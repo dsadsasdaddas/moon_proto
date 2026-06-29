@@ -327,21 +327,61 @@ fn encode_packed_repeated_field(
 }
 
 ///|
+fn oneof_group(label : FieldLabel) -> String? {
+  match label {
+    Oneof(group) => Some(group)
+    Singular | Optional | Repeated => None
+  }
+}
+
+///|
+fn message_field_in_oneof_group(
+  desc : MessageDescriptor,
+  field_name : String,
+  group : String,
+) -> Bool {
+  match find_field_by_name(desc, field_name) {
+    None => false
+    Some(fd) =>
+      match oneof_group(fd.label) {
+        Some(g) => g == group
+        None => false
+      }
+  }
+}
+
+///|
 fn validate_message_fields(
   desc : MessageDescriptor,
   value : MessageValue,
 ) -> DecodeError? {
+  let seen_oneofs : Array[String] = []
   for f in value.fields {
     if !has_field_name(desc, f.name) {
       return Some(Unsupported("unknown field: " + f.name))
     }
     match find_field_by_name(desc, f.name) {
-      Some(fd) =>
+      Some(fd) => {
         if fd.label != Repeated && f.values.length() > 1 {
           return Some(
             Unsupported("singular field has multiple values: " + f.name),
           )
         }
+        match oneof_group(fd.label) {
+          None => ()
+          Some(group) =>
+            if f.values.length() > 0 {
+              for seen in seen_oneofs {
+                if seen == group {
+                  return Some(
+                    Unsupported("multiple fields set for oneof group: " + group),
+                  )
+                }
+              }
+              seen_oneofs.push(group)
+            }
+        }
+      }
       None => ()
     }
   }
@@ -588,9 +628,24 @@ fn skip_unknown_field(
 ///|
 fn add_decoded_field(
   fields : Array[MessageField],
+  message_desc : MessageDescriptor,
   desc : FieldDescriptor,
   value : ProtoValue,
 ) -> Unit {
+  match oneof_group(desc.label) {
+    None => ()
+    Some(group) => {
+      let mut i = 0
+      while i < fields.length() {
+        if fields[i].name != desc.name &&
+          message_field_in_oneof_group(message_desc, fields[i].name, group) {
+          let _ = fields.remove(i)
+        } else {
+          i = i + 1
+        }
+      }
+    }
+  }
   for i = 0; i < fields.length(); i = i + 1 {
     if fields[i].name == desc.name {
       if desc.label == Repeated {
@@ -657,7 +712,7 @@ pub fn decode_message_with_descriptors(
                     DecodePackedErr(e) => return DecodeMessageErr(e)
                     DecodedPacked(values, next) => {
                       for value in values {
-                        add_decoded_field(decoded, fd, value)
+                        add_decoded_field(decoded, desc, fd, value)
                       }
                       i = next
                     }
@@ -671,7 +726,7 @@ pub fn decode_message_with_descriptors(
                     decode_scalar_payload(fd.typ, input, after_key, descriptors) {
                     DecodeScalarErr(e) => return DecodeMessageErr(e)
                     DecodedScalar(value, next) => {
-                      add_decoded_field(decoded, fd, value)
+                      add_decoded_field(decoded, desc, fd, value)
                       i = next
                     }
                   }

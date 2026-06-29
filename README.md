@@ -24,15 +24,16 @@ a complete proto3 toolkit:
 - descriptor-registry based nested message binary and JSON roundtrip;
 - repeated field emission and accumulation;
 - proto3 map parser, dynamic binary runtime, JSON object mapping and validation;
+- proto3 oneof parser, conflict validation and last-one-wins decode semantics;
 - proto3 packed repeated encoding/decoding for numeric scalar fields;
 - unknown-field skipping during decode;
-- protobuf-style JSON writer/parser for scalar/repeated/map dynamic messages;
+- protobuf-style JSON writer/parser for scalar/repeated/map/oneof dynamic messages;
 - proto3 schema model for messages, fields and top-level enums;
 - enum field resolution with protobuf varint runtime support;
-- a small `.proto` lexer/parser for `syntax`, `package`, `message`, `enum`, scalar fields, `optional`, `repeated`, and `map`;
+- a small `.proto` lexer/parser for `syntax`, `package`, `message`, `enum`, scalar fields, `optional`, `repeated`, `map`, and `oneof`;
 - MoonBit source generator for message structs, enums and descriptor functions;
 - schema validator for field numbers, duplicates and proto3 enum invariants;
-- official Python and Go protobuf oracle fixtures for cross-language scalar/repeated/map compatibility;
+- official Python and Go protobuf oracle fixtures for cross-language scalar/repeated/map/oneof compatibility;
 - deterministic property-style roundtrip corpora for binary and JSON paths;
 - golden tests for all implemented pieces.
 
@@ -148,7 +149,7 @@ tests/codegen/compile_generated.sh
 - M11: CLI smoke generator and runtime helper codegen. ✅
 - M12: generated-code compile check. ✅
 - M13: proto3 maps. ✅
-- M14: oneof groups.
+- M14: oneof groups. ✅
 - M15: file-based CLI `moon_proto gen schema.proto -o generated/`.
 
 ## License

@@ -57,6 +57,7 @@ fn validate_field_descriptor(
   }
   match field.label {
     Singular | Optional | Repeated => ()
+    Oneof(group) => validate_nonempty_name(issues, path + ".oneof", group)
   }
   match field.typ {
     MapType(key_typ, value_typ) => {

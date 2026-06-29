@@ -56,6 +56,7 @@ fn moonbit_field_type(field : FieldDescriptor) -> String {
   match field.label {
     Repeated => "Array[" + base + "]"
     Optional => base + "?"
+    Oneof(_) => base + "?"
     Singular => base
   }
 }
@@ -95,6 +96,7 @@ fn field_label_source(label : FieldLabel) -> String {
     Singular => "Singular"
     Optional => "Optional"
     Repeated => "Repeated"
+    Oneof(group) => "Oneof(\"" + group + "\")"
   }
 }
 

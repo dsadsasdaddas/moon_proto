@@ -27,6 +27,7 @@ pub(all) enum FieldLabel {
   Singular
   Optional
   Repeated
+  Oneof(String)
 } derive(Debug, Eq)
 
 ///|

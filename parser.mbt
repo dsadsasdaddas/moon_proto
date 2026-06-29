@@ -204,8 +204,10 @@ fn ProtoParser::parse_field(self : ProtoParser) -> FieldDescriptor? {
 }
 
 ///|
-fn ProtoParser::parse_message(self : ProtoParser) -> MessageDescriptor? {
-  let name = match self.consume_ident() {
+fn ProtoParser::parse_oneof_fields(
+  self : ProtoParser,
+) -> Array[FieldDescriptor]? {
+  let group = match self.consume_ident() {
     Some(n) => n
     None => return None
   }
@@ -225,9 +227,57 @@ fn ProtoParser::parse_message(self : ProtoParser) -> MessageDescriptor? {
         }
       Some(_) =>
         match self.parse_field() {
-          Some(f) => fields.push(f)
+          Some(f) =>
+            if f.label == Singular {
+              fields.push(FieldDescriptor::{ ..f, label: Oneof(group) })
+            } else {
+              return None
+            }
           None => return None
         }
+      None => return None
+    }
+  }
+  Some(fields)
+}
+
+///|
+fn ProtoParser::parse_message(self : ProtoParser) -> MessageDescriptor? {
+  let name = match self.consume_ident() {
+    Some(n) => n
+    None => return None
+  }
+  if !self.consume_sym("{") {
+    return None
+  }
+  let fields : Array[FieldDescriptor] = []
+  let mut done = false
+  while !done {
+    match self.peek() {
+      Some(Sym(s)) =>
+        if s == "}" {
+          let _ = self.advance()
+          done = true
+        } else {
+          return None
+        }
+      Some(Ident(word)) =>
+        if word == "oneof" {
+          let _ = self.advance()
+          match self.parse_oneof_fields() {
+            None => return None
+            Some(oneof_fields) =>
+              for f in oneof_fields {
+                fields.push(f)
+              }
+          }
+        } else {
+          match self.parse_field() {
+            Some(f) => fields.push(f)
+            None => return None
+          }
+        }
+      Some(_) => return None
       None => return None
     }
   }

@@ -52,6 +52,18 @@ func messageField(
 	return field
 }
 
+func oneofField(
+	name string,
+	number int32,
+	fieldType descriptorpb.FieldDescriptorProto_Type,
+	fieldLabel descriptorpb.FieldDescriptorProto_Label,
+	oneofIndex int32,
+) *descriptorpb.FieldDescriptorProto {
+	field := field(name, number, fieldType, fieldLabel)
+	field.OneofIndex = i32(oneofIndex)
+	return field
+}
+
 func repoRoot() string {
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
@@ -183,6 +195,48 @@ func makeBagMessage() proto.Message {
 	return message.Interface()
 }
 
+func makeContactDescriptor() protoreflect.MessageDescriptor {
+	optional := descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL
+	file := &descriptorpb.FileDescriptorProto{
+		Name:    str("moon_proto_oneof_oracle.proto"),
+		Package: str("demo"),
+		Syntax:  str("proto3"),
+		MessageType: []*descriptorpb.DescriptorProto{
+			{
+				Name: str("Contact"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					field("id", 1, descriptorpb.FieldDescriptorProto_TYPE_UINT64, optional),
+					oneofField("email", 2, descriptorpb.FieldDescriptorProto_TYPE_STRING, optional, 0),
+					oneofField("phone", 3, descriptorpb.FieldDescriptorProto_TYPE_STRING, optional, 0),
+				},
+				OneofDecl: []*descriptorpb.OneofDescriptorProto{
+					{Name: str("reach")},
+				},
+			},
+		},
+	}
+	files, err := protodesc.NewFiles(&descriptorpb.FileDescriptorSet{
+		File: []*descriptorpb.FileDescriptorProto{file},
+	})
+	if err != nil {
+		panic(err)
+	}
+	desc, err := files.FindDescriptorByName("demo.Contact")
+	if err != nil {
+		panic(err)
+	}
+	return desc.(protoreflect.MessageDescriptor)
+}
+
+func makeContactMessage() proto.Message {
+	desc := makeContactDescriptor()
+	message := dynamicpb.NewMessageType(desc).New()
+	fields := desc.Fields()
+	message.Set(fields.ByName("id"), protoreflect.ValueOfUint64(1))
+	message.Set(fields.ByName("phone"), protoreflect.ValueOfString("123"))
+	return message.Interface()
+}
+
 func oracleValues() ([]byte, string, string) {
 	message := makeUserMessage()
 	binary, err := proto.MarshalOptions{Deterministic: true}.Marshal(message)
@@ -198,6 +252,19 @@ func oracleValues() ([]byte, string, string) {
 
 func bagOracleValues() ([]byte, string, string) {
 	message := makeBagMessage()
+	binary, err := proto.MarshalOptions{Deterministic: true}.Marshal(message)
+	if err != nil {
+		panic(err)
+	}
+	jsonBytes, err := protojson.MarshalOptions{UseProtoNames: true}.Marshal(message)
+	if err != nil {
+		panic(err)
+	}
+	return binary, hex.EncodeToString(binary) + "\n", string(jsonBytes) + "\n"
+}
+
+func contactOracleValues() ([]byte, string, string) {
+	message := makeContactMessage()
 	binary, err := proto.MarshalOptions{Deterministic: true}.Marshal(message)
 	if err != nil {
 		panic(err)
@@ -243,11 +310,14 @@ func main() {
 	root := repoRoot()
 	binary, hexText, jsonText := oracleValues()
 	bagBinary, bagHexText, bagJSONText := bagOracleValues()
+	contactBinary, contactHexText, contactJSONText := contactOracleValues()
 	checks := map[string][]byte{
-		filepath.Join(root, "tests", "fixtures", "user_full.bin"): binary,
-		filepath.Join(root, "tests", "fixtures", "user_full.hex"): []byte(hexText),
-		filepath.Join(root, "tests", "fixtures", "bag_maps.bin"):  bagBinary,
-		filepath.Join(root, "tests", "fixtures", "bag_maps.hex"):  []byte(bagHexText),
+		filepath.Join(root, "tests", "fixtures", "user_full.bin"):     binary,
+		filepath.Join(root, "tests", "fixtures", "user_full.hex"):     []byte(hexText),
+		filepath.Join(root, "tests", "fixtures", "bag_maps.bin"):      bagBinary,
+		filepath.Join(root, "tests", "fixtures", "bag_maps.hex"):      []byte(bagHexText),
+		filepath.Join(root, "tests", "fixtures", "contact_oneof.bin"): contactBinary,
+		filepath.Join(root, "tests", "fixtures", "contact_oneof.hex"): []byte(contactHexText),
 	}
 	for path, expected := range checks {
 		if err := verifyFile(path, expected); err != nil {
@@ -260,9 +330,14 @@ func main() {
 	if err := verifyJSONFile(filepath.Join(root, "tests", "fixtures", "bag_maps.json"), []byte(bagJSONText)); err != nil {
 		panic(err)
 	}
+	if err := verifyJSONFile(filepath.Join(root, "tests", "fixtures", "contact_oneof.json"), []byte(contactJSONText)); err != nil {
+		panic(err)
+	}
 	fmt.Println("Go protobuf oracle fixtures verified")
 	fmt.Println("user_full.hex", hexText[:len(hexText)-1])
 	fmt.Println("user_full.json", jsonText[:len(jsonText)-1])
 	fmt.Println("bag_maps.hex", bagHexText[:len(bagHexText)-1])
 	fmt.Println("bag_maps.json", bagJSONText[:len(bagJSONText)-1])
+	fmt.Println("contact_oneof.hex", contactHexText[:len(contactHexText)-1])
+	fmt.Println("contact_oneof.json", contactJSONText[:len(contactJSONText)-1])
 }

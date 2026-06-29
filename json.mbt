@@ -263,15 +263,24 @@ fn json_has_message_field(fields : Array[MessageField], name : String) -> Bool {
 }
 
 ///|
+fn json_oneof_group(label : FieldLabel) -> String? {
+  match label {
+    Oneof(group) => Some(group)
+    Singular | Optional | Repeated => None
+  }
+}
+
+///|
 fn validate_json_message(
   desc : MessageDescriptor,
   value : MessageValue,
 ) -> DecodeError? {
+  let seen_oneofs : Array[String] = []
   for field in value.fields {
     match json_find_descriptor(desc, field.name) {
       None =>
         return Some(Unsupported("unknown field in JSON mapping: " + field.name))
-      Some(fd) =>
+      Some(fd) => {
         if fd.label != Repeated && field.values.length() > 1 {
           return Some(
             Unsupported(
@@ -279,6 +288,21 @@ fn validate_json_message(
             ),
           )
         }
+        match json_oneof_group(fd.label) {
+          None => ()
+          Some(group) =>
+            if field.values.length() > 0 {
+              for seen in seen_oneofs {
+                if seen == group {
+                  return Some(
+                    Unsupported("multiple fields set for oneof group: " + group),
+                  )
+                }
+              }
+              seen_oneofs.push(group)
+            }
+        }
+      }
     }
   }
   None
@@ -913,6 +937,7 @@ fn parse_json_message_object(
     return JsonDecodeErr(Unsupported("expected JSON object"))
   }
   let parsed : Array[MessageField] = []
+  let seen_oneofs : Array[String] = []
   parser.skip_ws()
   if parser.consume('}') {
     return JsonDecodeOk(message_value([]))
@@ -932,6 +957,19 @@ fn parse_json_message_object(
     let fd = match json_find_descriptor(desc, key) {
       None => return JsonDecodeErr(Unsupported("unknown JSON field: " + key))
       Some(found) => found
+    }
+    match json_oneof_group(fd.label) {
+      None => ()
+      Some(group) => {
+        for seen in seen_oneofs {
+          if seen == group {
+            return JsonDecodeErr(
+              Unsupported("multiple JSON fields for oneof group: " + group),
+            )
+          }
+        }
+        seen_oneofs.push(group)
+      }
     }
     match parse_json_field(parser, fd, descriptors) {
       JsonDecodeErr(e) => return JsonDecodeErr(e)

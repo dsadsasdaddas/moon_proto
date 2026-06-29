@@ -21,14 +21,26 @@ JSON = FIXTURES / "user_full.json"
 BAG_BIN = FIXTURES / "bag_maps.bin"
 BAG_HEX = FIXTURES / "bag_maps.hex"
 BAG_JSON = FIXTURES / "bag_maps.json"
+CONTACT_BIN = FIXTURES / "contact_oneof.bin"
+CONTACT_HEX = FIXTURES / "contact_oneof.hex"
+CONTACT_JSON = FIXTURES / "contact_oneof.json"
 
 
-def _field(message, name: str, number: int, typ: int, label: int) -> None:
+def _field(
+    message,
+    name: str,
+    number: int,
+    typ: int,
+    label: int,
+    oneof_index: int | None = None,
+) -> None:
     field = message.field.add()
     field.name = name
     field.number = number
     field.type = typ
     field.label = label
+    if oneof_index is not None:
+        field.oneof_index = oneof_index
 
 
 def _message_field(
@@ -154,6 +166,46 @@ def make_bag():
     return bag
 
 
+def make_contact_message_class():
+    file_desc = descriptor_pb2.FileDescriptorProto(
+        name="moon_proto_oneof_oracle.proto",
+        package="demo",
+        syntax="proto3",
+    )
+    msg = file_desc.message_type.add()
+    msg.name = "Contact"
+    msg.oneof_decl.add().name = "reach"
+    label_optional = descriptor_pb2.FieldDescriptorProto.LABEL_OPTIONAL
+    _field(msg, "id", 1, descriptor_pb2.FieldDescriptorProto.TYPE_UINT64, label_optional)
+    _field(
+        msg,
+        "email",
+        2,
+        descriptor_pb2.FieldDescriptorProto.TYPE_STRING,
+        label_optional,
+        oneof_index=0,
+    )
+    _field(
+        msg,
+        "phone",
+        3,
+        descriptor_pb2.FieldDescriptorProto.TYPE_STRING,
+        label_optional,
+        oneof_index=0,
+    )
+
+    pool = descriptor_pool.DescriptorPool()
+    pool.Add(file_desc)
+    descriptor = pool.FindMessageTypeByName("demo.Contact")
+    factory = message_factory.MessageFactory(pool)
+    return factory.GetPrototype(descriptor)
+
+
+def make_contact():
+    Contact = make_contact_message_class()
+    return Contact(id=1, phone="123")
+
+
 def oracle_values():
     user = make_user()
     binary = user.SerializeToString(deterministic=True)
@@ -170,6 +222,14 @@ def bag_oracle_values():
     return binary, binary.hex() + "\n", canonical_json
 
 
+def contact_oracle_values():
+    contact = make_contact()
+    binary = contact.SerializeToString(deterministic=True)
+    data = json_format.MessageToDict(contact, preserving_proto_field_name=True)
+    canonical_json = json.dumps(data, ensure_ascii=False, separators=(",", ":")) + "\n"
+    return binary, binary.hex() + "\n", canonical_json
+
+
 def write_fixtures() -> None:
     FIXTURES.mkdir(parents=True, exist_ok=True)
     binary, hex_text, json_text = oracle_values()
@@ -180,11 +240,16 @@ def write_fixtures() -> None:
     BAG_BIN.write_bytes(bag_binary)
     BAG_HEX.write_text(bag_hex_text, encoding="utf-8")
     BAG_JSON.write_text(bag_json_text, encoding="utf-8")
+    contact_binary, contact_hex_text, contact_json_text = contact_oracle_values()
+    CONTACT_BIN.write_bytes(contact_binary)
+    CONTACT_HEX.write_text(contact_hex_text, encoding="utf-8")
+    CONTACT_JSON.write_text(contact_json_text, encoding="utf-8")
 
 
 def verify_fixtures() -> None:
     binary, hex_text, json_text = oracle_values()
     bag_binary, bag_hex_text, bag_json_text = bag_oracle_values()
+    contact_binary, contact_hex_text, contact_json_text = contact_oracle_values()
     checks = [
         (BIN, binary, BIN.read_bytes() if BIN.exists() else None),
         (HEX, hex_text, HEX.read_text(encoding="utf-8") if HEX.exists() else None),
@@ -199,6 +264,21 @@ def verify_fixtures() -> None:
             BAG_JSON,
             bag_json_text,
             BAG_JSON.read_text(encoding="utf-8") if BAG_JSON.exists() else None,
+        ),
+        (
+            CONTACT_BIN,
+            contact_binary,
+            CONTACT_BIN.read_bytes() if CONTACT_BIN.exists() else None,
+        ),
+        (
+            CONTACT_HEX,
+            contact_hex_text,
+            CONTACT_HEX.read_text(encoding="utf-8") if CONTACT_HEX.exists() else None,
+        ),
+        (
+            CONTACT_JSON,
+            contact_json_text,
+            CONTACT_JSON.read_text(encoding="utf-8") if CONTACT_JSON.exists() else None,
         ),
     ]
     failures = []
@@ -216,6 +296,8 @@ def verify_fixtures() -> None:
     print("user_full.json", json_text.strip())
     print("bag_maps.hex", bag_hex_text.strip())
     print("bag_maps.json", bag_json_text.strip())
+    print("contact_oneof.hex", contact_hex_text.strip())
+    print("contact_oneof.json", contact_json_text.strip())
 
 
 def main() -> None:

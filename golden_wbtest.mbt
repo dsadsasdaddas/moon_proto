@@ -1275,6 +1275,176 @@ test "map schema validation rejects unsupported key and nested map value" {
 }
 
 ///|
+test "parse and codegen oneof fields" {
+  let src =
+    #|syntax = "proto3";
+    #|package demo;
+    #|message Contact {
+    #|  uint64 id = 1;
+    #|  oneof reach {
+    #|    string email = 2;
+    #|    string phone = 3;
+    #|  }
+    #|}
+  match parse_proto(src) {
+    ProtoErr(_) => fail("oneof parser failed")
+    ProtoOk(file) => {
+      assert_eq(file.messages.length(), 1)
+      assert_eq(file.messages[0].fields.length(), 3)
+      assert_true(file.messages[0].fields[1].label == Oneof("reach"))
+      assert_true(file.messages[0].fields[2].label == Oneof("reach"))
+      let generated = generate_moonbit_source(file)
+      let expected =
+        #|pub(all) struct Contact {
+        #|  id : UInt64
+        #|  email : String?
+        #|  phone : String?
+        #|} derive(Debug, Eq)
+        #|
+        #|pub fn descriptor_Contact() -> MessageDescriptor {
+        #|  MessageDescriptor::{
+        #|    name : "Contact",
+        #|    fields : [
+        #|      FieldDescriptor::{ name : "id", typ : UInt64Type, number : 1, label : Singular },
+        #|      FieldDescriptor::{ name : "email", typ : StringType, number : 2, label : Oneof("reach") },
+        #|      FieldDescriptor::{ name : "phone", typ : StringType, number : 3, label : Oneof("reach") },
+        #|    ],
+        #|  }
+        #|}
+        #|
+        #|pub fn message_descriptors() -> Array[MessageDescriptor] {
+        #|  [
+        #|    descriptor_Contact(),
+        #|  ]
+        #|}
+        #|
+        #|pub fn encode_Contact(value : MessageValue) -> EncodeMessageResult {
+        #|  encode_message_with_descriptors(descriptor_Contact(), message_descriptors(), value)
+        #|}
+        #|
+        #|pub fn decode_Contact(input : Bytes) -> DecodeMessageResult {
+        #|  decode_message_with_descriptors(descriptor_Contact(), message_descriptors(), input)
+        #|}
+        #|
+        #|pub fn to_json_Contact(value : MessageValue) -> JsonEncodeResult {
+        #|  message_to_json_with_descriptors(descriptor_Contact(), message_descriptors(), value)
+        #|}
+        #|
+        #|pub fn from_json_Contact(input : String) -> JsonDecodeResult {
+        #|  json_to_message_with_descriptors(descriptor_Contact(), message_descriptors(), input)
+        #|}
+      assert_eq(generated, expected)
+    }
+  }
+}
+
+///|
+test "oneof binary and json semantics" {
+  let desc = MessageDescriptor::{
+    name: "Contact",
+    fields: [
+      FieldDescriptor::{
+        name: "id",
+        typ: UInt64Type,
+        number: 1,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "email",
+        typ: StringType,
+        number: 2,
+        label: Oneof("reach"),
+      },
+      FieldDescriptor::{
+        name: "phone",
+        typ: StringType,
+        number: 3,
+        label: Oneof("reach"),
+      },
+    ],
+  }
+  let by_email = message_value([
+    message_field("id", UInt64Value(1UL)),
+    message_field("email", StringValue("a@example.com")),
+  ])
+  match encode_message(desc, by_email) {
+    EncodeMessageErr(_) => fail("oneof encode failed")
+    EncodeMessageOk(bytes) => {
+      assert_eq(
+        bytes,
+        concat_bytes([
+          encode_uint64_field(1, 1UL),
+          encode_string_field(2, "a@example.com"),
+        ]),
+      )
+      match decode_message(desc, bytes) {
+        DecodeMessageErr(_) => fail("oneof decode failed")
+        DecodeMessageOk(decoded, next) => {
+          assert_eq(next, bytes.length())
+          assert_true(decoded == by_email)
+        }
+      }
+    }
+  }
+  let conflicting = message_value([
+    message_field("email", StringValue("a@example.com")),
+    message_field("phone", StringValue("123")),
+  ])
+  match encode_message(desc, conflicting) {
+    EncodeMessageOk(_) => fail("oneof encoder should reject conflicts")
+    EncodeMessageErr(Unsupported(_)) => ()
+    EncodeMessageErr(_) => fail("unexpected oneof encode error")
+  }
+  let last_one_wins = concat_bytes([
+    encode_string_field(2, "a@example.com"),
+    encode_string_field(3, "123"),
+  ])
+  match decode_message(desc, last_one_wins) {
+    DecodeMessageErr(_) => fail("oneof last-one-wins decode failed")
+    DecodeMessageOk(decoded, next) => {
+      assert_eq(next, last_one_wins.length())
+      assert_true(
+        decoded == message_value([message_field("phone", StringValue("123"))]),
+      )
+    }
+  }
+  match message_to_json(desc, by_email) {
+    JsonErr(_) => fail("oneof JSON encode failed")
+    JsonOk(json) =>
+      assert_eq(json, "{\"id\":\"1\",\"email\":\"a@example.com\"}")
+  }
+  let by_phone = message_value([
+    message_field("id", UInt64Value(1UL)),
+    message_field("phone", StringValue("123")),
+  ])
+  match encode_message(desc, by_phone) {
+    EncodeMessageErr(_) => fail("oneof phone encode failed")
+    EncodeMessageOk(bytes) => assert_eq(bytes, b"\x08\x01\x1a\x03123")
+  }
+  match message_to_json(desc, by_phone) {
+    JsonErr(_) => fail("oneof phone JSON encode failed")
+    JsonOk(json) => assert_eq(json, "{\"id\":\"1\",\"phone\":\"123\"}")
+  }
+  match json_to_message(desc, "{\"phone\":\"123\",\"id\":\"1\"}") {
+    JsonDecodeErr(_) => fail("oneof JSON decode failed")
+    JsonDecodeOk(decoded) =>
+      assert_true(
+        decoded ==
+        message_value([
+          message_field("id", UInt64Value(1UL)),
+          message_field("phone", StringValue("123")),
+        ]),
+      )
+  }
+  match
+    json_to_message(desc, "{\"email\":\"a@example.com\",\"phone\":\"123\"}") {
+    JsonDecodeOk(_) => fail("oneof JSON parser should reject conflicts")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected oneof JSON error")
+  }
+}
+
+///|
 fn deterministic_u64(seed : Int) -> UInt64 {
   let x = seed.to_uint64()
   (x * 9973UL) ^ (x << 9) ^ (x >> 3)

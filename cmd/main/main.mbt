@@ -33,6 +33,10 @@ fn example_schema() -> String {
     #|  Color favorite = 4;
     #|  Address address = 5;
     #|  map<string, uint64> counters = 6;
+    #|  oneof contact {
+    #|    string email = 7;
+    #|    string phone = 8;
+    #|  }
     #|}
   schema
 }
