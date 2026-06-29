@@ -17,6 +17,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.23'
+          cache-dependency-path: tests/oracle/go.sum
       - name: Go protobuf oracle fixtures
         run: cd tests/oracle && go run .
       - name: Install MoonBit toolchain

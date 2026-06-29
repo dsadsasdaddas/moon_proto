@@ -3,9 +3,11 @@ package main
 import (
 	"bytes"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -131,18 +133,39 @@ func verifyFile(path string, expected []byte) error {
 	return nil
 }
 
+func verifyJSONFile(path string, expected []byte) error {
+	actual, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	var actualValue any
+	var expectedValue any
+	if err := json.Unmarshal(actual, &actualValue); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(expected, &expectedValue); err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(actualValue, expectedValue) {
+		return fmt.Errorf("JSON fixture mismatch: %s", path)
+	}
+	return nil
+}
+
 func main() {
 	root := repoRoot()
 	binary, hexText, jsonText := oracleValues()
 	checks := map[string][]byte{
-		filepath.Join(root, "tests", "fixtures", "user_full.bin"):  binary,
-		filepath.Join(root, "tests", "fixtures", "user_full.hex"):  []byte(hexText),
-		filepath.Join(root, "tests", "fixtures", "user_full.json"): []byte(jsonText),
+		filepath.Join(root, "tests", "fixtures", "user_full.bin"): binary,
+		filepath.Join(root, "tests", "fixtures", "user_full.hex"): []byte(hexText),
 	}
 	for path, expected := range checks {
 		if err := verifyFile(path, expected); err != nil {
 			panic(err)
 		}
+	}
+	if err := verifyJSONFile(filepath.Join(root, "tests", "fixtures", "user_full.json"), []byte(jsonText)); err != nil {
+		panic(err)
 	}
 	fmt.Println("Go protobuf oracle fixtures verified")
 	fmt.Println("user_full.hex", hexText[:len(hexText)-1])
