@@ -45,7 +45,7 @@ Moon Proto Lab 面向 MoonBit protobuf 生态，提供动态 `.proto` schema 解
 - `scripts/moon_proto_gen.py` 文件版生成入口：`python3 scripts/moon_proto_gen.py gen schema.proto -o generated/`；
 - `scripts/moon_proto_lab.py doctor/inspect/compat/verify` 提供文件版 Schema Doctor、schema summary、old/new schema 兼容性检查、AI verify 与 Markdown/HTML 报告生成；
 - `tests/codegen/compile_generated.sh` 实际生成 MoonBit 源码并执行 `moon check`，验证生成代码可编译；
-- Python `google.protobuf` 与 Go `google.golang.org/protobuf` oracle fixtures，用于验证 scalar/repeated/map/oneof golden bytes/JSON 与成熟生态一致；
+- Python `google.protobuf` 与 Go `google.golang.org/protobuf` oracle fixtures，用于验证 scalar/repeated/map/oneof/32-bit numeric golden bytes/JSON 与成熟生态一致；
 - deterministic property-style tests 覆盖 varint、zig-zag、动态 message 二进制和 JSON roundtrip；
 - GitHub Actions CI 覆盖 oracle、check、build、test、多 target、CLI smoke 和 generated-code compile check。
 

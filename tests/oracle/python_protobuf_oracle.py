@@ -24,6 +24,9 @@ BAG_JSON = FIXTURES / "bag_maps.json"
 CONTACT_BIN = FIXTURES / "contact_oneof.bin"
 CONTACT_HEX = FIXTURES / "contact_oneof.hex"
 CONTACT_JSON = FIXTURES / "contact_oneof.json"
+NUMBERS32_BIN = FIXTURES / "numbers32.bin"
+NUMBERS32_HEX = FIXTURES / "numbers32.hex"
+NUMBERS32_JSON = FIXTURES / "numbers32.json"
 
 
 def _field(
@@ -206,6 +209,33 @@ def make_contact():
     return Contact(id=1, phone="123")
 
 
+def make_numbers32_message_class():
+    file_desc = descriptor_pb2.FileDescriptorProto(
+        name="moon_proto_numbers32_oracle.proto",
+        package="demo",
+        syntax="proto3",
+    )
+    msg = file_desc.message_type.add()
+    msg.name = "Numbers32"
+    label_optional = descriptor_pb2.FieldDescriptorProto.LABEL_OPTIONAL
+    _field(msg, "u", 1, descriptor_pb2.FieldDescriptorProto.TYPE_UINT32, label_optional)
+    _field(msg, "i", 2, descriptor_pb2.FieldDescriptorProto.TYPE_INT32, label_optional)
+    _field(msg, "s", 3, descriptor_pb2.FieldDescriptorProto.TYPE_SINT32, label_optional)
+    _field(msg, "f", 4, descriptor_pb2.FieldDescriptorProto.TYPE_FIXED32, label_optional)
+    _field(msg, "sf", 5, descriptor_pb2.FieldDescriptorProto.TYPE_SFIXED32, label_optional)
+
+    pool = descriptor_pool.DescriptorPool()
+    pool.Add(file_desc)
+    descriptor = pool.FindMessageTypeByName("demo.Numbers32")
+    factory = message_factory.MessageFactory(pool)
+    return factory.GetPrototype(descriptor)
+
+
+def make_numbers32():
+    Numbers32 = make_numbers32_message_class()
+    return Numbers32(u=4294967295, i=-1, s=-2, f=4294967295, sf=-3)
+
+
 def oracle_values():
     user = make_user()
     binary = user.SerializeToString(deterministic=True)
@@ -230,6 +260,14 @@ def contact_oracle_values():
     return binary, binary.hex() + "\n", canonical_json
 
 
+def numbers32_oracle_values():
+    numbers = make_numbers32()
+    binary = numbers.SerializeToString(deterministic=True)
+    data = json_format.MessageToDict(numbers, preserving_proto_field_name=True)
+    canonical_json = json.dumps(data, ensure_ascii=False, separators=(",", ":")) + "\n"
+    return binary, binary.hex() + "\n", canonical_json
+
+
 def write_fixtures() -> None:
     FIXTURES.mkdir(parents=True, exist_ok=True)
     binary, hex_text, json_text = oracle_values()
@@ -244,12 +282,17 @@ def write_fixtures() -> None:
     CONTACT_BIN.write_bytes(contact_binary)
     CONTACT_HEX.write_text(contact_hex_text, encoding="utf-8")
     CONTACT_JSON.write_text(contact_json_text, encoding="utf-8")
+    numbers32_binary, numbers32_hex_text, numbers32_json_text = numbers32_oracle_values()
+    NUMBERS32_BIN.write_bytes(numbers32_binary)
+    NUMBERS32_HEX.write_text(numbers32_hex_text, encoding="utf-8")
+    NUMBERS32_JSON.write_text(numbers32_json_text, encoding="utf-8")
 
 
 def verify_fixtures() -> None:
     binary, hex_text, json_text = oracle_values()
     bag_binary, bag_hex_text, bag_json_text = bag_oracle_values()
     contact_binary, contact_hex_text, contact_json_text = contact_oracle_values()
+    numbers32_binary, numbers32_hex_text, numbers32_json_text = numbers32_oracle_values()
     checks = [
         (BIN, binary, BIN.read_bytes() if BIN.exists() else None),
         (HEX, hex_text, HEX.read_text(encoding="utf-8") if HEX.exists() else None),
@@ -280,6 +323,21 @@ def verify_fixtures() -> None:
             contact_json_text,
             CONTACT_JSON.read_text(encoding="utf-8") if CONTACT_JSON.exists() else None,
         ),
+        (
+            NUMBERS32_BIN,
+            numbers32_binary,
+            NUMBERS32_BIN.read_bytes() if NUMBERS32_BIN.exists() else None,
+        ),
+        (
+            NUMBERS32_HEX,
+            numbers32_hex_text,
+            NUMBERS32_HEX.read_text(encoding="utf-8") if NUMBERS32_HEX.exists() else None,
+        ),
+        (
+            NUMBERS32_JSON,
+            numbers32_json_text,
+            NUMBERS32_JSON.read_text(encoding="utf-8") if NUMBERS32_JSON.exists() else None,
+        ),
     ]
     failures = []
     for path, expected, actual in checks:
@@ -298,6 +356,8 @@ def verify_fixtures() -> None:
     print("bag_maps.json", bag_json_text.strip())
     print("contact_oneof.hex", contact_hex_text.strip())
     print("contact_oneof.json", contact_json_text.strip())
+    print("numbers32.hex", numbers32_hex_text.strip())
+    print("numbers32.json", numbers32_json_text.strip())
 
 
 def main() -> None:

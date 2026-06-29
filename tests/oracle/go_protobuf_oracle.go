@@ -237,6 +237,50 @@ func makeContactMessage() proto.Message {
 	return message.Interface()
 }
 
+func makeNumbers32Descriptor() protoreflect.MessageDescriptor {
+	optional := descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL
+	file := &descriptorpb.FileDescriptorProto{
+		Name:    str("moon_proto_numbers32_oracle.proto"),
+		Package: str("demo"),
+		Syntax:  str("proto3"),
+		MessageType: []*descriptorpb.DescriptorProto{
+			{
+				Name: str("Numbers32"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					field("u", 1, descriptorpb.FieldDescriptorProto_TYPE_UINT32, optional),
+					field("i", 2, descriptorpb.FieldDescriptorProto_TYPE_INT32, optional),
+					field("s", 3, descriptorpb.FieldDescriptorProto_TYPE_SINT32, optional),
+					field("f", 4, descriptorpb.FieldDescriptorProto_TYPE_FIXED32, optional),
+					field("sf", 5, descriptorpb.FieldDescriptorProto_TYPE_SFIXED32, optional),
+				},
+			},
+		},
+	}
+	files, err := protodesc.NewFiles(&descriptorpb.FileDescriptorSet{
+		File: []*descriptorpb.FileDescriptorProto{file},
+	})
+	if err != nil {
+		panic(err)
+	}
+	desc, err := files.FindDescriptorByName("demo.Numbers32")
+	if err != nil {
+		panic(err)
+	}
+	return desc.(protoreflect.MessageDescriptor)
+}
+
+func makeNumbers32Message() proto.Message {
+	desc := makeNumbers32Descriptor()
+	message := dynamicpb.NewMessageType(desc).New()
+	fields := desc.Fields()
+	message.Set(fields.ByName("u"), protoreflect.ValueOfUint32(4294967295))
+	message.Set(fields.ByName("i"), protoreflect.ValueOfInt32(-1))
+	message.Set(fields.ByName("s"), protoreflect.ValueOfInt32(-2))
+	message.Set(fields.ByName("f"), protoreflect.ValueOfUint32(4294967295))
+	message.Set(fields.ByName("sf"), protoreflect.ValueOfInt32(-3))
+	return message.Interface()
+}
+
 func oracleValues() ([]byte, string, string) {
 	message := makeUserMessage()
 	binary, err := proto.MarshalOptions{Deterministic: true}.Marshal(message)
@@ -265,6 +309,19 @@ func bagOracleValues() ([]byte, string, string) {
 
 func contactOracleValues() ([]byte, string, string) {
 	message := makeContactMessage()
+	binary, err := proto.MarshalOptions{Deterministic: true}.Marshal(message)
+	if err != nil {
+		panic(err)
+	}
+	jsonBytes, err := protojson.MarshalOptions{UseProtoNames: true}.Marshal(message)
+	if err != nil {
+		panic(err)
+	}
+	return binary, hex.EncodeToString(binary) + "\n", string(jsonBytes) + "\n"
+}
+
+func numbers32OracleValues() ([]byte, string, string) {
+	message := makeNumbers32Message()
 	binary, err := proto.MarshalOptions{Deterministic: true}.Marshal(message)
 	if err != nil {
 		panic(err)
@@ -311,6 +368,7 @@ func main() {
 	binary, hexText, jsonText := oracleValues()
 	bagBinary, bagHexText, bagJSONText := bagOracleValues()
 	contactBinary, contactHexText, contactJSONText := contactOracleValues()
+	numbers32Binary, numbers32HexText, numbers32JSONText := numbers32OracleValues()
 	checks := map[string][]byte{
 		filepath.Join(root, "tests", "fixtures", "user_full.bin"):     binary,
 		filepath.Join(root, "tests", "fixtures", "user_full.hex"):     []byte(hexText),
@@ -318,6 +376,8 @@ func main() {
 		filepath.Join(root, "tests", "fixtures", "bag_maps.hex"):      []byte(bagHexText),
 		filepath.Join(root, "tests", "fixtures", "contact_oneof.bin"): contactBinary,
 		filepath.Join(root, "tests", "fixtures", "contact_oneof.hex"): []byte(contactHexText),
+		filepath.Join(root, "tests", "fixtures", "numbers32.bin"):     numbers32Binary,
+		filepath.Join(root, "tests", "fixtures", "numbers32.hex"):     []byte(numbers32HexText),
 	}
 	for path, expected := range checks {
 		if err := verifyFile(path, expected); err != nil {
@@ -333,6 +393,9 @@ func main() {
 	if err := verifyJSONFile(filepath.Join(root, "tests", "fixtures", "contact_oneof.json"), []byte(contactJSONText)); err != nil {
 		panic(err)
 	}
+	if err := verifyJSONFile(filepath.Join(root, "tests", "fixtures", "numbers32.json"), []byte(numbers32JSONText)); err != nil {
+		panic(err)
+	}
 	fmt.Println("Go protobuf oracle fixtures verified")
 	fmt.Println("user_full.hex", hexText[:len(hexText)-1])
 	fmt.Println("user_full.json", jsonText[:len(jsonText)-1])
@@ -340,4 +403,6 @@ func main() {
 	fmt.Println("bag_maps.json", bagJSONText[:len(bagJSONText)-1])
 	fmt.Println("contact_oneof.hex", contactHexText[:len(contactHexText)-1])
 	fmt.Println("contact_oneof.json", contactJSONText[:len(contactJSONText)-1])
+	fmt.Println("numbers32.hex", numbers32HexText[:len(numbers32HexText)-1])
+	fmt.Println("numbers32.json", numbers32JSONText[:len(numbers32JSONText)-1])
 }

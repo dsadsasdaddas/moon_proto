@@ -185,11 +185,29 @@ fn encode_varint_payload(
   value : ProtoValue,
 ) -> EncodeFieldResult {
   match (typ, value) {
-    (UInt32Type, UInt64Value(v)) | (UInt64Type, UInt64Value(v)) =>
+    (UInt32Type, UInt64Value(v)) =>
+      if v <= 0xffffffffUL {
+        EncodedField(encode_varint_u64(v))
+      } else {
+        EncodeFieldErr(Unsupported("uint32 value out of range"))
+      }
+    (UInt64Type, UInt64Value(v)) =>
       EncodedField(encode_varint_u64(v))
-    (Int32Type, Int64Value(v)) | (Int64Type, Int64Value(v)) =>
+    (Int32Type, Int64Value(v)) =>
+      if v >= (-2147483647L - 1L) && v <= 2147483647L {
+        EncodedField(encode_varint_u64(v.reinterpret_as_uint64()))
+      } else {
+        EncodeFieldErr(Unsupported("int32 value out of range"))
+      }
+    (Int64Type, Int64Value(v)) =>
       EncodedField(encode_varint_u64(v.reinterpret_as_uint64()))
-    (SInt32Type, Int64Value(v)) | (SInt64Type, Int64Value(v)) =>
+    (SInt32Type, Int64Value(v)) =>
+      if v >= (-2147483647L - 1L) && v <= 2147483647L {
+        EncodedField(encode_varint_u64(encode_zigzag_i64(v)))
+      } else {
+        EncodeFieldErr(Unsupported("sint32 value out of range"))
+      }
+    (SInt64Type, Int64Value(v)) =>
       EncodedField(encode_varint_u64(encode_zigzag_i64(v)))
     (BoolType, BoolValue(v)) => EncodedField(encode_varint_u64(bool_to_u64(v)))
     (EnumType(_), Int64Value(v)) =>
@@ -246,11 +264,20 @@ fn encode_fixed32_payload(
   value : ProtoValue,
 ) -> EncodeFieldResult {
   match (typ, value) {
-    (Fixed32Type, UInt64Value(v)) => EncodedField(encode_fixed32(v.to_uint()))
+    (Fixed32Type, UInt64Value(v)) =>
+      if v <= 0xffffffffUL {
+        EncodedField(encode_fixed32(v.to_uint()))
+      } else {
+        EncodeFieldErr(Unsupported("fixed32 value out of range"))
+      }
     (SFixed32Type, Int64Value(v)) =>
-      EncodedField(
-        encode_fixed32((v.reinterpret_as_uint64() & 0xffffffffUL).to_uint()),
-      )
+      if v >= (-2147483647L - 1L) && v <= 2147483647L {
+        EncodedField(
+          encode_fixed32((v.reinterpret_as_uint64() & 0xffffffffUL).to_uint()),
+        )
+      } else {
+        EncodeFieldErr(Unsupported("sfixed32 value out of range"))
+      }
     (FloatType, _) =>
       EncodeFieldErr(Unsupported("float encoding is not implemented"))
     _ => EncodeFieldErr(Unsupported("value does not match fixed32 scalar type"))

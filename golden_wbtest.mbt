@@ -271,6 +271,93 @@ test "message encode rejects bad dynamic values" {
 }
 
 ///|
+test "32-bit numeric bounds are enforced" {
+  let desc = MessageDescriptor::{
+    name: "Nums",
+    fields: [
+      FieldDescriptor::{
+        name: "u",
+        typ: UInt32Type,
+        number: 1,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "i",
+        typ: Int32Type,
+        number: 2,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "s",
+        typ: SInt32Type,
+        number: 3,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "f",
+        typ: Fixed32Type,
+        number: 4,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "sf",
+        typ: SFixed32Type,
+        number: 5,
+        label: Singular,
+      },
+    ],
+  }
+  let valid = message_value([
+    message_field("u", UInt64Value(0xffffffffUL)),
+    message_field("i", Int64Value(2147483647L)),
+    message_field("s", Int64Value(-2147483647L - 1L)),
+    message_field("f", UInt64Value(0xffffffffUL)),
+    message_field("sf", Int64Value(-1L)),
+  ])
+  match encode_message(desc, valid) {
+    EncodeMessageErr(_) => fail("valid 32-bit boundary values should encode")
+    EncodeMessageOk(_) => ()
+  }
+  match
+    encode_message(
+      desc,
+      message_value([message_field("u", UInt64Value(0x100000000UL))]),
+    ) {
+    EncodeMessageOk(_) => fail("uint32 overflow should be rejected")
+    EncodeMessageErr(Unsupported(_)) => ()
+    EncodeMessageErr(_) => fail("unexpected uint32 overflow error")
+  }
+  match
+    encode_message(
+      desc,
+      message_value([message_field("i", Int64Value(2147483648L))]),
+    ) {
+    EncodeMessageOk(_) => fail("int32 overflow should be rejected")
+    EncodeMessageErr(Unsupported(_)) => ()
+    EncodeMessageErr(_) => fail("unexpected int32 overflow error")
+  }
+  match
+    encode_message(
+      desc,
+      message_value([message_field("s", Int64Value(-2147483647L - 2L))]),
+    ) {
+    EncodeMessageOk(_) => fail("sint32 underflow should be rejected")
+    EncodeMessageErr(Unsupported(_)) => ()
+    EncodeMessageErr(_) => fail("unexpected sint32 underflow error")
+  }
+  match json_to_message(desc, "{\"u\":4294967296}") {
+    JsonDecodeOk(_) => fail("uint32 JSON overflow should be rejected")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected uint32 JSON overflow error")
+  }
+  match json_to_message(desc, "{\"i\":2147483648}") {
+    JsonDecodeOk(_) => fail("int32 JSON overflow should be rejected")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected int32 JSON overflow error")
+  }
+}
+
+///|
 test "codegen emits moonbit struct and descriptor" {
   let src =
     #|syntax = "proto3";
@@ -815,6 +902,75 @@ test "official python protobuf oracle full user bytes and json" {
   }
   match json_to_message(desc, python_oracle_json) {
     JsonDecodeErr(_) => fail("python oracle JSON parse failed")
+    JsonDecodeOk(decoded) => assert_true(decoded == msg)
+  }
+}
+
+///|
+test "official python protobuf oracle 32-bit numeric bytes and json" {
+  let desc = MessageDescriptor::{
+    name: "Numbers32",
+    fields: [
+      FieldDescriptor::{
+        name: "u",
+        typ: UInt32Type,
+        number: 1,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "i",
+        typ: Int32Type,
+        number: 2,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "s",
+        typ: SInt32Type,
+        number: 3,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "f",
+        typ: Fixed32Type,
+        number: 4,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "sf",
+        typ: SFixed32Type,
+        number: 5,
+        label: Singular,
+      },
+    ],
+  }
+  let msg = message_value([
+    message_field("u", UInt64Value(0xffffffffUL)),
+    message_field("i", Int64Value(-1L)),
+    message_field("s", Int64Value(-2L)),
+    message_field("f", UInt64Value(0xffffffffUL)),
+    message_field("sf", Int64Value(-3L)),
+  ])
+  let oracle_bytes = b"\x08\xff\xff\xff\xff\x0f\x10\xff\xff\xff\xff\xff\xff\xff\xff\xff\x01\x18\x03\x25\xff\xff\xff\xff\x2d\xfd\xff\xff\xff"
+  let oracle_json = "{\"u\":4294967295,\"i\":-1,\"s\":-2,\"f\":4294967295,\"sf\":-3}"
+  match encode_message(desc, msg) {
+    EncodeMessageErr(_) => fail("encoding numbers32 oracle failed")
+    EncodeMessageOk(bytes) => {
+      assert_eq(bytes, oracle_bytes)
+      match decode_message(desc, bytes) {
+        DecodeMessageErr(_) => fail("decoding numbers32 oracle failed")
+        DecodeMessageOk(decoded, next) => {
+          assert_eq(next, bytes.length())
+          assert_true(decoded == msg)
+        }
+      }
+    }
+  }
+  match message_to_json(desc, msg) {
+    JsonErr(_) => fail("numbers32 oracle JSON render failed")
+    JsonOk(json) => assert_eq(json, oracle_json)
+  }
+  match json_to_message(desc, oracle_json) {
+    JsonDecodeErr(_) => fail("numbers32 oracle JSON parse failed")
     JsonDecodeOk(decoded) => assert_true(decoded == msg)
   }
 }

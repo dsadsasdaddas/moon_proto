@@ -326,17 +326,27 @@ fn map_key_to_json_property(
   match (typ, value) {
     (StringType, StringValue(v)) => JsonOk(v)
     (BoolType, BoolValue(v)) => JsonOk(if v { "true" } else { "false" })
-    (UInt32Type | UInt64Type | Fixed32Type | Fixed64Type, UInt64Value(v)) =>
+    (UInt32Type | Fixed32Type, UInt64Value(v)) =>
+      if v <= 0xffffffffUL {
+        JsonOk(v.to_string())
+      } else {
+        JsonErr(Unsupported("uint32 map key out of range"))
+      }
+    (UInt64Type | Fixed64Type, UInt64Value(v)) =>
       JsonOk(v.to_string())
     (
       Int32Type
-      | Int64Type
       | SInt32Type
-      | SInt64Type
-      | SFixed32Type
-      | SFixed64Type,
+      | SFixed32Type,
       Int64Value(v),
-    ) => JsonOk(v.to_string())
+    ) =>
+      if v >= (-2147483647L - 1L) && v <= 2147483647L {
+        JsonOk(v.to_string())
+      } else {
+        JsonErr(Unsupported("int32 map key out of range"))
+      }
+    (Int64Type | SInt64Type | SFixed64Type, Int64Value(v)) =>
+      JsonOk(v.to_string())
     _ => JsonErr(Unsupported("value does not match map key type"))
   }
 }
@@ -389,7 +399,13 @@ fn scalar_to_json(typ : ScalarType, value : ProtoValue) -> JsonEncodeResult {
     (BytesType, BytesValue(v)) => JsonOk(json_escape_string(base64_encode(v)))
     (BoolType, BoolValue(v)) => JsonOk(if v { "true" } else { "false" })
     (EnumType(_), Int64Value(v)) => JsonOk(v.to_string())
-    (UInt32Type | UInt64Type | Fixed32Type | Fixed64Type, UInt64Value(v)) =>
+    (UInt32Type | Fixed32Type, UInt64Value(v)) =>
+      if v > 0xffffffffUL {
+        JsonErr(Unsupported("uint32 value out of range"))
+      } else {
+        JsonOk(v.to_string())
+      }
+    (UInt64Type | Fixed64Type, UInt64Value(v)) =>
       if is_i64_json_string_type(typ) {
         JsonOk(json_escape_string(v.to_string()))
       } else {
@@ -397,10 +413,18 @@ fn scalar_to_json(typ : ScalarType, value : ProtoValue) -> JsonEncodeResult {
       }
     (
       Int32Type
-      | Int64Type
       | SInt32Type
+      | SFixed32Type,
+      Int64Value(v),
+    ) =>
+      if v < (-2147483647L - 1L) || v > 2147483647L {
+        JsonErr(Unsupported("int32 value out of range"))
+      } else {
+        JsonOk(v.to_string())
+      }
+    (
+      Int64Type
       | SInt64Type
-      | SFixed32Type
       | SFixed64Type,
       Int64Value(v),
     ) =>
@@ -703,7 +727,21 @@ fn parse_scalar_from_json(
       } else {
         JsonScalarErr(Unsupported("expected JSON bool"))
       }
-    UInt32Type | UInt64Type | Fixed32Type | Fixed64Type =>
+    UInt32Type | Fixed32Type =>
+      match parser.parse_number_or_string_token() {
+        JsonStringErr(e) => JsonScalarErr(e)
+        JsonStringOk(text) =>
+          match parse_u64_digits(text) {
+            Some(v) =>
+              if v <= 0xffffffffUL {
+                JsonScalarOk(UInt64Value(v))
+              } else {
+                JsonScalarErr(Unsupported("uint32 JSON out of range"))
+              }
+            None => JsonScalarErr(Unsupported("invalid unsigned integer JSON"))
+          }
+      }
+    UInt64Type | Fixed64Type =>
       match parser.parse_number_or_string_token() {
         JsonStringErr(e) => JsonScalarErr(e)
         JsonStringOk(text) =>
@@ -712,12 +750,21 @@ fn parse_scalar_from_json(
             None => JsonScalarErr(Unsupported("invalid unsigned integer JSON"))
           }
       }
-    Int32Type
-    | Int64Type
-    | SInt32Type
-    | SInt64Type
-    | SFixed32Type
-    | SFixed64Type =>
+    Int32Type | SInt32Type | SFixed32Type =>
+      match parser.parse_number_or_string_token() {
+        JsonStringErr(e) => JsonScalarErr(e)
+        JsonStringOk(text) =>
+          match parse_i64_digits(text) {
+            Some(v) =>
+              if v >= (-2147483647L - 1L) && v <= 2147483647L {
+                JsonScalarOk(Int64Value(v))
+              } else {
+                JsonScalarErr(Unsupported("int32 JSON out of range"))
+              }
+            None => JsonScalarErr(Unsupported("invalid signed integer JSON"))
+          }
+      }
+    Int64Type | SInt64Type | SFixed64Type =>
       match parser.parse_number_or_string_token() {
         JsonStringErr(e) => JsonScalarErr(e)
         JsonStringOk(text) =>
@@ -779,17 +826,32 @@ fn parse_map_key_from_json_property(
       } else {
         JsonScalarErr(Unsupported("invalid bool map key JSON"))
       }
-    UInt32Type | UInt64Type | Fixed32Type | Fixed64Type =>
+    UInt32Type | Fixed32Type =>
+      match parse_u64_digits(key) {
+        Some(v) =>
+          if v <= 0xffffffffUL {
+            JsonScalarOk(UInt64Value(v))
+          } else {
+            JsonScalarErr(Unsupported("uint32 map key JSON out of range"))
+          }
+        None => JsonScalarErr(Unsupported("invalid unsigned map key JSON"))
+      }
+    UInt64Type | Fixed64Type =>
       match parse_u64_digits(key) {
         Some(v) => JsonScalarOk(UInt64Value(v))
         None => JsonScalarErr(Unsupported("invalid unsigned map key JSON"))
       }
-    Int32Type
-    | Int64Type
-    | SInt32Type
-    | SInt64Type
-    | SFixed32Type
-    | SFixed64Type =>
+    Int32Type | SInt32Type | SFixed32Type =>
+      match parse_i64_digits(key) {
+        Some(v) =>
+          if v >= (-2147483647L - 1L) && v <= 2147483647L {
+            JsonScalarOk(Int64Value(v))
+          } else {
+            JsonScalarErr(Unsupported("int32 map key JSON out of range"))
+          }
+        None => JsonScalarErr(Unsupported("invalid signed map key JSON"))
+      }
+    Int64Type | SInt64Type | SFixed64Type =>
       match parse_i64_digits(key) {
         Some(v) => JsonScalarOk(Int64Value(v))
         None => JsonScalarErr(Unsupported("invalid signed map key JSON"))
