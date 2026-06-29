@@ -33,6 +33,7 @@ Moon Proto 计划为 MoonBit 生态补齐 Protocol Buffers 基础能力，使 Mo
 - `.proto` lexer/parser 子集：syntax、package、message、enum、optional/repeated、标量字段；
 - MoonBit 代码生成雏形：根据 message/enum descriptor 生成 struct、enum 与 descriptor 函数；
 - enum 字段解析后会解析为 varint runtime 类型，支持二进制与 JSON 数值 roundtrip；
+- schema validator 可检查字段号范围、重复字段名/号、proto3 enum 首值为 0、顶层命名冲突等问题，增强 AI 生成 schema/codegen 的可验证性；
 - 官方 Python `google.protobuf` oracle fixtures，用于验证 MoonBit golden bytes/JSON 与成熟生态一致；
 - golden tests 覆盖 varint 向量、field bytes、schema parser、动态 message roundtrip、unknown field、packed repeated、codegen 快照、JSON 转义/输出/解析、enum parser/codegen、Python oracle 兼容样例。
 

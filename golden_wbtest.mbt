@@ -774,3 +774,104 @@ test "official python protobuf oracle full user bytes and json" {
     JsonDecodeOk(decoded) => assert_true(decoded == msg)
   }
 }
+
+///|
+test "schema validator accepts parsed supported proto" {
+  let src =
+    #|syntax = "proto3";
+    #|package demo;
+    #|enum Color {
+    #|  COLOR_UNSPECIFIED = 0;
+    #|  RED = 1;
+    #|}
+    #|message Paint {
+    #|  uint64 id = 1;
+    #|  Color color = 2;
+    #|  repeated string tags = 3;
+    #|}
+  match parse_proto(src) {
+    ProtoErr(_) => fail("schema parse failed")
+    ProtoOk(file) => {
+      assert_true(schema_is_valid(file))
+      assert_true(validate_proto_file(file) == SchemaValid)
+    }
+  }
+}
+
+///|
+test "schema validator reports duplicate and reserved fields" {
+  let msg = MessageDescriptor::{
+    name: "Bad",
+    fields: [
+      FieldDescriptor::{
+        name: "id",
+        typ: UInt64Type,
+        number: 1,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "id",
+        typ: StringType,
+        number: 2,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "reserved",
+        typ: BoolType,
+        number: 19000,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "again",
+        typ: BoolType,
+        number: 1,
+        label: Singular,
+      },
+    ],
+  }
+  match validate_message_descriptor(msg) {
+    SchemaValid => fail("invalid message should fail validation")
+    SchemaInvalid(issues) => {
+      assert_eq(issues.length(), 3)
+      assert_eq(issues[0].message, "duplicate field name")
+      assert_eq(issues[1].message, "invalid protobuf field number")
+      assert_eq(issues[2].message, "duplicate field number")
+    }
+  }
+}
+
+///|
+test "schema validator reports enum and top level issues" {
+  let file = ProtoFile::{
+    syntax: "proto2",
+    package_name: "demo",
+    messages: [
+      MessageDescriptor::{ name: "Thing", fields: [] },
+      MessageDescriptor::{ name: "Thing", fields: [] },
+    ],
+    enums: [
+      EnumDescriptor::{
+        name: "Thing",
+        values: [
+          EnumValueDescriptor::{ name: "RED", number: 1 },
+          EnumValueDescriptor::{ name: "RED", number: 1 },
+        ],
+      },
+    ],
+  }
+  match validate_proto_file(file) {
+    SchemaValid => fail("invalid proto file should fail validation")
+    SchemaInvalid(issues) => {
+      assert_eq(issues.length(), 6)
+      assert_eq(issues[0].path, "syntax")
+      assert_eq(issues[1].message, "duplicate top-level message name")
+      assert_eq(issues[2].message, "proto3 enum first value must be zero")
+      assert_eq(issues[3].message, "duplicate enum value name")
+      assert_eq(issues[4].message, "duplicate enum value number")
+      assert_eq(
+        issues[5].message,
+        "top-level enum name conflicts with message name",
+      )
+    }
+  }
+}
