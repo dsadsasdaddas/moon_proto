@@ -146,6 +146,7 @@ tests/codegen/compile_generated.sh
 
 - [Testing strategy](docs/TESTING.md)
 - [Development report](docs/DEVELOPMENT_REPORT.md)
+- [Submission checklist](docs/SUBMISSION_CHECKLIST.md)
 - Proposal PDF: `output/pdf/MoonProto_王越的战队_项目申报书.pdf`
 
 ## Roadmap
