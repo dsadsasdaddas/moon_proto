@@ -1,44 +1,55 @@
-# moon_proto
+# Moon Proto Lab
 
-`moon_proto` is a **proto3 Protocol Buffers runtime, parser, and codegen toolkit for MoonBit**.
+**Moon Proto Lab** is a MoonBit protobuf ecosystem lab for **dynamic schema parsing, compatibility testing, JSON mapping, code generation experiments, and AI-generated schema/code verification**.
 
-The project targets the MoonBit open-source ecosystem contest as basic software infrastructure for cloud, edge, WebAssembly, RPC-like data exchange, and multi-language interoperability.
+The repository name remains `moon_proto`, but the project is now deliberately positioned as an ecosystem companion instead of a replacement for the existing MoonBit protobuf implementation.
 
 ## Repository links
 
 - GitHub: https://github.com/dsadsasdaddas/moon_proto
 - Gitlink: https://gitlink.org.cn/wangyue111/moon_proto
 
+## Ecosystem positioning
+
+Before submission we checked the MoonBit package ecosystem and found existing protobuf-related packages, including `moonbitlang/protobuf` (https://mooncakes.io/docs/moonbitlang/protobuf) and `moonbitlang/protoc-gen-mbt` (https://github.com/moonbitlang/protoc-gen-mbt).
+
+Moon Proto Lab therefore does **not** claim to replace the official/runtime-oriented protobuf stack. Its independent value is the verification and tooling layer around protobuf usage in MoonBit:
+
+- parse and validate `.proto` schemas before code generation;
+- provide a dynamic descriptor/message runtime for debugging and schema experiments;
+- check protobuf binary and JSON mapping behavior against Python/Go official protobuf oracles;
+- provide conformance-lite fixtures for scalar, repeated, packed repeated, enum, nested, map and oneof cases;
+- compile-check generated MoonBit source so AI-generated schema/code changes are not only syntactically plausible but actually buildable;
+- keep the door open for future adapters to official MoonBit protobuf packages.
+
+This makes the project fit the contest theme of improving MoonBit open-source infrastructure and addressing the problem that AI-generated code is hard to verify and maintain over time.
+
 ## Current scope
 
-The project keeps the early milestones small and testable while moving toward
-a complete proto3 toolkit:
+The project has a small but end-to-end verifiable protobuf laboratory pipeline:
 
 - protobuf wire type model;
+- key packing/parsing;
 - UInt64 varint encode/decode;
 - zig-zag signed integer mapping;
 - fixed32/fixed64 little-endian helpers;
 - length-delimited bytes/string helpers;
 - field-level helpers for `uint64`, `bool`, `sint64`, `string`, `bytes`;
-- schema-driven dynamic message encode/decode for scalar fields;
-- descriptor-registry based nested message binary and JSON roundtrip;
-- repeated field emission and accumulation;
-- proto3 map parser, dynamic binary runtime, JSON object mapping and validation;
-- proto3 oneof parser, conflict validation and last-one-wins decode semantics;
-- proto3 packed repeated encoding/decoding for numeric scalar fields;
+- proto3 schema model for messages, fields, labels, scalar types, enums, named messages, maps and oneof groups;
+- `.proto` lexer/parser for `syntax`, `package`, `message`, `enum`, scalar fields, `optional`, `repeated`, `map`, and `oneof`;
+- schema validator for field numbers, duplicate names/numbers, proto3 enum invariants, top-level conflicts and map constraints;
+- schema-driven dynamic message encode/decode for scalar, repeated, packed repeated, enum, nested message, map and oneof fields;
 - unknown-field skipping during decode;
-- protobuf-style JSON writer/parser for scalar/repeated/map/oneof dynamic messages;
-- proto3 schema model for messages, fields and top-level enums;
-- enum field resolution with protobuf varint runtime support;
-- a small `.proto` lexer/parser for `syntax`, `package`, `message`, `enum`, scalar fields, `optional`, `repeated`, `map`, and `oneof`;
-- MoonBit source generator for message structs, enums and descriptor functions;
+- protobuf-style JSON writer/parser for scalar/repeated/map/nested/oneof dynamic messages;
+- MoonBit source generator for message structs, enums, descriptor registries and helper functions;
 - file-based generator wrapper for `.proto` input and generated `.mbt` output;
-- schema validator for field numbers, duplicates and proto3 enum invariants;
-- official Python and Go protobuf oracle fixtures for cross-language scalar/repeated/map/oneof compatibility;
+- Python and Go official protobuf oracle fixtures for cross-language compatibility checks;
 - deterministic property-style roundtrip corpora for binary and JSON paths;
-- golden tests for all implemented pieces.
+- generated-code compile checks and GitHub Actions CI.
 
 ## Example
+
+Encode a small hand-written message:
 
 ```moonbit
 let user = concat_bytes([
@@ -110,15 +121,6 @@ match message_to_json(desc, msg) {
 }
 ```
 
-Parse protobuf-style JSON back into a dynamic message:
-
-```moonbit
-match json_to_message(desc, "{\"id\":\"150\",\"name\":\"Alice\"}") {
-  JsonDecodeOk(msg) => println("ok")
-  JsonDecodeErr(_) => println("invalid JSON")
-}
-```
-
 Validate parsed schemas before codegen:
 
 ```moonbit
@@ -144,6 +146,7 @@ tests/codegen/compile_generated.sh
 
 ## Documentation
 
+- [Ecosystem positioning](docs/ECOSYSTEM_POSITIONING.md)
 - [Testing strategy](docs/TESTING.md)
 - [Development report](docs/DEVELOPMENT_REPORT.md)
 - [Submission checklist](docs/SUBMISSION_CHECKLIST.md)
@@ -151,21 +154,23 @@ tests/codegen/compile_generated.sh
 
 ## Roadmap
 
-- M1: wire runtime + schema parser + tests. ✅
-- M2: schema-driven dynamic encode/decode for scalar fields and repeated fields. ✅
-- M3: generated MoonBit structs and descriptor functions. ✅
-- M4: packed repeated numeric scalar encoding/decoding. ✅
-- M5: protobuf-style JSON writer/parser for scalar/repeated messages. ✅
-- M6: top-level enum parser and codegen. ✅
-- M7: enum field runtime/JSON support. ✅
-- M8: Python/Go protobuf oracle compatibility fixtures. ✅
-- M9: schema validator for AI/codegen safety. ✅
-- M10: nested message dynamic runtime/JSON support. ✅
-- M11: CLI smoke generator and runtime helper codegen. ✅
-- M12: generated-code compile check. ✅
-- M13: proto3 maps. ✅
-- M14: oneof groups. ✅
-- M15: file-based CLI wrapper `moon_proto gen schema.proto -o generated/`. ✅
+- M1: wire runtime + schema parser + tests. Done.
+- M2: schema-driven dynamic encode/decode for scalar and repeated fields. Done.
+- M3: generated MoonBit structs and descriptor functions. Done.
+- M4: packed repeated numeric scalar encoding/decoding. Done.
+- M5: protobuf-style JSON writer/parser for scalar/repeated messages. Done.
+- M6: top-level enum parser and codegen. Done.
+- M7: enum field runtime/JSON support. Done.
+- M8: Python/Go protobuf oracle compatibility fixtures. Done.
+- M9: schema validator for AI/codegen safety. Done.
+- M10: nested message dynamic runtime/JSON support. Done.
+- M11: CLI smoke generator and runtime helper codegen. Done.
+- M12: generated-code compile check. Done.
+- M13: proto3 maps. Done.
+- M14: oneof groups. Done.
+- M15: file-based CLI wrapper `moon_proto gen schema.proto -o generated/`. Done.
+- M16: adapters and differential tests around existing MoonBit protobuf packages. Planned.
+- M17: larger conformance-lite corpus and import/option/reserved schema support. Planned.
 
 ## License
 

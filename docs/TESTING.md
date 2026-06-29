@@ -1,6 +1,6 @@
 # Testing strategy
 
-moon_proto is designed for verification-first development.
+Moon Proto Lab is designed for verification-first development. Its main value is not only that it can encode/decode a protobuf subset, but that every implemented behavior is backed by reproducible tests, golden fixtures, cross-language oracles, and generated-code compile checks.
 
 Current tests cover:
 
@@ -46,13 +46,24 @@ python3 scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/
 tests/codegen/compile_generated.sh
 ```
 
-Python/Go oracle fixtures live in `tests/fixtures/`. The Python script can
-regenerate the checked-in binary/hex/JSON fixtures:
+Python/Go oracle fixtures live in `tests/fixtures/`. The Python script can regenerate the checked-in binary/hex/JSON fixtures:
 
 ```bash
 python3 tests/oracle/python_protobuf_oracle.py --write
 ```
 
+## Why these tests matter
+
+The project is positioned as a protobuf ecosystem verification lab for MoonBit. The tests are therefore part of the product:
+
+- golden bytes detect binary compatibility regressions;
+- JSON roundtrip tests detect mapping drift;
+- Python/Go oracles make behavior comparable with mature ecosystems;
+- negative tests reject invalid AI-generated schemas or dynamic messages;
+- generated-code compile checks ensure generated MoonBit source actually builds.
+
 Planned next verification:
 
-- expand generated-code integration examples for downstream packages.
+- differential tests against existing MoonBit protobuf packages where APIs are compatible;
+- larger conformance-lite corpus;
+- import/option/reserved schema validation tests.
