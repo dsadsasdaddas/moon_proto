@@ -4,6 +4,11 @@
 
 The project targets the MoonBit open-source ecosystem contest as basic software infrastructure for cloud, edge, WebAssembly, RPC-like data exchange, and multi-language interoperability.
 
+## Repository links
+
+- GitHub: https://github.com/dsadsasdaddas/moon_proto
+- Gitlink: https://gitlink.org.cn/wangyue111/moon_proto
+
 ## Stage-1 scope
 
 This first milestone intentionally keeps the scope small and testable:

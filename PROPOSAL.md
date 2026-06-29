@@ -6,7 +6,7 @@
 - **参赛者**：王月
 - **联系方式**：待填写
 - **GitHub 仓库链接**：https://github.com/dsadsasdaddas/moon_proto
-- **Gitlink 仓库链接**：待同步后填写
+- **Gitlink 仓库链接**：https://gitlink.org.cn/wangyue111/moon_proto
 - **项目方向**：MoonBit 基础序列化工具 / 云与边缘计算数据交换基础设施
 - **是否为移植或参考项目**：参考成熟标准 Protocol Buffers，从零实现 MoonBit 运行时与工具链
 
