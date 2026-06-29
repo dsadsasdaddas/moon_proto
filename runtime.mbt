@@ -111,6 +111,19 @@ fn has_field_name(desc : MessageDescriptor, name : String) -> Bool {
 }
 
 ///|
+fn find_message_descriptor(
+  descriptors : Array[MessageDescriptor],
+  name : String,
+) -> MessageDescriptor? {
+  for desc in descriptors {
+    if desc.name == name {
+      return Some(desc)
+    }
+  }
+  None
+}
+
+///|
 fn bool_to_u64(value : Bool) -> UInt64 {
   if value {
     1UL
@@ -161,13 +174,27 @@ fn encode_varint_payload(
 fn encode_length_payload(
   typ : ScalarType,
   value : ProtoValue,
+  descriptors : Array[MessageDescriptor],
 ) -> EncodeFieldResult {
   match (typ, value) {
     (StringType, StringValue(v)) => EncodedField(encode_string(v))
     (BytesType, BytesValue(v)) => EncodedField(encode_length_delimited(v))
+    (NamedType(name), NestedMessageValue(v)) =>
+      match find_message_descriptor(descriptors, name) {
+        None =>
+          EncodeFieldErr(
+            Unsupported("missing descriptor for nested message: " + name),
+          )
+        Some(desc) =>
+          match encode_message_with_descriptors(desc, descriptors, v) {
+            EncodeMessageErr(e) => EncodeFieldErr(e)
+            EncodeMessageOk(bytes) =>
+              EncodedField(encode_length_delimited(bytes))
+          }
+      }
     (NamedType(name), _) =>
       EncodeFieldErr(
-        Unsupported("nested message encoding is not implemented: " + name),
+        Unsupported("value does not match nested message: " + name),
       )
     _ =>
       EncodeFieldErr(
@@ -212,10 +239,11 @@ fn encode_fixed64_payload(
 fn encode_scalar_payload(
   typ : ScalarType,
   value : ProtoValue,
+  descriptors : Array[MessageDescriptor],
 ) -> EncodeFieldResult {
   match typ.wire_type() {
     Varint => encode_varint_payload(typ, value)
-    LengthDelimited => encode_length_payload(typ, value)
+    LengthDelimited => encode_length_payload(typ, value, descriptors)
     Fixed32 => encode_fixed32_payload(typ, value)
     Fixed64 => encode_fixed64_payload(typ, value)
     StartGroup | EndGroup =>
@@ -227,8 +255,9 @@ fn encode_scalar_payload(
 fn encode_scalar_field(
   desc : FieldDescriptor,
   value : ProtoValue,
+  descriptors : Array[MessageDescriptor],
 ) -> EncodeFieldResult {
-  let payload = encode_scalar_payload(desc.typ, value)
+  let payload = encode_scalar_payload(desc.typ, value, descriptors)
   match payload {
     EncodedField(p) =>
       EncodedField(
@@ -242,10 +271,11 @@ fn encode_scalar_field(
 fn encode_packed_repeated_field(
   desc : FieldDescriptor,
   values : Array[ProtoValue],
+  descriptors : Array[MessageDescriptor],
 ) -> EncodeFieldResult {
   let payloads : Array[Bytes] = []
   for v in values {
-    match encode_scalar_payload(desc.typ, v) {
+    match encode_scalar_payload(desc.typ, v, descriptors) {
       EncodedField(bytes) => payloads.push(bytes)
       EncodeFieldErr(e) => return EncodeFieldErr(e)
     }
@@ -291,6 +321,17 @@ pub fn encode_message(
   desc : MessageDescriptor,
   value : MessageValue,
 ) -> EncodeMessageResult {
+  encode_message_with_descriptors(desc, [], value)
+}
+
+///|
+/// Encode a dynamic message, resolving `NamedType` fields through
+/// `descriptors` for message-valued nested fields.
+pub fn encode_message_with_descriptors(
+  desc : MessageDescriptor,
+  descriptors : Array[MessageDescriptor],
+  value : MessageValue,
+) -> EncodeMessageResult {
   match validate_message_fields(desc, value) {
     Some(e) => return EncodeMessageErr(e)
     None => ()
@@ -302,13 +343,13 @@ pub fn encode_message(
         if fd.label == Repeated &&
           is_packable_scalar(fd.typ) &&
           f.values.length() > 0 {
-          match encode_packed_repeated_field(fd, f.values) {
+          match encode_packed_repeated_field(fd, f.values, descriptors) {
             EncodedField(bytes) => parts.push(bytes)
             EncodeFieldErr(e) => return EncodeMessageErr(e)
           }
         } else {
           for v in f.values {
-            match encode_scalar_field(fd, v) {
+            match encode_scalar_field(fd, v, descriptors) {
               EncodedField(bytes) => parts.push(bytes)
               EncodeFieldErr(e) => return EncodeMessageErr(e)
             }
@@ -325,6 +366,7 @@ fn decode_scalar_payload(
   typ : ScalarType,
   input : Bytes,
   offset : Int,
+  descriptors : Array[MessageDescriptor],
 ) -> DecodeScalarResult {
   match typ.wire_type() {
     Varint =>
@@ -356,9 +398,31 @@ fn decode_scalar_payload(
             BytesOk(b, next) => DecodedScalar(BytesValue(b), next)
           }
         NamedType(name) =>
-          DecodeScalarErr(
-            Unsupported("nested message decoding is not implemented: " + name),
-          )
+          match decode_length_delimited(input, offset~) {
+            BytesErr(e) => DecodeScalarErr(e)
+            BytesOk(payload, next) =>
+              match find_message_descriptor(descriptors, name) {
+                None =>
+                  DecodeScalarErr(
+                    Unsupported(
+                      "missing descriptor for nested message: " + name,
+                    ),
+                  )
+                Some(desc) =>
+                  match
+                    decode_message_with_descriptors(desc, descriptors, payload) {
+                    DecodeMessageErr(e) => DecodeScalarErr(e)
+                    DecodeMessageOk(message, payload_next) =>
+                      if payload_next != payload.length() {
+                        DecodeScalarErr(
+                          Unsupported("nested decoder left trailing bytes"),
+                        )
+                      } else {
+                        DecodedScalar(NestedMessageValue(message), next)
+                      }
+                  }
+              }
+          }
         _ => DecodeScalarErr(Unsupported("unsupported length-delimited scalar"))
       }
     Fixed32 =>
@@ -400,6 +464,7 @@ fn decode_packed_payload(
   typ : ScalarType,
   input : Bytes,
   offset : Int,
+  descriptors : Array[MessageDescriptor],
 ) -> DecodePackedResult {
   match decode_length_delimited(input, offset~) {
     BytesErr(e) => DecodePackedErr(e)
@@ -407,7 +472,7 @@ fn decode_packed_payload(
       let values : Array[ProtoValue] = []
       let mut i = 0
       while i < payload.length() {
-        match decode_scalar_payload(typ, payload, i) {
+        match decode_scalar_payload(typ, payload, i, descriptors) {
           DecodeScalarErr(e) => return DecodePackedErr(e)
           DecodedScalar(value, after_value) => {
             if after_value <= i {
@@ -495,6 +560,18 @@ pub fn decode_message(
   input : Bytes,
   offset? : Int = 0,
 ) -> DecodeMessageResult {
+  decode_message_with_descriptors(desc, [], input, offset~)
+}
+
+///|
+/// Decode a dynamic message, resolving `NamedType` fields through
+/// `descriptors` for message-valued nested fields.
+pub fn decode_message_with_descriptors(
+  desc : MessageDescriptor,
+  descriptors : Array[MessageDescriptor],
+  input : Bytes,
+  offset? : Int = 0,
+) -> DecodeMessageResult {
   if offset < 0 || offset > input.length() {
     return DecodeMessageErr(UnexpectedEof)
   }
@@ -517,7 +594,8 @@ pub fn decode_message(
                 if fd.label == Repeated &&
                   is_packable_scalar(fd.typ) &&
                   wire == LengthDelimited {
-                  match decode_packed_payload(fd.typ, input, after_key) {
+                  match
+                    decode_packed_payload(fd.typ, input, after_key, descriptors) {
                     DecodePackedErr(e) => return DecodeMessageErr(e)
                     DecodedPacked(values, next) => {
                       for value in values {
@@ -531,7 +609,8 @@ pub fn decode_message(
                     Unsupported("wire type mismatch for field: " + fd.name),
                   )
                 } else {
-                  match decode_scalar_payload(fd.typ, input, after_key) {
+                  match
+                    decode_scalar_payload(fd.typ, input, after_key, descriptors) {
                     DecodeScalarErr(e) => return DecodeMessageErr(e)
                     DecodedScalar(value, next) => {
                       add_decoded_field(decoded, fd, value)

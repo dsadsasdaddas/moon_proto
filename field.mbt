@@ -12,6 +12,7 @@ pub(all) enum ProtoValue {
   BoolValue(Bool)
   StringValue(String)
   BytesValue(Bytes)
+  NestedMessageValue(MessageValue)
 } derive(Debug, Eq)
 
 ///|

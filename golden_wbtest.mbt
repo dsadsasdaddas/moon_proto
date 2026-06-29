@@ -875,3 +875,103 @@ test "schema validator reports enum and top level issues" {
     }
   }
 }
+
+///|
+test "nested message binary and json roundtrip" {
+  let address_desc = MessageDescriptor::{
+    name: "Address",
+    fields: [
+      FieldDescriptor::{
+        name: "street",
+        typ: StringType,
+        number: 1,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "zip",
+        typ: UInt64Type,
+        number: 2,
+        label: Singular,
+      },
+    ],
+  }
+  let person_desc = MessageDescriptor::{
+    name: "Person",
+    fields: [
+      FieldDescriptor::{
+        name: "name",
+        typ: StringType,
+        number: 1,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "address",
+        typ: NamedType("Address"),
+        number: 2,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "previous",
+        typ: NamedType("Address"),
+        number: 3,
+        label: Repeated,
+      },
+    ],
+  }
+  let address = message_value([
+    message_field("street", StringValue("Main")),
+    message_field("zip", UInt64Value(94107UL)),
+  ])
+  let previous = message_value([
+    message_field("street", StringValue("Old")),
+    message_field("zip", UInt64Value(1UL)),
+  ])
+  let person = message_value([
+    message_field("name", StringValue("Bob")),
+    message_field("address", NestedMessageValue(address)),
+    repeated_message_field("previous", [NestedMessageValue(previous)]),
+  ])
+  let address_bytes = concat_bytes([
+    encode_string_field(1, "Main"),
+    encode_uint64_field(2, 94107UL),
+  ])
+  let previous_bytes = concat_bytes([
+    encode_string_field(1, "Old"),
+    encode_uint64_field(2, 1UL),
+  ])
+  let expected = concat_bytes([
+    encode_string_field(1, "Bob"),
+    concat_bytes([
+      encode_key(2, LengthDelimited),
+      encode_length_delimited(address_bytes),
+    ]),
+    concat_bytes([
+      encode_key(3, LengthDelimited),
+      encode_length_delimited(previous_bytes),
+    ]),
+  ])
+  let descriptors = [address_desc]
+  match encode_message_with_descriptors(person_desc, descriptors, person) {
+    EncodeMessageErr(_) => fail("nested message encode failed")
+    EncodeMessageOk(bytes) => {
+      assert_eq(bytes, expected)
+      match decode_message_with_descriptors(person_desc, descriptors, bytes) {
+        DecodeMessageErr(_) => fail("nested message decode failed")
+        DecodeMessageOk(decoded, next) => {
+          assert_eq(next, bytes.length())
+          assert_true(decoded == person)
+        }
+      }
+    }
+  }
+  let expected_json = "{\"name\":\"Bob\",\"address\":{\"street\":\"Main\",\"zip\":\"94107\"},\"previous\":[{\"street\":\"Old\",\"zip\":\"1\"}]}"
+  match message_to_json_with_descriptors(person_desc, descriptors, person) {
+    JsonErr(_) => fail("nested message json encode failed")
+    JsonOk(json) => assert_eq(json, expected_json)
+  }
+  match
+    json_to_message_with_descriptors(person_desc, descriptors, expected_json) {
+    JsonDecodeErr(_) => fail("nested message json decode failed")
+    JsonDecodeOk(decoded) => assert_true(decoded == person)
+  }
+}

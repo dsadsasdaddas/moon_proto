@@ -240,6 +240,19 @@ fn json_find_message_field(
 }
 
 ///|
+fn json_find_message_descriptor(
+  descriptors : Array[MessageDescriptor],
+  name : String,
+) -> MessageDescriptor? {
+  for desc in descriptors {
+    if desc.name == name {
+      return Some(desc)
+    }
+  }
+  None
+}
+
+///|
 fn json_has_message_field(fields : Array[MessageField], name : String) -> Bool {
   for field in fields {
     if field.name == name {
@@ -298,8 +311,10 @@ fn scalar_to_json(typ : ScalarType, value : ProtoValue) -> JsonEncodeResult {
       } else {
         JsonOk(v.to_string())
       }
+    (NamedType(name), NestedMessageValue(_)) =>
+      JsonErr(Unsupported("missing descriptor for nested message: " + name))
     (NamedType(name), _) =>
-      JsonErr(Unsupported("nested message JSON is not implemented: " + name))
+      JsonErr(Unsupported("value does not match nested message: " + name))
     (FloatType | DoubleType, _) =>
       JsonErr(Unsupported("float/double JSON is not implemented"))
     _ => JsonErr(Unsupported("value does not match JSON scalar type"))
@@ -310,11 +325,12 @@ fn scalar_to_json(typ : ScalarType, value : ProtoValue) -> JsonEncodeResult {
 fn field_to_json(
   desc : FieldDescriptor,
   field : MessageField,
+  descriptors : Array[MessageDescriptor],
 ) -> JsonEncodeResult {
   if desc.label == Repeated {
     let items : Array[String] = []
     for value in field.values {
-      match scalar_to_json(desc.typ, value) {
+      match scalar_to_json_with_descriptors(desc.typ, value, descriptors) {
         JsonErr(e) => return JsonErr(e)
         JsonOk(item) => items.push(item)
       }
@@ -323,7 +339,24 @@ fn field_to_json(
   } else if field.values.length() == 0 {
     JsonErr(Unsupported("singular field has no JSON value: " + field.name))
   } else {
-    scalar_to_json(desc.typ, field.values[0])
+    scalar_to_json_with_descriptors(desc.typ, field.values[0], descriptors)
+  }
+}
+
+///|
+fn scalar_to_json_with_descriptors(
+  typ : ScalarType,
+  value : ProtoValue,
+  descriptors : Array[MessageDescriptor],
+) -> JsonEncodeResult {
+  match (typ, value) {
+    (NamedType(name), NestedMessageValue(v)) =>
+      match json_find_message_descriptor(descriptors, name) {
+        None =>
+          JsonErr(Unsupported("missing descriptor for nested message: " + name))
+        Some(desc) => message_to_json_with_descriptors(desc, descriptors, v)
+      }
+    _ => scalar_to_json(typ, value)
   }
 }
 
@@ -332,6 +365,17 @@ fn field_to_json(
 /// fields are emitted in descriptor order; absent fields are omitted.
 pub fn message_to_json(
   desc : MessageDescriptor,
+  value : MessageValue,
+) -> JsonEncodeResult {
+  message_to_json_with_descriptors(desc, [], value)
+}
+
+///|
+/// Convert a dynamic message to deterministic protobuf-style JSON, resolving
+/// `NamedType` fields through `descriptors` for nested message values.
+pub fn message_to_json_with_descriptors(
+  desc : MessageDescriptor,
+  descriptors : Array[MessageDescriptor],
   value : MessageValue,
 ) -> JsonEncodeResult {
   match validate_json_message(desc, value) {
@@ -343,7 +387,7 @@ pub fn message_to_json(
     match json_find_message_field(value, fd.name) {
       None => ()
       Some(field) =>
-        match field_to_json(fd, field) {
+        match field_to_json(fd, field, descriptors) {
           JsonErr(e) => return JsonErr(e)
           JsonOk(encoded) =>
             props.push(json_escape_string(fd.name) + ":" + encoded)
@@ -530,6 +574,7 @@ fn parse_i64_digits(text : String) -> Int64? {
 fn parse_scalar_from_json(
   parser : JsonParser,
   typ : ScalarType,
+  descriptors : Array[MessageDescriptor],
 ) -> JsonScalarDecodeResult {
   match typ {
     StringType =>
@@ -587,9 +632,17 @@ fn parse_scalar_from_json(
           }
       }
     NamedType(name) =>
-      JsonScalarErr(
-        Unsupported("nested message JSON is not implemented: " + name),
-      )
+      match json_find_message_descriptor(descriptors, name) {
+        None =>
+          JsonScalarErr(
+            Unsupported("missing descriptor for nested message: " + name),
+          )
+        Some(desc) =>
+          match parse_json_message_object(parser, desc, descriptors) {
+            JsonDecodeErr(e) => JsonScalarErr(e)
+            JsonDecodeOk(message) => JsonScalarOk(NestedMessageValue(message))
+          }
+      }
     FloatType | DoubleType =>
       JsonScalarErr(Unsupported("float/double JSON is not implemented"))
   }
@@ -599,6 +652,7 @@ fn parse_scalar_from_json(
 fn parse_json_field(
   parser : JsonParser,
   fd : FieldDescriptor,
+  descriptors : Array[MessageDescriptor],
 ) -> JsonDecodeResult {
   if fd.label == Repeated {
     if !parser.consume('[') {
@@ -613,7 +667,7 @@ fn parse_json_field(
     }
     let mut done = false
     while !done {
-      match parse_scalar_from_json(parser, fd.typ) {
+      match parse_scalar_from_json(parser, fd.typ, descriptors) {
         JsonScalarErr(e) => return JsonDecodeErr(e)
         JsonScalarOk(value) => values.push(value)
       }
@@ -628,7 +682,7 @@ fn parse_json_field(
     }
     JsonDecodeOk(message_value([repeated_message_field(fd.name, values)]))
   } else {
-    match parse_scalar_from_json(parser, fd.typ) {
+    match parse_scalar_from_json(parser, fd.typ, descriptors) {
       JsonScalarErr(e) => JsonDecodeErr(e)
       JsonScalarOk(value) =>
         JsonDecodeOk(message_value([message_field(fd.name, value)]))
@@ -661,13 +715,11 @@ fn order_json_fields(
 }
 
 ///|
-/// Parse a protobuf-style JSON object into a dynamic message. Known fields are
-/// accepted in any JSON order and returned in descriptor order.
-pub fn json_to_message(
+fn parse_json_message_object(
+  parser : JsonParser,
   desc : MessageDescriptor,
-  input : String,
+  descriptors : Array[MessageDescriptor],
 ) -> JsonDecodeResult {
-  let parser = JsonParser::{ src: input, chars: input.to_array(), i: 0 }
   if !parser.consume('{') {
     return JsonDecodeErr(Unsupported("expected JSON object"))
   }
@@ -692,7 +744,7 @@ pub fn json_to_message(
       None => return JsonDecodeErr(Unsupported("unknown JSON field: " + key))
       Some(found) => found
     }
-    match parse_json_field(parser, fd) {
+    match parse_json_field(parser, fd, descriptors) {
       JsonDecodeErr(e) => return JsonDecodeErr(e)
       JsonDecodeOk(one) => append_json_field(parsed, one.fields[0])
     }
@@ -705,9 +757,37 @@ pub fn json_to_message(
       return JsonDecodeErr(Unsupported("expected comma or object end"))
     }
   }
-  parser.skip_ws()
-  if parser.i != parser.chars.length() {
-    return JsonDecodeErr(Unsupported("trailing JSON input"))
-  }
   JsonDecodeOk(message_value(order_json_fields(desc, parsed)))
+}
+
+///|
+/// Parse a protobuf-style JSON object into a dynamic message. Known fields are
+/// accepted in any JSON order and returned in descriptor order.
+pub fn json_to_message(
+  desc : MessageDescriptor,
+  input : String,
+) -> JsonDecodeResult {
+  json_to_message_with_descriptors(desc, [], input)
+}
+
+///|
+/// Parse protobuf-style JSON, resolving `NamedType` fields through
+/// `descriptors` for nested message values.
+pub fn json_to_message_with_descriptors(
+  desc : MessageDescriptor,
+  descriptors : Array[MessageDescriptor],
+  input : String,
+) -> JsonDecodeResult {
+  let parser = JsonParser::{ src: input, chars: input.to_array(), i: 0 }
+  match parse_json_message_object(parser, desc, descriptors) {
+    JsonDecodeErr(e) => JsonDecodeErr(e)
+    JsonDecodeOk(message) => {
+      parser.skip_ws()
+      if parser.i != parser.chars.length() {
+        JsonDecodeErr(Unsupported("trailing JSON input"))
+      } else {
+        JsonDecodeOk(message)
+      }
+    }
+  }
 }

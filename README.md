@@ -21,6 +21,7 @@ a complete proto3 toolkit:
 - length-delimited bytes/string helpers;
 - field-level helpers for `uint64`, `bool`, `sint64`, `string`, `bytes`;
 - schema-driven dynamic message encode/decode for scalar fields;
+- descriptor-registry based nested message binary and JSON roundtrip;
 - repeated field emission and accumulation;
 - proto3 packed repeated encoding/decoding for numeric scalar fields;
 - unknown-field skipping during decode;
@@ -131,9 +132,10 @@ moon test --target all
 - M7: enum field runtime/JSON support. ✅
 - M8: Python protobuf oracle compatibility fixtures. ✅
 - M9: schema validator for AI/codegen safety. ✅
-- M10: nested messages, oneof, maps.
-- M11: Go oracle cross-language compatibility tests.
-- M12: CLI `moon_proto gen schema.proto -o generated/` and examples.
+- M10: nested message dynamic runtime/JSON support. ✅
+- M11: oneof and maps.
+- M12: Go oracle cross-language compatibility tests.
+- M13: CLI `moon_proto gen schema.proto -o generated/` and examples.
 
 ## License
 

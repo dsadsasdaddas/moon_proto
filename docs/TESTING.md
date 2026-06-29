@@ -25,6 +25,7 @@ Current tests cover:
 - top-level enum parser and MoonBit codegen snapshots;
 - enum field binary and JSON roundtrip;
 - schema validator positive and negative cases;
+- nested message binary and JSON roundtrip through descriptor registries;
 - official Python `google.protobuf` oracle fixtures for a full scalar/repeated user message.
 
 Run the full matrix:
