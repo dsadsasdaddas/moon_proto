@@ -6,6 +6,32 @@ pub(all) enum JsonEncodeResult {
 } derive(Debug, Eq)
 
 ///|
+/// Result of parsing protobuf-style JSON into a dynamic message.
+pub(all) enum JsonDecodeResult {
+  JsonDecodeOk(MessageValue)
+  JsonDecodeErr(DecodeError)
+} derive(Debug, Eq)
+
+///|
+priv enum JsonStringResult {
+  JsonStringOk(String)
+  JsonStringErr(DecodeError)
+}
+
+///|
+priv enum JsonScalarDecodeResult {
+  JsonScalarOk(ProtoValue)
+  JsonScalarErr(DecodeError)
+}
+
+///|
+priv struct JsonParser {
+  src : String
+  chars : Array[Char]
+  mut i : Int
+}
+
+///|
 fn json_join(parts : Array[String], sep : String) -> String {
   let mut out = ""
   for i = 0; i < parts.length(); i = i + 1 {
@@ -115,6 +141,71 @@ pub fn base64_encode(input : Bytes) -> String {
 }
 
 ///|
+fn base64_value(c : Char) -> Int {
+  if c >= 'A' && c <= 'Z' {
+    c.to_int() - 'A'.to_int()
+  } else if c >= 'a' && c <= 'z' {
+    c.to_int() - 'a'.to_int() + 26
+  } else if c >= '0' && c <= '9' {
+    c.to_int() - '0'.to_int() + 52
+  } else if c == '+' {
+    62
+  } else if c == '/' {
+    63
+  } else {
+    -1
+  }
+}
+
+///|
+/// Decode standard base64 used by protobuf JSON bytes fields.
+pub fn base64_decode(input : String) -> DecodeBytesResult {
+  let chars = input.to_array()
+  if chars.length() == 0 {
+    return BytesOk(b"", 0)
+  }
+  if chars.length() % 4 != 0 {
+    return BytesErr(Unsupported("invalid base64 length"))
+  }
+  let out : Array[Byte] = []
+  let mut i = 0
+  while i < chars.length() {
+    let c0 = chars[i]
+    let c1 = chars[i + 1]
+    let c2 = chars[i + 2]
+    let c3 = chars[i + 3]
+    let v0 = base64_value(c0)
+    let v1 = base64_value(c1)
+    let pad2 = c2 == '='
+    let pad3 = c3 == '='
+    if v0 < 0 || v1 < 0 {
+      return BytesErr(Unsupported("invalid base64 alphabet"))
+    }
+    if pad2 && !pad3 {
+      return BytesErr(Unsupported("invalid base64 padding"))
+    }
+    let v2 = if pad2 { 0 } else { base64_value(c2) }
+    let v3 = if pad3 { 0 } else { base64_value(c3) }
+    if v2 < 0 || v3 < 0 {
+      return BytesErr(Unsupported("invalid base64 alphabet"))
+    }
+    let triple = (v0 << 18) | (v1 << 12) | (v2 << 6) | v3
+    out.push(((triple >> 16) & 255).reinterpret_as_uint().to_byte())
+    if !pad2 {
+      out.push(((triple >> 8) & 255).reinterpret_as_uint().to_byte())
+    }
+    if !pad3 {
+      out.push((triple & 255).reinterpret_as_uint().to_byte())
+    }
+    if (pad2 || pad3) && i + 4 < chars.length() {
+      return BytesErr(Unsupported("base64 padding must be final"))
+    }
+    i = i + 4
+  }
+  BytesOk(Bytes::from_array(out), chars.length())
+}
+
+///|
 fn is_i64_json_string_type(typ : ScalarType) -> Bool {
   match typ {
     Int64Type | UInt64Type | SInt64Type | Fixed64Type | SFixed64Type => true
@@ -146,6 +237,16 @@ fn json_find_message_field(
     }
   }
   None
+}
+
+///|
+fn json_has_message_field(fields : Array[MessageField], name : String) -> Bool {
+  for field in fields {
+    if field.name == name {
+      return true
+    }
+  }
+  false
 }
 
 ///|
@@ -249,4 +350,354 @@ pub fn message_to_json(
     }
   }
   JsonOk("{" + json_join(props, ",") + "}")
+}
+
+///|
+fn JsonParser::skip_ws(self : JsonParser) -> Unit {
+  while self.i < self.chars.length() {
+    let c = self.chars[self.i]
+    if c == ' ' || c == '\n' || c == '\r' || c == '\t' {
+      self.i = self.i + 1
+    } else {
+      return
+    }
+  }
+}
+
+///|
+fn JsonParser::peek(self : JsonParser) -> Char? {
+  if self.i < self.chars.length() {
+    Some(self.chars[self.i])
+  } else {
+    None
+  }
+}
+
+///|
+fn JsonParser::consume(self : JsonParser, wanted : Char) -> Bool {
+  self.skip_ws()
+  match self.peek() {
+    Some(c) =>
+      if c == wanted {
+        self.i = self.i + 1
+        true
+      } else {
+        false
+      }
+    None => false
+  }
+}
+
+///|
+fn JsonParser::consume_literal(self : JsonParser, wanted : String) -> Bool {
+  self.skip_ws()
+  let chars = wanted.to_array()
+  if self.i + chars.length() > self.chars.length() {
+    return false
+  }
+  for j = 0; j < chars.length(); j = j + 1 {
+    if self.chars[self.i + j] != chars[j] {
+      return false
+    }
+  }
+  self.i = self.i + chars.length()
+  true
+}
+
+///|
+fn JsonParser::parse_string(self : JsonParser) -> JsonStringResult {
+  self.skip_ws()
+  if self.i >= self.chars.length() || self.chars[self.i] != '"' {
+    return JsonStringErr(Unsupported("expected JSON string"))
+  }
+  self.i = self.i + 1
+  let out : Array[Char] = []
+  while self.i < self.chars.length() {
+    let c = self.chars[self.i]
+    self.i = self.i + 1
+    if c == '"' {
+      return JsonStringOk(String::from_iter(out.iter()))
+    } else if c == '\\' {
+      if self.i >= self.chars.length() {
+        return JsonStringErr(UnexpectedEof)
+      }
+      let e = self.chars[self.i]
+      self.i = self.i + 1
+      if e == '"' {
+        out.push('"')
+      } else if e == '\\' {
+        out.push('\\')
+      } else if e == '/' {
+        out.push('/')
+      } else if e == 'n' {
+        out.push('\n')
+      } else if e == 'r' {
+        out.push('\r')
+      } else if e == 't' {
+        out.push('\t')
+      } else {
+        return JsonStringErr(Unsupported("unsupported JSON escape"))
+      }
+    } else {
+      out.push(c)
+    }
+  }
+  JsonStringErr(UnexpectedEof)
+}
+
+///|
+fn is_json_digit(c : Char) -> Bool {
+  c >= '0' && c <= '9'
+}
+
+///|
+fn JsonParser::parse_number_token(self : JsonParser) -> JsonStringResult {
+  self.skip_ws()
+  let start = self.i
+  if self.i < self.chars.length() && self.chars[self.i] == '-' {
+    self.i = self.i + 1
+  }
+  let digit_start = self.i
+  while self.i < self.chars.length() && is_json_digit(self.chars[self.i]) {
+    self.i = self.i + 1
+  }
+  if self.i == digit_start {
+    return JsonStringErr(Unsupported("expected JSON integer"))
+  }
+  JsonStringOk(self.src[start:self.i].to_owned())
+}
+
+///|
+fn JsonParser::parse_number_or_string_token(
+  self : JsonParser,
+) -> JsonStringResult {
+  self.skip_ws()
+  match self.peek() {
+    Some('"') => self.parse_string()
+    _ => self.parse_number_token()
+  }
+}
+
+///|
+fn parse_u64_digits(text : String) -> UInt64? {
+  let chars = text.to_array()
+  if chars.length() == 0 {
+    return None
+  }
+  let mut value = 0UL
+  for c in chars {
+    if !is_json_digit(c) {
+      return None
+    }
+    value = value * 10UL + (c.to_int() - '0'.to_int()).to_uint64()
+  }
+  Some(value)
+}
+
+///|
+fn parse_i64_digits(text : String) -> Int64? {
+  let chars = text.to_array()
+  if chars.length() == 0 {
+    return None
+  }
+  let mut i = 0
+  let mut negative = false
+  if chars[0] == '-' {
+    negative = true
+    i = 1
+  }
+  if i >= chars.length() {
+    return None
+  }
+  let mut value = 0L
+  while i < chars.length() {
+    let c = chars[i]
+    if !is_json_digit(c) {
+      return None
+    }
+    value = value * 10L + (c.to_int() - '0'.to_int()).to_int64()
+    i = i + 1
+  }
+  if negative {
+    Some(-value)
+  } else {
+    Some(value)
+  }
+}
+
+///|
+fn parse_scalar_from_json(
+  parser : JsonParser,
+  typ : ScalarType,
+) -> JsonScalarDecodeResult {
+  match typ {
+    StringType =>
+      match parser.parse_string() {
+        JsonStringErr(e) => JsonScalarErr(e)
+        JsonStringOk(v) => JsonScalarOk(StringValue(v))
+      }
+    BytesType =>
+      match parser.parse_string() {
+        JsonStringErr(e) => JsonScalarErr(e)
+        JsonStringOk(text) =>
+          match base64_decode(text) {
+            BytesErr(e) => JsonScalarErr(e)
+            BytesOk(bytes, _) => JsonScalarOk(BytesValue(bytes))
+          }
+      }
+    BoolType =>
+      if parser.consume_literal("true") {
+        JsonScalarOk(BoolValue(true))
+      } else if parser.consume_literal("false") {
+        JsonScalarOk(BoolValue(false))
+      } else {
+        JsonScalarErr(Unsupported("expected JSON bool"))
+      }
+    UInt32Type | UInt64Type | Fixed32Type | Fixed64Type =>
+      match parser.parse_number_or_string_token() {
+        JsonStringErr(e) => JsonScalarErr(e)
+        JsonStringOk(text) =>
+          match parse_u64_digits(text) {
+            Some(v) => JsonScalarOk(UInt64Value(v))
+            None => JsonScalarErr(Unsupported("invalid unsigned integer JSON"))
+          }
+      }
+    Int32Type
+    | Int64Type
+    | SInt32Type
+    | SInt64Type
+    | SFixed32Type
+    | SFixed64Type =>
+      match parser.parse_number_or_string_token() {
+        JsonStringErr(e) => JsonScalarErr(e)
+        JsonStringOk(text) =>
+          match parse_i64_digits(text) {
+            Some(v) => JsonScalarOk(Int64Value(v))
+            None => JsonScalarErr(Unsupported("invalid signed integer JSON"))
+          }
+      }
+    NamedType(name) =>
+      JsonScalarErr(
+        Unsupported("nested message JSON is not implemented: " + name),
+      )
+    FloatType | DoubleType =>
+      JsonScalarErr(Unsupported("float/double JSON is not implemented"))
+  }
+}
+
+///|
+fn parse_json_field(
+  parser : JsonParser,
+  fd : FieldDescriptor,
+) -> JsonDecodeResult {
+  if fd.label == Repeated {
+    if !parser.consume('[') {
+      return JsonDecodeErr(Unsupported("expected repeated JSON array"))
+    }
+    let values : Array[ProtoValue] = []
+    parser.skip_ws()
+    if parser.consume(']') {
+      return JsonDecodeOk(
+        message_value([repeated_message_field(fd.name, values)]),
+      )
+    }
+    let mut done = false
+    while !done {
+      match parse_scalar_from_json(parser, fd.typ) {
+        JsonScalarErr(e) => return JsonDecodeErr(e)
+        JsonScalarOk(value) => values.push(value)
+      }
+      parser.skip_ws()
+      if parser.consume(',') {
+        ()
+      } else if parser.consume(']') {
+        done = true
+      } else {
+        return JsonDecodeErr(Unsupported("expected comma or array end"))
+      }
+    }
+    JsonDecodeOk(message_value([repeated_message_field(fd.name, values)]))
+  } else {
+    match parse_scalar_from_json(parser, fd.typ) {
+      JsonScalarErr(e) => JsonDecodeErr(e)
+      JsonScalarOk(value) =>
+        JsonDecodeOk(message_value([message_field(fd.name, value)]))
+    }
+  }
+}
+
+///|
+fn append_json_field(
+  fields : Array[MessageField],
+  field : MessageField,
+) -> Unit {
+  fields.push(field)
+}
+
+///|
+fn order_json_fields(
+  desc : MessageDescriptor,
+  parsed : Array[MessageField],
+) -> Array[MessageField] {
+  let ordered : Array[MessageField] = []
+  for fd in desc.fields {
+    for f in parsed {
+      if f.name == fd.name {
+        ordered.push(f)
+      }
+    }
+  }
+  ordered
+}
+
+///|
+/// Parse a protobuf-style JSON object into a dynamic message. Known fields are
+/// accepted in any JSON order and returned in descriptor order.
+pub fn json_to_message(
+  desc : MessageDescriptor,
+  input : String,
+) -> JsonDecodeResult {
+  let parser = JsonParser::{ src: input, chars: input.to_array(), i: 0 }
+  if !parser.consume('{') {
+    return JsonDecodeErr(Unsupported("expected JSON object"))
+  }
+  let parsed : Array[MessageField] = []
+  parser.skip_ws()
+  if parser.consume('}') {
+    return JsonDecodeOk(message_value([]))
+  }
+  let mut done = false
+  while !done {
+    let key = match parser.parse_string() {
+      JsonStringErr(e) => return JsonDecodeErr(e)
+      JsonStringOk(k) => k
+    }
+    if json_has_message_field(parsed, key) {
+      return JsonDecodeErr(Unsupported("duplicate JSON field: " + key))
+    }
+    if !parser.consume(':') {
+      return JsonDecodeErr(Unsupported("expected JSON object colon"))
+    }
+    let fd = match json_find_descriptor(desc, key) {
+      None => return JsonDecodeErr(Unsupported("unknown JSON field: " + key))
+      Some(found) => found
+    }
+    match parse_json_field(parser, fd) {
+      JsonDecodeErr(e) => return JsonDecodeErr(e)
+      JsonDecodeOk(one) => append_json_field(parsed, one.fields[0])
+    }
+    parser.skip_ws()
+    if parser.consume(',') {
+      ()
+    } else if parser.consume('}') {
+      done = true
+    } else {
+      return JsonDecodeErr(Unsupported("expected comma or object end"))
+    }
+  }
+  parser.skip_ws()
+  if parser.i != parser.chars.length() {
+    return JsonDecodeErr(Unsupported("trailing JSON input"))
+  }
+  JsonDecodeOk(message_value(order_json_fields(desc, parsed)))
 }

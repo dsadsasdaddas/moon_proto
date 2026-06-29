@@ -441,6 +441,8 @@ test "json string escaping and base64" {
   assert_eq(base64_encode(b""), "")
   assert_eq(base64_encode(b"\xff\x00"), "/wA=")
   assert_eq(base64_encode(b"abc"), "YWJj")
+  assert_true(base64_decode("/wA=") == BytesOk(b"\xff\x00", 4))
+  assert_true(base64_decode("YWJj") == BytesOk(b"abc", 4))
 }
 
 ///|
@@ -533,5 +535,106 @@ test "message to json rejects unknown or mismatched fields" {
     JsonOk(_) => fail("bad field value should be rejected")
     JsonErr(Unsupported(_)) => ()
     JsonErr(_) => fail("unexpected json error")
+  }
+}
+
+///|
+test "protobuf style json parser roundtrip" {
+  let desc = MessageDescriptor::{
+    name: "User",
+    fields: [
+      FieldDescriptor::{
+        name: "id",
+        typ: UInt64Type,
+        number: 1,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "name",
+        typ: StringType,
+        number: 2,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "active",
+        typ: BoolType,
+        number: 3,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "tags",
+        typ: StringType,
+        number: 4,
+        label: Repeated,
+      },
+      FieldDescriptor::{
+        name: "score",
+        typ: SInt64Type,
+        number: 5,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "blob",
+        typ: BytesType,
+        number: 6,
+        label: Singular,
+      },
+    ],
+  }
+  let json = "{\"blob\":\"/wA=\",\"tags\":[\"admin\",\"tester\"],\"active\":true,\"name\":\"Alice \\\"A\\\"\",\"score\":\"-2\",\"id\":\"150\"}"
+  match json_to_message(desc, json) {
+    JsonDecodeErr(_) => fail("JSON parser failed")
+    JsonDecodeOk(msg) => {
+      let expected = message_value([
+        message_field("id", UInt64Value(150UL)),
+        message_field("name", StringValue("Alice \"A\"")),
+        message_field("active", BoolValue(true)),
+        repeated_message_field("tags", [
+          StringValue("admin"),
+          StringValue("tester"),
+        ]),
+        message_field("score", Int64Value(-2L)),
+        message_field("blob", BytesValue(b"\xff\x00")),
+      ])
+      assert_true(msg == expected)
+      match message_to_json(desc, msg) {
+        JsonErr(_) => fail("JSON writer failed after parse")
+        JsonOk(canonical) =>
+          assert_eq(
+            canonical, "{\"id\":\"150\",\"name\":\"Alice \\\"A\\\"\",\"active\":true,\"tags\":[\"admin\",\"tester\"],\"score\":\"-2\",\"blob\":\"/wA=\"}",
+          )
+      }
+    }
+  }
+}
+
+///|
+test "json parser rejects duplicate and invalid values" {
+  let desc = MessageDescriptor::{
+    name: "User",
+    fields: [
+      FieldDescriptor::{
+        name: "id",
+        typ: UInt64Type,
+        number: 1,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "active",
+        typ: BoolType,
+        number: 2,
+        label: Singular,
+      },
+    ],
+  }
+  match json_to_message(desc, "{\"id\":\"1\",\"id\":\"2\"}") {
+    JsonDecodeOk(_) => fail("duplicate JSON field should be rejected")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected duplicate-field error")
+  }
+  match json_to_message(desc, "{\"active\":\"true\"}") {
+    JsonDecodeOk(_) => fail("quoted bool should be rejected")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected bool error")
   }
 }

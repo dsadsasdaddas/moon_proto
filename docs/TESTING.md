@@ -21,6 +21,7 @@ Current tests cover:
 - JSON string escaping and bytes base64 vectors;
 - protobuf-style JSON output for descriptor-driven dynamic messages;
 - JSON mapping rejection of unknown or mismatched fields;
+- JSON parser roundtrip and duplicate/invalid value rejection;
 - top-level enum parser and MoonBit codegen snapshots.
 
 Run the full matrix:

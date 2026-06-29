@@ -24,7 +24,7 @@ a complete proto3 toolkit:
 - repeated field emission and accumulation;
 - proto3 packed repeated encoding/decoding for numeric scalar fields;
 - unknown-field skipping during decode;
-- protobuf-style JSON writer for scalar/repeated dynamic messages;
+- protobuf-style JSON writer/parser for scalar/repeated dynamic messages;
 - proto3 schema model for messages, fields and top-level enums;
 - a small `.proto` lexer/parser for `syntax`, `package`, `message`, `enum`, scalar fields, `optional`, and `repeated`;
 - MoonBit source generator for message structs, enums and descriptor functions;
@@ -89,6 +89,15 @@ match message_to_json(desc, msg) {
 }
 ```
 
+Parse protobuf-style JSON back into a dynamic message:
+
+```moonbit
+match json_to_message(desc, "{\"id\":\"150\",\"name\":\"Alice\"}") {
+  JsonDecodeOk(msg) => println("ok")
+  JsonDecodeErr(_) => println("invalid JSON")
+}
+```
+
 ## Verify
 
 ```bash
@@ -104,10 +113,10 @@ moon test --target all
 - M2: schema-driven dynamic encode/decode for scalar fields and repeated fields. ✅
 - M3: generated MoonBit structs and descriptor functions. ✅
 - M4: packed repeated numeric scalar encoding/decoding. ✅
-- M5: protobuf-style JSON writer for scalar/repeated messages. ✅
+- M5: protobuf-style JSON writer/parser for scalar/repeated messages. ✅
 - M6: top-level enum parser and codegen. ✅
 - M7: nested messages, oneof, maps.
-- M8: JSON parser and Python/Go oracle cross-language compatibility tests.
+- M8: Python/Go oracle cross-language compatibility tests.
 - M9: CLI `moon_proto gen schema.proto -o generated/` and examples.
 
 ## License
