@@ -262,6 +262,48 @@ fn ProtoParser::parse_enum(self : ProtoParser) -> EnumDescriptor? {
 }
 
 ///|
+fn is_top_level_enum(enums : Array[EnumDescriptor], name : String) -> Bool {
+  for e in enums {
+    if e.name == name {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn resolve_type(typ : ScalarType, enums : Array[EnumDescriptor]) -> ScalarType {
+  match typ {
+    NamedType(name) =>
+      if is_top_level_enum(enums, name) {
+        EnumType(name)
+      } else {
+        NamedType(name)
+      }
+    other => other
+  }
+}
+
+///|
+fn resolve_message_types(
+  messages : Array[MessageDescriptor],
+  enums : Array[EnumDescriptor],
+) -> Array[MessageDescriptor] {
+  let out : Array[MessageDescriptor] = []
+  for msg in messages {
+    let fields : Array[FieldDescriptor] = []
+    for field in msg.fields {
+      fields.push(FieldDescriptor::{
+        ..field,
+        typ: resolve_type(field.typ, enums),
+      })
+    }
+    out.push(MessageDescriptor::{ name: msg.name, fields })
+  }
+  out
+}
+
+///|
 /// Parse a proto3 subset: syntax/package declarations, messages, fields and
 /// top-level enums.
 pub fn parse_proto(src : String) -> ParseProtoResult {
@@ -303,5 +345,10 @@ pub fn parse_proto(src : String) -> ParseProtoResult {
       None => return ProtoErr(UnexpectedEofInSchema)
     }
   }
-  ProtoOk(ProtoFile::{ syntax, package_name, messages, enums })
+  ProtoOk(ProtoFile::{
+    syntax,
+    package_name,
+    messages: resolve_message_types(messages, enums),
+    enums,
+  })
 }

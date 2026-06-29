@@ -326,7 +326,7 @@ test "parse enum and codegen enum descriptor" {
       assert_eq(file.enums[0].name, "Color")
       assert_eq(file.enums[0].values.length(), 3)
       assert_eq(file.enums[0].values[2].name, "BLUE")
-      assert_true(file.messages[0].fields[0].typ == NamedType("Color"))
+      assert_true(file.messages[0].fields[0].typ == EnumType("Color"))
       let generated = generate_moonbit_source(file)
       let expected =
         #|pub(all) enum Color {
@@ -354,12 +354,58 @@ test "parse enum and codegen enum descriptor" {
         #|  MessageDescriptor::{
         #|    name : "Paint",
         #|    fields : [
-        #|      FieldDescriptor::{ name : "color", typ : NamedType("Color"), number : 1, label : Singular },
+        #|      FieldDescriptor::{ name : "color", typ : EnumType("Color"), number : 1, label : Singular },
         #|    ],
         #|  }
         #|}
       assert_eq(generated, expected)
     }
+  }
+}
+
+///|
+test "enum fields encode as protobuf varints" {
+  let desc = MessageDescriptor::{
+    name: "Paint",
+    fields: [
+      FieldDescriptor::{
+        name: "color",
+        typ: EnumType("Color"),
+        number: 1,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "history",
+        typ: EnumType("Color"),
+        number: 2,
+        label: Repeated,
+      },
+    ],
+  }
+  let msg = message_value([
+    message_field("color", Int64Value(2L)),
+    repeated_message_field("history", [Int64Value(1L), Int64Value(2L)]),
+  ])
+  match encode_message(desc, msg) {
+    EncodeMessageErr(_) => fail("enum encode failed")
+    EncodeMessageOk(bytes) => {
+      assert_eq(bytes, b"\x08\x02\x12\x02\x01\x02")
+      match decode_message(desc, bytes) {
+        DecodeMessageErr(_) => fail("enum decode failed")
+        DecodeMessageOk(decoded, next) => {
+          assert_eq(next, bytes.length())
+          assert_true(decoded == msg)
+        }
+      }
+    }
+  }
+  match message_to_json(desc, msg) {
+    JsonErr(_) => fail("enum json failed")
+    JsonOk(json) => assert_eq(json, "{\"color\":2,\"history\":[1,2]}")
+  }
+  match json_to_message(desc, "{\"history\":[1,2],\"color\":2}") {
+    JsonDecodeErr(_) => fail("enum json parse failed")
+    JsonDecodeOk(decoded) => assert_true(decoded == msg)
   }
 }
 
@@ -636,5 +682,95 @@ test "json parser rejects duplicate and invalid values" {
     JsonDecodeOk(_) => fail("quoted bool should be rejected")
     JsonDecodeErr(Unsupported(_)) => ()
     JsonDecodeErr(_) => fail("unexpected bool error")
+  }
+}
+
+///|
+test "official python protobuf oracle full user bytes and json" {
+  let desc = MessageDescriptor::{
+    name: "User",
+    fields: [
+      FieldDescriptor::{
+        name: "id",
+        typ: UInt64Type,
+        number: 1,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "name",
+        typ: StringType,
+        number: 2,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "active",
+        typ: BoolType,
+        number: 3,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "tags",
+        typ: StringType,
+        number: 4,
+        label: Repeated,
+      },
+      FieldDescriptor::{
+        name: "score",
+        typ: SInt64Type,
+        number: 5,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "blob",
+        typ: BytesType,
+        number: 6,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "samples",
+        typ: UInt64Type,
+        number: 7,
+        label: Repeated,
+      },
+      FieldDescriptor::{
+        name: "deltas",
+        typ: SInt64Type,
+        number: 8,
+        label: Repeated,
+      },
+    ],
+  }
+  let msg = message_value([
+    message_field("id", UInt64Value(150UL)),
+    message_field("name", StringValue("Alice \"A\"")),
+    message_field("active", BoolValue(true)),
+    repeated_message_field("tags", [StringValue("admin"), StringValue("tester")]),
+    message_field("score", Int64Value(-2L)),
+    message_field("blob", BytesValue(b"\xff\x00")),
+    repeated_message_field("samples", [UInt64Value(1UL), UInt64Value(150UL)]),
+    repeated_message_field("deltas", [Int64Value(-1L), Int64Value(2L)]),
+  ])
+  let python_oracle_bytes = b"\x08\x96\x01\x12\x09Alice \x22A\x22\x18\x01\x22\x05admin\x22\x06tester\x28\x03\x32\x02\xff\x00\x3a\x03\x01\x96\x01\x42\x02\x01\x04"
+  let python_oracle_json = "{\"id\":\"150\",\"name\":\"Alice \\\"A\\\"\",\"active\":true,\"tags\":[\"admin\",\"tester\"],\"score\":\"-2\",\"blob\":\"/wA=\",\"samples\":[\"1\",\"150\"],\"deltas\":[\"-1\",\"2\"]}"
+  match encode_message(desc, msg) {
+    EncodeMessageErr(_) => fail("encoding python oracle user failed")
+    EncodeMessageOk(bytes) => {
+      assert_eq(bytes, python_oracle_bytes)
+      match decode_message(desc, bytes) {
+        DecodeMessageErr(_) => fail("decoding python oracle user failed")
+        DecodeMessageOk(decoded, next) => {
+          assert_eq(next, bytes.length())
+          assert_true(decoded == msg)
+        }
+      }
+    }
+  }
+  match message_to_json(desc, msg) {
+    JsonErr(_) => fail("python oracle JSON render failed")
+    JsonOk(json) => assert_eq(json, python_oracle_json)
+  }
+  match json_to_message(desc, python_oracle_json) {
+    JsonDecodeErr(_) => fail("python oracle JSON parse failed")
+    JsonDecodeOk(decoded) => assert_true(decoded == msg)
   }
 }

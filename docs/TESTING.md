@@ -22,20 +22,27 @@ Current tests cover:
 - protobuf-style JSON output for descriptor-driven dynamic messages;
 - JSON mapping rejection of unknown or mismatched fields;
 - JSON parser roundtrip and duplicate/invalid value rejection;
-- top-level enum parser and MoonBit codegen snapshots.
+- top-level enum parser and MoonBit codegen snapshots;
+- enum field binary and JSON roundtrip;
+- official Python `google.protobuf` oracle fixtures for a full scalar/repeated user message.
 
 Run the full matrix:
 
 ```bash
+python3 tests/oracle/python_protobuf_oracle.py
 moon check
 moon build
 moon test
 moon test --target all
 ```
 
-Planned Stage 2 verification:
+Python oracle fixtures live in `tests/fixtures/` and can be regenerated with:
 
-- generate Python protobuf oracle bytes in `tests/fixtures/*.bin`;
-- verify MoonBit decode against Python encode;
-- verify Python decode against MoonBit encode;
+```bash
+python3 tests/oracle/python_protobuf_oracle.py --write
+```
+
+Planned next verification:
+
 - add property-style roundtrip tests for scalar and repeated fields.
+- add generated-code compile tests once CLI output is available.

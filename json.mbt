@@ -277,6 +277,7 @@ fn scalar_to_json(typ : ScalarType, value : ProtoValue) -> JsonEncodeResult {
     (StringType, StringValue(v)) => JsonOk(json_escape_string(v))
     (BytesType, BytesValue(v)) => JsonOk(json_escape_string(base64_encode(v)))
     (BoolType, BoolValue(v)) => JsonOk(if v { "true" } else { "false" })
+    (EnumType(_), Int64Value(v)) => JsonOk(v.to_string())
     (UInt32Type | UInt64Type | Fixed32Type | Fixed64Type, UInt64Value(v)) =>
       if is_i64_json_string_type(typ) {
         JsonOk(json_escape_string(v.to_string()))
@@ -574,6 +575,15 @@ fn parse_scalar_from_json(
           match parse_i64_digits(text) {
             Some(v) => JsonScalarOk(Int64Value(v))
             None => JsonScalarErr(Unsupported("invalid signed integer JSON"))
+          }
+      }
+    EnumType(_) =>
+      match parser.parse_number_or_string_token() {
+        JsonStringErr(e) => JsonScalarErr(e)
+        JsonStringOk(text) =>
+          match parse_i64_digits(text) {
+            Some(v) => JsonScalarOk(Int64Value(v))
+            None => JsonScalarErr(Unsupported("invalid enum integer JSON"))
           }
       }
     NamedType(name) =>

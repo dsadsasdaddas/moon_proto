@@ -9,6 +9,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install Python oracle dependencies
+        run: python3 -m pip install --user 'protobuf==3.20.3'
+      - name: Python protobuf oracle fixtures
+        run: python3 tests/oracle/python_protobuf_oracle.py
       - name: Install MoonBit toolchain
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash

@@ -26,8 +26,10 @@ a complete proto3 toolkit:
 - unknown-field skipping during decode;
 - protobuf-style JSON writer/parser for scalar/repeated dynamic messages;
 - proto3 schema model for messages, fields and top-level enums;
+- enum field resolution with protobuf varint runtime support;
 - a small `.proto` lexer/parser for `syntax`, `package`, `message`, `enum`, scalar fields, `optional`, and `repeated`;
 - MoonBit source generator for message structs, enums and descriptor functions;
+- official Python protobuf oracle fixtures for cross-language compatibility;
 - golden tests for all implemented pieces.
 
 ## Example
@@ -101,6 +103,7 @@ match json_to_message(desc, "{\"id\":\"150\",\"name\":\"Alice\"}") {
 ## Verify
 
 ```bash
+python3 tests/oracle/python_protobuf_oracle.py
 moon check
 moon build
 moon test
@@ -115,9 +118,11 @@ moon test --target all
 - M4: packed repeated numeric scalar encoding/decoding. ✅
 - M5: protobuf-style JSON writer/parser for scalar/repeated messages. ✅
 - M6: top-level enum parser and codegen. ✅
-- M7: nested messages, oneof, maps.
-- M8: Python/Go oracle cross-language compatibility tests.
-- M9: CLI `moon_proto gen schema.proto -o generated/` and examples.
+- M7: enum field runtime/JSON support. ✅
+- M8: Python protobuf oracle compatibility fixtures. ✅
+- M9: nested messages, oneof, maps.
+- M10: Go oracle cross-language compatibility tests.
+- M11: CLI `moon_proto gen schema.proto -o generated/` and examples.
 
 ## License
 

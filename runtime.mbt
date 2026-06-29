@@ -132,6 +132,7 @@ fn is_packable_scalar(typ : ScalarType) -> Bool {
     | Fixed64Type
     | SFixed32Type
     | SFixed64Type
+    | EnumType(_)
     | BoolType => true
     _ => false
   }
@@ -150,6 +151,8 @@ fn encode_varint_payload(
     (SInt32Type, Int64Value(v)) | (SInt64Type, Int64Value(v)) =>
       EncodedField(encode_varint_u64(encode_zigzag_i64(v)))
     (BoolType, BoolValue(v)) => EncodedField(encode_varint_u64(bool_to_u64(v)))
+    (EnumType(_), Int64Value(v)) =>
+      EncodedField(encode_varint_u64(v.reinterpret_as_uint64()))
     _ => EncodeFieldErr(Unsupported("value does not match varint scalar type"))
   }
 }
@@ -335,6 +338,8 @@ fn decode_scalar_payload(
             SInt32Type | SInt64Type =>
               DecodedScalar(Int64Value(decode_zigzag_i64(raw)), next)
             BoolType => DecodedScalar(BoolValue(raw != 0UL), next)
+            EnumType(_) =>
+              DecodedScalar(Int64Value(raw.reinterpret_as_int64()), next)
             _ => DecodeScalarErr(Unsupported("unsupported varint scalar"))
           }
       }

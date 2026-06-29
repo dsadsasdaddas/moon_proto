@@ -16,6 +16,7 @@ pub(all) enum ScalarType {
   BoolType
   StringType
   BytesType
+  EnumType(String)
   NamedType(String)
 } derive(Debug, Eq)
 
@@ -99,6 +100,7 @@ pub fn ScalarType::wire_type(self : ScalarType) -> WireType {
     SFixed32Type => Fixed32
     Fixed64Type => Fixed64
     SFixed64Type => Fixed64
+    EnumType(_) => Varint
     StringType => LengthDelimited
     BytesType => LengthDelimited
     NamedType(_) => LengthDelimited

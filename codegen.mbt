@@ -40,6 +40,7 @@ fn moonbit_type_name(typ : ScalarType) -> String {
     BoolType => "Bool"
     StringType => "String"
     BytesType => "Bytes"
+    EnumType(name) => name
     NamedType(name) => name
   }
 }
@@ -72,6 +73,7 @@ fn scalar_type_source(typ : ScalarType) -> String {
     BoolType => "BoolType"
     StringType => "StringType"
     BytesType => "BytesType"
+    EnumType(name) => "EnumType(\"" + name + "\")"
     NamedType(name) => "NamedType(\"" + name + "\")"
   }
 }
