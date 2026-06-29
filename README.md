@@ -129,6 +129,8 @@ python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/sim
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.html
 python3 scripts/moon_proto_official_diff.py --report generated/official_diff_report.md
+git clone --depth 1 https://github.com/moonbitlang/protoc-gen-mbt /tmp/protoc-gen-mbt
+python3 scripts/moon_proto_official_diff.py --official-repo /tmp/protoc-gen-mbt --require-official --report generated/official_source_diff_report.md
 ```
 
 Convert a dynamic message to protobuf-style JSON:
@@ -165,6 +167,8 @@ python3 scripts/moon_proto_lab.py doctor examples/decorated/telemetry.proto
 python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md
 python3 scripts/moon_proto_official_diff.py --report generated/official_diff_report.md
+git clone --depth 1 https://github.com/moonbitlang/protoc-gen-mbt /tmp/protoc-gen-mbt
+python3 scripts/moon_proto_official_diff.py --official-repo /tmp/protoc-gen-mbt --require-official --report generated/official_source_diff_report.md
 tests/codegen/compile_generated.sh
 ```
 
@@ -202,8 +206,9 @@ tests/codegen/compile_generated.sh
 - M20: import/option/reserved/extensions/field-option parser tolerance for real-world `.proto` files. Done.
 - M21: reserved number/name validation and compatibility contracts. Done.
 - M22: official MoonBit protobuf differential harness manifest and report. Done.
-- M23: deeper generated-code differential tests against an installed official generator. Planned.
-- M24: descriptor set / reflection import path. Planned.
+- M23: CI-enforced official source contract check against `moonbitlang/protoc-gen-mbt`. Done.
+- M24: deeper generated-code differential tests against an installed official generator. Planned.
+- M25: descriptor set / reflection import path. Planned.
 
 ## License
 

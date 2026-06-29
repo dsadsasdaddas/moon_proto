@@ -8,7 +8,8 @@ The goal is not to replace the official production generator. The goal is to mak
 - verify inspect output against a stable case manifest;
 - generate Moon Proto Lab dynamic helper code and compile-check it;
 - document intentional differences between the dynamic lab and the official typed generator;
-- optionally invoke an official `protoc-gen-mbt` checkout when `protoc` and the official repository are available.
+- validate the public official README/spec contract when an official checkout is available;
+- optionally invoke an official `protoc-gen-mbt` checkout when `protoc` and registry dependencies are available.
 
 ## Manifest
 
@@ -39,20 +40,35 @@ python3 scripts/moon_proto_official_diff.py \
   --report generated/official_diff_report.md
 ```
 
-Default mode does not require `protoc`. It must still run Moon Proto Lab doctor, inspect, codegen and generated-code compile checks. The official generator step is marked `SKIP` unless an official checkout is supplied.
+Default mode does not require `protoc` or an official checkout. It still runs Moon Proto Lab doctor, inspect, codegen and generated-code compile checks. The official source and generator steps are marked `SKIP`, but the overall report can still pass because the dynamic lab contract is verified.
+
+## Run the official source contract check
+
+When a checkout of `moonbitlang/protoc-gen-mbt` is available, the harness can validate that the public README/spec feature contract still matches the manifest. This mode is stable enough for CI and does not build the official generator:
+
+```bash
+git clone --depth 1 https://github.com/moonbitlang/protoc-gen-mbt /tmp/protoc-gen-mbt
+python3 scripts/moon_proto_official_diff.py \
+  --official-repo /tmp/protoc-gen-mbt \
+  --require-official \
+  --report generated/official_source_diff_report.md
+```
+
+`--require-official` makes the source-contract step blocking. Moon Proto Lab CI runs this mode.
 
 ## Run with the optional official generator
 
-When `protoc`, MoonBit and a checkout of `moonbitlang/protoc-gen-mbt` are available:
+When `protoc`, MoonBit, the official checkout, and its registry dependencies are all available, the same harness can attempt to build and invoke the official generator:
 
 ```bash
-git clone https://github.com/moonbitlang/protoc-gen-mbt /tmp/protoc-gen-mbt
 python3 scripts/moon_proto_official_diff.py \
   --official-repo /tmp/protoc-gen-mbt \
-  --report generated/official_diff_report.md
+  --run-official-generator \
+  --require-official \
+  --report generated/official_generator_diff_report.md
 ```
 
-Use `--require-official` in environments where the official generator must be executed and `SKIP` should be treated as failure.
+The generator step is only blocking when both `--require-official` and `--run-official-generator` are used. This keeps the main CI stable while still documenting a deeper path for environments where the official generator dependency graph resolves.
 
 ## Why this matters
 

@@ -45,7 +45,7 @@
 - file-based generator wrapper；
 - Schema Doctor CLI；
 - old/new schema compatibility checker，包含 removed-but-reserved 与 reserved 契约保留检查；
-- official MoonBit protobuf differential harness manifest/report；
+- official MoonBit protobuf differential harness manifest/report and CI source-contract check；
 - AI verify Markdown/HTML report generator；
 - Python/Go official protobuf oracle fixtures, including 32-bit numeric boundary, float/double and special float fixtures；
 - generated-code compile check，适合验证 AI 生成代码。
@@ -66,7 +66,7 @@
 | Schema Doctor | `python3 scripts/moon_proto_lab.py doctor examples/simple/user.proto` |
 | Compatibility report | `python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md` |
 | Verify report | `python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md` |
-| Official differential report | `python3 scripts/moon_proto_official_diff.py --report generated/official_diff_report.md` |
+| Official differential report | `python3 scripts/moon_proto_official_diff.py --report generated/official_diff_report.md` / CI also runs `--official-repo /tmp/protoc-gen-mbt --require-official` |
 | GitHub Actions | GitHub Actions 最新 main 分支 CI 需为 success：https://github.com/dsadsasdaddas/moon_proto/actions |
 
 ## 文档与交付物

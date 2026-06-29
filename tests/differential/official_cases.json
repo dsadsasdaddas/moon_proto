@@ -11,7 +11,20 @@
     "notes": [
       "README says extensions and custom options are ignored.",
       "doc/spec.md documents scalar, optional, repeated, oneof and map MoonBit mappings."
-    ]
+    ],
+    "required_source_snippets": {
+      "README.md": [
+        "MoonBit protobuf generator",
+        "Extensions and custom options are ignored"
+      ],
+      "doc/spec.md": [
+        "double      | Double",
+        "`optional` field will generate `Option` type in MoonBit",
+        "`repeated` field will generate MoonBit `Array`",
+        "oneof` fields are encoded as MoonBit `Enum`",
+        "Maps are fully supported and will map to MoonBit `Map`"
+      ]
+    }
   },
   "cases": [
     {

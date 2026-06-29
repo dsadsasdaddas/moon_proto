@@ -36,3 +36,10 @@ jobs:
         run: moon run cmd/main -- gen --example
       - name: Generated code compile check
         run: tests/codegen/compile_generated.sh
+      - name: Official differential source contract
+        run: |
+          git clone --depth 1 https://github.com/moonbitlang/protoc-gen-mbt.git /tmp/protoc-gen-mbt
+          python3 scripts/moon_proto_official_diff.py \
+            --official-repo /tmp/protoc-gen-mbt \
+            --require-official \
+            --report generated/official_source_diff_report.md

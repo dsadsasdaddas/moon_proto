@@ -95,6 +95,59 @@ def official_plugin_path(repo: Path) -> Path | None:
     return built[0] if built else None
 
 
+
+def git_head(repo: Path) -> str | None:
+    git_dir = repo / '.git'
+    if not git_dir.exists():
+        return None
+    proc = subprocess.run(
+        ['git', '-C', str(repo), 'rev-parse', 'HEAD'],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if proc.returncode != 0:
+        return None
+    return proc.stdout.strip()
+
+
+def check_official_source_contract(repo_arg: str | None, official: dict) -> StepResult:
+    if not repo_arg:
+        return step('official source contract', 'SKIP', 'pass --official-repo to validate an official checkout')
+    repo = Path(repo_arg)
+    if not repo.exists():
+        return step('official source contract', 'FAIL', f'checkout not found: {repo}')
+    missing_files: list[str] = []
+    missing_snippets: list[str] = []
+    required = official.get('required_source_snippets', {})
+    for rel, snippets in required.items():
+        path = repo / rel
+        if not path.exists():
+            missing_files.append(rel)
+            continue
+        text = path.read_text(encoding='utf-8', errors='replace')
+        for snippet in snippets:
+            if snippet not in text:
+                missing_snippets.append(f'{rel}: {snippet}')
+    if missing_files or missing_snippets:
+        details = []
+        if missing_files:
+            details.append('missing files: ' + ', '.join(missing_files))
+        if missing_snippets:
+            details.append('missing snippets: ' + ', '.join(missing_snippets))
+        return step('official source contract', 'FAIL', '; '.join(details))
+    head = git_head(repo)
+    observed = official.get('observed_commit', '')
+    if head and observed and head != observed:
+        return step(
+            'official source contract',
+            'PASS',
+            f'source contract matched; checkout HEAD {head} differs from observed {observed}',
+        )
+    suffix = f'; checkout HEAD {head}' if head else ''
+    return step('official source contract', 'PASS', 'source contract matched' + suffix)
+
+
 def run_official_generator(
     proto: Path,
     repo: Path,
@@ -185,7 +238,7 @@ def run_case(args: argparse.Namespace, case: dict, root: Path) -> CaseResult:
     except RuntimeError as exc:
         steps.append(step('Moon Proto Lab codegen/compile', 'FAIL', str(exc)))
 
-    if args.official_repo:
+    if args.official_repo and args.run_official_generator:
         steps.append(
             run_official_generator(
                 proto,
@@ -195,16 +248,20 @@ def run_case(args: argparse.Namespace, case: dict, root: Path) -> CaseResult:
                 root,
             )
         )
+    elif args.official_repo:
+        steps.append(step('official protoc-gen-mbt', 'SKIP', 'official generator not requested; pass --run-official-generator to execute it'))
     else:
-        steps.append(step('official protoc-gen-mbt', 'SKIP', 'pass --official-repo to run the optional generator check'))
+        steps.append(step('official protoc-gen-mbt', 'SKIP', 'pass --official-repo and --run-official-generator to run the optional generator check'))
 
     return CaseResult(case['name'], proto, steps, inspect_output)
 
 
-def markdown_report(manifest: dict, results: list[CaseResult], require_official: bool) -> str:
+def markdown_report(manifest: dict, source_step: StepResult, results: list[CaseResult], require_official: bool, run_generator: bool) -> str:
     official = manifest['official']
     blocking_failures = [step for result in results for step in result.steps if step.blocking]
-    if require_official:
+    if source_step.blocking or (require_official and source_step.status != 'PASS'):
+        blocking_failures.append(source_step)
+    if require_official and run_generator:
         blocking_failures.extend(
             step for result in results for step in result.steps
             if step.name == 'official protoc-gen-mbt' and step.status != 'PASS'
@@ -218,7 +275,8 @@ def markdown_report(manifest: dict, results: list[CaseResult], require_official:
         f'- Official project: [{official["name"]}]({official["repository"]})',
         f'- Observed official commit: `{official["observed_commit"]}`',
         f'- Runtime package: `{official["runtime_package"]}`',
-        f'- Official generator required: `{str(require_official).lower()}`',
+        f'- Official source required: `{str(require_official).lower()}`',
+        f'- Official generator requested: `{str(run_generator).lower()}`',
         '',
         '## Official feature contract used by this harness',
         '',
@@ -227,14 +285,27 @@ def markdown_report(manifest: dict, results: list[CaseResult], require_official:
         lines.append(f'- {item};')
     for note in official.get('notes', []):
         lines.append(f'- source note: {note}')
-    lines.extend(['', '## Case results', '', '| Case | Proto | Step | Status | Details |', '| --- | --- | --- | --- | --- |'])
+    source_details = source_step.details.replace('|', '\\|').replace('\n', '<br>')
+    lines.extend([
+        '',
+        '## Official source checkout',
+        '',
+        '| Step | Status | Details |',
+        '| --- | --- | --- |',
+        f'| {source_step.name} | {source_step.status} | {source_details} |',
+        '',
+        '## Case results',
+        '',
+        '| Case | Proto | Step | Status | Details |',
+        '| --- | --- | --- | --- | --- |',
+    ])
     for result in results:
         for s in result.steps:
             details = s.details.replace('|', '\\|').replace('\n', '<br>')
             lines.append(f'| {result.name} | `{result.proto}` | {s.name} | {s.status} | {details} |')
     lines.extend(['', '## Interpretation', ''])
     lines.append('`PASS` means Moon Proto Lab can independently verify the schema/codegen contract for that case.')
-    lines.append('`SKIP` for the official generator is non-blocking unless `--require-official` is used; it documents that this repository can act as a harness once `protoc` and a `protoc-gen-mbt` checkout are supplied.')
+    lines.append('The official source contract step is blocking when `--require-official` is used. The generator step is only blocking when both `--require-official` and `--run-official-generator` are used.')
     lines.append('Intentional differences are expected: Moon Proto Lab keeps descriptor-driven `MessageValue` helpers for dynamic verification, while the official generator emits production typed structs, maps and oneof enums.')
     return '\n'.join(lines) + '\n'
 
@@ -265,7 +336,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--moon-bin', default='moon')
     parser.add_argument('--protoc-bin', default='protoc')
     parser.add_argument('--official-repo', help='optional path to a moonbitlang/protoc-gen-mbt checkout')
-    parser.add_argument('--require-official', action='store_true', help='fail if the optional official generator step is skipped or fails')
+    parser.add_argument('--require-official', action='store_true', help='fail if the official source contract is skipped or fails; also require generator success when --run-official-generator is used')
+    parser.add_argument('--run-official-generator', action='store_true', help='build and run the official protoc-gen-mbt plugin when --official-repo is available')
     parser.add_argument('--skip-compile', action='store_true', help='skip Moon Proto Lab generated-code compile checks')
     return parser
 
@@ -274,18 +346,28 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     root = repo_root()
     manifest = load_manifest(root / args.manifest)
+    source_step = check_official_source_contract(args.official_repo, manifest['official'])
     results = [run_case(args, case, root) for case in manifest['cases']]
-    md = markdown_report(manifest, results, args.require_official)
+    md = markdown_report(
+        manifest,
+        source_step,
+        results,
+        args.require_official,
+        args.run_official_generator,
+    )
     if args.report:
         write_report(Path(args.report), md)
         print(f'report: {args.report}')
     print(md, end='')
     has_failures = any(step.blocking for result in results for step in result.steps)
+    has_failures = has_failures or source_step.blocking
     if args.require_official:
-        has_failures = has_failures or any(
-            step.name == 'official protoc-gen-mbt' and step.status != 'PASS'
-            for result in results for step in result.steps
-        )
+        has_failures = has_failures or source_step.status != 'PASS'
+        if args.run_official_generator:
+            has_failures = has_failures or any(
+                step.name == 'official protoc-gen-mbt' and step.status != 'PASS'
+                for result in results for step in result.steps
+            )
     return 1 if has_failures else 0
 
 
