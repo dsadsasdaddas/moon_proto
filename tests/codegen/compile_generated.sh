@@ -186,6 +186,16 @@ python3 scripts/moon_proto_descriptor.py fixture \
   --hex-out generated/user_descriptor_set.hex \
   --json-out generated/user_descriptor_set.json
 cmp generated/user_descriptor_set.hex tests/fixtures/user_descriptor_set.hex
+python3 scripts/moon_proto_descriptor.py fixture \
+  --variant user_reserved_v2 \
+  --hex-out generated/user_descriptor_set_reserved_v2.hex \
+  --json-out generated/user_descriptor_set_reserved_v2.json
+cmp generated/user_descriptor_set_reserved_v2.hex tests/fixtures/user_descriptor_set_reserved_v2.hex
+python3 scripts/moon_proto_descriptor.py fixture \
+  --variant user_breaking \
+  --hex-out generated/user_descriptor_set_breaking.hex \
+  --json-out generated/user_descriptor_set_breaking.json
+cmp generated/user_descriptor_set_breaking.hex tests/fixtures/user_descriptor_set_breaking.hex
 
 python3 scripts/moon_proto_descriptor.py inspect tests/fixtures/user_descriptor_set.hex \
   --report generated/descriptor_report.md
@@ -199,5 +209,21 @@ grep -q 'oneof contact' generated/user_from_descriptor.proto
 python3 scripts/moon_proto_descriptor.py verify tests/fixtures/user_descriptor_set.hex \
   --report generated/descriptor_verify_report.md
 grep -Fq 'Overall status: **PASS**' generated/descriptor_verify_report.md
+
+python3 scripts/moon_proto_descriptor.py compat \
+  tests/fixtures/user_descriptor_set.hex \
+  tests/fixtures/user_descriptor_set_reserved_v2.hex \
+  --report generated/descriptor_compat_report.md
+grep -Fq 'Overall status: **PASS**' generated/descriptor_compat_report.md
+
+if python3 scripts/moon_proto_descriptor.py compat \
+  tests/fixtures/user_descriptor_set.hex \
+  tests/fixtures/user_descriptor_set_breaking.hex \
+  --report generated/descriptor_breaking_report.md; then
+  echo "expected descriptor compat failure" >&2
+  exit 1
+fi
+grep -Fq 'Overall status: **FAIL**' generated/descriptor_breaking_report.md
+grep -q 'field type changed' generated/descriptor_breaking_report.md
 
 echo "Generated MoonBit source compiles"

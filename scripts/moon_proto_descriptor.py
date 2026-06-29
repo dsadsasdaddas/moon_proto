@@ -22,8 +22,10 @@ from moon_proto_gen import (
     compile_generated_source,
     repo_root,
     run_moon_codegen,
+    run_moon_compat,
     run_moon_doctor,
     run_moon_inspect,
+    schema_is_compatible,
     schema_is_valid,
 )
 
@@ -218,14 +220,20 @@ def descriptor_set_to_proto_text(fds: descriptor_pb2.FileDescriptorSet) -> str:
     return '\n'.join(chunks).strip() + '\n'
 
 
-def fixture_user_descriptor_set() -> descriptor_pb2.FileDescriptorSet:
+FIXTURE_VARIANTS = ('user', 'user_v2', 'user_reserved_v2', 'user_breaking')
+
+
+def fixture_user_descriptor_set(variant: str = 'user') -> descriptor_pb2.FileDescriptorSet:
+    if variant not in FIXTURE_VARIANTS:
+        raise ValueError(f'unknown fixture variant: {variant}')
     f = descriptor_pb2.FileDescriptorProto(
-        name='examples/simple/user.proto',
+        name=f'examples/simple/{variant}.proto',
         package='demo',
         syntax='proto3',
     )
     user = f.message_type.add(name='User')
-    user.field.add(name='id', number=1, label=descriptor_pb2.FieldDescriptorProto.LABEL_OPTIONAL, type=descriptor_pb2.FieldDescriptorProto.TYPE_UINT32)
+    id_type = descriptor_pb2.FieldDescriptorProto.TYPE_STRING if variant == 'user_breaking' else descriptor_pb2.FieldDescriptorProto.TYPE_UINT32
+    user.field.add(name='id', number=1, label=descriptor_pb2.FieldDescriptorProto.LABEL_OPTIONAL, type=id_type)
     user.field.add(name='name', number=2, label=descriptor_pb2.FieldDescriptorProto.LABEL_OPTIONAL, type=descriptor_pb2.FieldDescriptorProto.TYPE_STRING)
     user.field.add(name='tags', number=3, label=descriptor_pb2.FieldDescriptorProto.LABEL_REPEATED, type=descriptor_pb2.FieldDescriptorProto.TYPE_STRING)
     counters = user.nested_type.add(name='CountersEntry')
@@ -241,7 +249,15 @@ def fixture_user_descriptor_set() -> descriptor_pb2.FileDescriptorSet:
     )
     user.oneof_decl.add(name='contact')
     user.field.add(name='email', number=5, label=descriptor_pb2.FieldDescriptorProto.LABEL_OPTIONAL, type=descriptor_pb2.FieldDescriptorProto.TYPE_STRING, oneof_index=0)
-    user.field.add(name='phone', number=6, label=descriptor_pb2.FieldDescriptorProto.LABEL_OPTIONAL, type=descriptor_pb2.FieldDescriptorProto.TYPE_STRING, oneof_index=0)
+    if variant == 'user_reserved_v2':
+        reserved = user.reserved_range.add()
+        reserved.start = 6
+        reserved.end = 7  # Descriptor ranges are exclusive at the end.
+        user.reserved_name.append('phone')
+    else:
+        user.field.add(name='phone', number=6, label=descriptor_pb2.FieldDescriptorProto.LABEL_OPTIONAL, type=descriptor_pb2.FieldDescriptorProto.TYPE_STRING, oneof_index=0)
+    if variant in {'user_v2', 'user_reserved_v2'}:
+        user.field.add(name='created_at', number=9, label=descriptor_pb2.FieldDescriptorProto.LABEL_OPTIONAL, type=descriptor_pb2.FieldDescriptorProto.TYPE_UINT64)
     return descriptor_pb2.FileDescriptorSet(file=[f])
 
 
@@ -295,6 +311,70 @@ def descriptor_report(path: Path, fds: descriptor_pb2.FileDescriptorSet, proto_t
     return '\n'.join(lines) + '\n'
 
 
+def descriptor_compat_report(
+    old_path: Path,
+    new_path: Path,
+    old_fds: descriptor_pb2.FileDescriptorSet,
+    new_fds: descriptor_pb2.FileDescriptorSet,
+    old_proto: str,
+    new_proto: str,
+    compat_output: str,
+    steps: list[DescriptorStep],
+) -> str:
+    ok = all(step.ok for step in steps)
+    lines = [
+        '# Moon Proto Lab descriptor set compatibility report',
+        '',
+        f'- Old descriptor input: `{old_path}`',
+        f'- New descriptor input: `{new_path}`',
+        f'- Generated at: `{datetime.now(timezone.utc).isoformat()}`',
+        f'- Overall status: **{"PASS" if ok else "FAIL"}**',
+        f'- Old files: `{len(old_fds.file)}`',
+        f'- New files: `{len(new_fds.file)}`',
+        '',
+        '## Steps',
+        '',
+        '| Step | Status | Details |',
+        '| --- | --- | --- |',
+    ]
+    for step in steps:
+        details = step.details.replace('|', '\\|').replace('\n', '<br>')
+        lines.append(f'| {step.name} | {"PASS" if step.ok else "FAIL"} | {details} |')
+    lines.extend([
+        '',
+        '## Compatibility output',
+        '',
+        '```text',
+        compat_output.strip(),
+        '```',
+        '',
+        '## Old descriptor summary',
+        '',
+        '```text',
+        summary(old_fds).strip(),
+        '```',
+        '',
+        '## New descriptor summary',
+        '',
+        '```text',
+        summary(new_fds).strip(),
+        '```',
+        '',
+        '## Old reconstructed proto preview',
+        '',
+        '```proto',
+        old_proto.strip(),
+        '```',
+        '',
+        '## New reconstructed proto preview',
+        '',
+        '```proto',
+        new_proto.strip(),
+        '```',
+    ])
+    return '\n'.join(lines) + '\n'
+
+
 def write_text_report(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.suffix.lower() in {'.html', '.htm'}:
@@ -304,7 +384,7 @@ def write_text_report(path: Path, text: str) -> None:
 
 
 def command_fixture(args: argparse.Namespace) -> int:
-    fds = fixture_user_descriptor_set()
+    fds = fixture_user_descriptor_set(args.variant)
     if args.output:
         write_descriptor_set(Path(args.output), fds)
         print(args.output)
@@ -341,6 +421,55 @@ def command_to_proto(args: argparse.Namespace) -> int:
     else:
         print(proto_text, end='')
     return 0
+
+
+def command_compat(args: argparse.Namespace) -> int:
+    root = repo_root()
+    old_path = Path(args.old_descriptor)
+    new_path = Path(args.new_descriptor)
+    steps: list[DescriptorStep] = []
+    compat_output = ''
+    try:
+        old_fds = load_descriptor_set(old_path)
+        steps.append(DescriptorStep('old descriptor parse', True, f'{len(old_fds.file)} file(s) parsed'))
+        new_fds = load_descriptor_set(new_path)
+        steps.append(DescriptorStep('new descriptor parse', True, f'{len(new_fds.file)} file(s) parsed'))
+        old_proto = descriptor_set_to_proto_text(old_fds)
+        steps.append(DescriptorStep('old descriptor to proto', True, f'{len(old_proto.splitlines())} proto lines'))
+        new_proto = descriptor_set_to_proto_text(new_fds)
+        steps.append(DescriptorStep('new descriptor to proto', True, f'{len(new_proto.splitlines())} proto lines'))
+    except Exception as exc:
+        print(f'error: {exc}', file=sys.stderr)
+        return 2
+
+    compatible = False
+    try:
+        compat_output = run_moon_compat(old_proto, new_proto, args.moon_bin, root)
+        compatible = schema_is_compatible(compat_output)
+        first_line = compat_output.splitlines()[0] if compat_output else 'no output'
+        steps.append(DescriptorStep('schema compatibility', compatible, first_line))
+    except RuntimeError as exc:
+        compat_output = str(exc)
+        steps.append(DescriptorStep('schema compatibility', False, compat_output))
+
+    if args.report:
+        write_text_report(
+            Path(args.report),
+            descriptor_compat_report(
+                old_path,
+                new_path,
+                old_fds,
+                new_fds,
+                old_proto,
+                new_proto,
+                compat_output,
+                steps,
+            ),
+        )
+        print(f'report: {args.report}')
+    print(compat_output, end='' if compat_output.endswith('\n') else '\n')
+    print('Moon Proto Lab descriptor compat: ' + ('PASS' if compatible else 'FAIL'))
+    return 0 if compatible else 1
 
 
 def command_verify(args: argparse.Namespace) -> int:
@@ -399,6 +528,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest='command', required=True)
 
     fixture = sub.add_parser('fixture', help='write a deterministic user FileDescriptorSet fixture')
+    fixture.add_argument('--variant', choices=FIXTURE_VARIANTS, default='user', help='fixture variant to write')
     fixture.add_argument('--output', help='binary/json/hex descriptor output path, inferred by suffix')
     fixture.add_argument('--json-out', help='also write JSON descriptor')
     fixture.add_argument('--hex-out', help='also write hex descriptor')
@@ -413,6 +543,13 @@ def build_parser() -> argparse.ArgumentParser:
     to_proto.add_argument('descriptor')
     to_proto.add_argument('-o', '--output')
     to_proto.set_defaults(func=command_to_proto)
+
+    compat = sub.add_parser('compat', help='compare two FileDescriptorSet inputs for protobuf schema compatibility')
+    compat.add_argument('old_descriptor')
+    compat.add_argument('new_descriptor')
+    compat.add_argument('--report')
+    compat.add_argument('--moon-bin', default='moon')
+    compat.set_defaults(func=command_compat)
 
     verify = sub.add_parser('verify', help='convert descriptor set and run doctor/codegen/compile checks')
     verify.add_argument('descriptor')

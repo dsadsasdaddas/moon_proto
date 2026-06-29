@@ -1,0 +1,82 @@
+{
+  "file": [
+    {
+      "message_type": [
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "id",
+              "number": 1,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "name",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_REPEATED",
+              "name": "tags",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_REPEATED",
+              "name": "counters",
+              "number": 4,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".demo.User.CountersEntry"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "email",
+              "number": 5,
+              "oneof_index": 0,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "phone",
+              "number": 6,
+              "oneof_index": 0,
+              "type": "TYPE_STRING"
+            }
+          ],
+          "name": "User",
+          "nested_type": [
+            {
+              "field": [
+                {
+                  "label": "LABEL_OPTIONAL",
+                  "name": "key",
+                  "number": 1,
+                  "type": "TYPE_STRING"
+                },
+                {
+                  "label": "LABEL_OPTIONAL",
+                  "name": "value",
+                  "number": 2,
+                  "type": "TYPE_UINT64"
+                }
+              ],
+              "name": "CountersEntry",
+              "options": {
+                "map_entry": true
+              }
+            }
+          ],
+          "oneof_decl": [
+            {
+              "name": "contact"
+            }
+          ]
+        }
+      ],
+      "name": "examples/simple/user_breaking.proto",
+      "package": "demo",
+      "syntax": "proto3"
+    }
+  ]
+}

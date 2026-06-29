@@ -24,7 +24,7 @@
 | 清晰工程结构 | wire/schema/runtime/json/codegen/cli/tests/docs 分层 |
 | 示例 schema | `examples/simple/user.proto`、`examples/decorated/telemetry.proto` |
 | 文件版生成入口 | `scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/` |
-| Schema Doctor / compat / verify / official diff / descriptor verify | `scripts/moon_proto_lab.py doctor examples/simple/user.proto` / `compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md` / `verify --report generated/verify_report.md` / `scripts/moon_proto_official_diff.py --report generated/official_diff_report.md` / `scripts/moon_proto_descriptor.py verify tests/fixtures/user_descriptor_set.hex --report generated/descriptor_verify_report.md` |
+| Schema Doctor / compat / verify / official diff / descriptor verify/compat | `scripts/moon_proto_lab.py doctor examples/simple/user.proto` / `compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md` / `verify --report generated/verify_report.md` / `scripts/moon_proto_official_diff.py --report generated/official_diff_report.md` / `scripts/moon_proto_descriptor.py verify tests/fixtures/user_descriptor_set.hex --report generated/descriptor_verify_report.md` / `scripts/moon_proto_descriptor.py compat tests/fixtures/user_descriptor_set.hex tests/fixtures/user_descriptor_set_reserved_v2.hex --report generated/descriptor_compat_report.md` |
 | 生态定位说明 | `docs/ECOSYSTEM_POSITIONING.md` |
 
 ## 核心能力
@@ -46,7 +46,7 @@
 - Schema Doctor CLI；
 - old/new schema compatibility checker，包含 removed-but-reserved 与 reserved 契约保留检查；
 - official MoonBit protobuf differential harness manifest/report and CI source-contract check；
-- FileDescriptorSet descriptor/reflection bridge 与 descriptor verify report；
+- FileDescriptorSet descriptor/reflection bridge、descriptor verify report 与 old/new descriptor compatibility report；
 - AI verify Markdown/HTML report generator；
 - Python/Go official protobuf oracle fixtures, including 32-bit numeric boundary, float/double and special float fixtures；
 - generated-code compile check，适合验证 AI 生成代码。
@@ -68,7 +68,7 @@
 | Compatibility report | `python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md` |
 | Verify report | `python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md` |
 | Official differential report | `python3 scripts/moon_proto_official_diff.py --report generated/official_diff_report.md` / CI also runs `--official-repo /tmp/protoc-gen-mbt --require-official` |
-| Descriptor verify report | `python3 scripts/moon_proto_descriptor.py verify tests/fixtures/user_descriptor_set.hex --report generated/descriptor_verify_report.md` |
+| Descriptor verify/compat report | `python3 scripts/moon_proto_descriptor.py verify tests/fixtures/user_descriptor_set.hex --report generated/descriptor_verify_report.md` / `python3 scripts/moon_proto_descriptor.py compat tests/fixtures/user_descriptor_set.hex tests/fixtures/user_descriptor_set_reserved_v2.hex --report generated/descriptor_compat_report.md` |
 | GitHub Actions | GitHub Actions 最新 main 分支 CI 需为 success：https://github.com/dsadsasdaddas/moon_proto/actions |
 
 ## 文档与交付物
@@ -104,5 +104,6 @@ python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/sim
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md
 python3 scripts/moon_proto_official_diff.py --report generated/official_diff_report.md
 python3 scripts/moon_proto_descriptor.py verify tests/fixtures/user_descriptor_set.hex --report generated/descriptor_verify_report.md
+python3 scripts/moon_proto_descriptor.py compat tests/fixtures/user_descriptor_set.hex tests/fixtures/user_descriptor_set_reserved_v2.hex --report generated/descriptor_compat_report.md
 tests/codegen/compile_generated.sh
 ```

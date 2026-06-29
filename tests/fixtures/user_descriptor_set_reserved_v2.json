@@ -1,0 +1,90 @@
+{
+  "file": [
+    {
+      "message_type": [
+        {
+          "field": [
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "id",
+              "number": 1,
+              "type": "TYPE_UINT32"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "name",
+              "number": 2,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_REPEATED",
+              "name": "tags",
+              "number": 3,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_REPEATED",
+              "name": "counters",
+              "number": 4,
+              "type": "TYPE_MESSAGE",
+              "type_name": ".demo.User.CountersEntry"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "email",
+              "number": 5,
+              "oneof_index": 0,
+              "type": "TYPE_STRING"
+            },
+            {
+              "label": "LABEL_OPTIONAL",
+              "name": "created_at",
+              "number": 9,
+              "type": "TYPE_UINT64"
+            }
+          ],
+          "name": "User",
+          "nested_type": [
+            {
+              "field": [
+                {
+                  "label": "LABEL_OPTIONAL",
+                  "name": "key",
+                  "number": 1,
+                  "type": "TYPE_STRING"
+                },
+                {
+                  "label": "LABEL_OPTIONAL",
+                  "name": "value",
+                  "number": 2,
+                  "type": "TYPE_UINT64"
+                }
+              ],
+              "name": "CountersEntry",
+              "options": {
+                "map_entry": true
+              }
+            }
+          ],
+          "oneof_decl": [
+            {
+              "name": "contact"
+            }
+          ],
+          "reserved_name": [
+            "phone"
+          ],
+          "reserved_range": [
+            {
+              "end": 7,
+              "start": 6
+            }
+          ]
+        }
+      ],
+      "name": "examples/simple/user_reserved_v2.proto",
+      "package": "demo",
+      "syntax": "proto3"
+    }
+  ]
+}

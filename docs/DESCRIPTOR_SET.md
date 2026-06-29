@@ -33,6 +33,15 @@ python3 scripts/moon_proto_descriptor.py verify tests/fixtures/user_descriptor_s
   --report generated/descriptor_verify_report.md
 ```
 
+Compare two descriptor sets for protobuf compatibility:
+
+```bash
+python3 scripts/moon_proto_descriptor.py compat \
+  tests/fixtures/user_descriptor_set.hex \
+  tests/fixtures/user_descriptor_set_reserved_v2.hex \
+  --report generated/descriptor_compat_report.md
+```
+
 The verify command performs:
 
 1. Parse `FileDescriptorSet` from `.bin`/`.pb`, `.hex`, or `.json`.
@@ -43,23 +52,27 @@ The verify command performs:
 6. Compile-check the generated MoonBit source.
 7. Write a Markdown or HTML descriptor report.
 
+The compat command performs:
+
+1. Parse old and new `FileDescriptorSet` inputs.
+2. Reconstruct old and new proto3 schema subsets.
+3. Reuse the MoonBit schema compatibility checker.
+4. Write a Markdown or HTML compatibility report with descriptor summaries, reconstructed proto previews, and compatibility diagnostics.
+
 ## Current coverage
 
-The checked-in fixture `tests/fixtures/user_descriptor_set.hex` covers:
+The checked-in descriptor fixtures cover:
 
-- package and syntax metadata;
-- scalar fields;
-- repeated fields;
-- proto3 map-entry descriptors converted back to `map<K, V>` syntax;
-- oneof descriptors converted back to `oneof` syntax.
+- `tests/fixtures/user_descriptor_set.hex`: package and syntax metadata, scalar fields, repeated fields, proto3 map-entry descriptors converted back to `map<K, V>` syntax, and oneof descriptors converted back to `oneof` syntax;
+- `tests/fixtures/user_descriptor_set_reserved_v2.hex`: a compatible migration that adds `created_at = 9` and removes `phone = 6` only after reserving both the number and name;
+- `tests/fixtures/user_descriptor_set_breaking.hex`: an intentionally incompatible migration that changes field `id = 1` from `uint32` to `string`.
 
-This intentionally starts with the same `examples/simple/user.proto` feature set so descriptor import is tested against existing parser/runtime/codegen paths.
+These intentionally start with the same `examples/simple/user.proto` feature set so descriptor import is tested against existing parser/runtime/codegen paths while descriptor compatibility is tested for both PASS and FAIL paths.
 
 ## Why this matters
 
 Descriptor sets are the interchange format behind protobuf reflection. Supporting them gives Moon Proto Lab a path to integrate with existing protobuf tools without requiring users to keep original `.proto` text around. It also creates a foundation for future work:
 
-- descriptor-set compatibility checks;
 - schema registry imports;
 - differential tests against descriptors emitted by official code generators;
 - richer reflection-based debugging reports.
