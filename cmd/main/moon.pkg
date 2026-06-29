@@ -1,0 +1,8 @@
+import {
+  "moonbitlang/core/env" @env,
+  "moon_proto" @proto,
+}
+
+options(
+  "is-main": true,
+)

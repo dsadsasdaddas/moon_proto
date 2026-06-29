@@ -301,6 +301,28 @@ test "codegen emits moonbit struct and descriptor" {
         #|    ],
         #|  }
         #|}
+        #|
+        #|pub fn message_descriptors() -> Array[MessageDescriptor] {
+        #|  [
+        #|    descriptor_User(),
+        #|  ]
+        #|}
+        #|
+        #|pub fn encode_User(value : MessageValue) -> EncodeMessageResult {
+        #|  encode_message_with_descriptors(descriptor_User(), message_descriptors(), value)
+        #|}
+        #|
+        #|pub fn decode_User(input : Bytes) -> DecodeMessageResult {
+        #|  decode_message_with_descriptors(descriptor_User(), message_descriptors(), input)
+        #|}
+        #|
+        #|pub fn to_json_User(value : MessageValue) -> JsonEncodeResult {
+        #|  message_to_json_with_descriptors(descriptor_User(), message_descriptors(), value)
+        #|}
+        #|
+        #|pub fn from_json_User(input : String) -> JsonDecodeResult {
+        #|  json_to_message_with_descriptors(descriptor_User(), message_descriptors(), input)
+        #|}
       assert_eq(generated, expected)
     }
   }
@@ -357,6 +379,28 @@ test "parse enum and codegen enum descriptor" {
         #|      FieldDescriptor::{ name : "color", typ : EnumType("Color"), number : 1, label : Singular },
         #|    ],
         #|  }
+        #|}
+        #|
+        #|pub fn message_descriptors() -> Array[MessageDescriptor] {
+        #|  [
+        #|    descriptor_Paint(),
+        #|  ]
+        #|}
+        #|
+        #|pub fn encode_Paint(value : MessageValue) -> EncodeMessageResult {
+        #|  encode_message_with_descriptors(descriptor_Paint(), message_descriptors(), value)
+        #|}
+        #|
+        #|pub fn decode_Paint(input : Bytes) -> DecodeMessageResult {
+        #|  decode_message_with_descriptors(descriptor_Paint(), message_descriptors(), input)
+        #|}
+        #|
+        #|pub fn to_json_Paint(value : MessageValue) -> JsonEncodeResult {
+        #|  message_to_json_with_descriptors(descriptor_Paint(), message_descriptors(), value)
+        #|}
+        #|
+        #|pub fn from_json_Paint(input : String) -> JsonDecodeResult {
+        #|  json_to_message_with_descriptors(descriptor_Paint(), message_descriptors(), input)
         #|}
       assert_eq(generated, expected)
     }

@@ -84,6 +84,13 @@ match parse_proto(src) {
 }
 ```
 
+Run the bundled CLI smoke generator:
+
+```bash
+moon run cmd/main -- gen --example
+moon run cmd/main -- gen --schema 'syntax = "proto3"; message User { uint64 id = 1; }'
+```
+
 Convert a dynamic message to protobuf-style JSON:
 
 ```moonbit
@@ -120,6 +127,7 @@ moon check
 moon build
 moon test
 moon test --target all
+moon run cmd/main -- gen --example
 ```
 
 ## Roadmap
@@ -134,8 +142,9 @@ moon test --target all
 - M8: Python/Go protobuf oracle compatibility fixtures. ✅
 - M9: schema validator for AI/codegen safety. ✅
 - M10: nested message dynamic runtime/JSON support. ✅
-- M11: oneof and maps.
-- M12: CLI `moon_proto gen schema.proto -o generated/` and examples.
+- M11: CLI smoke generator and runtime helper codegen. ✅
+- M12: oneof and maps.
+- M13: file-based CLI `moon_proto gen schema.proto -o generated/`.
 
 ## License
 

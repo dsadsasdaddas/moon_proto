@@ -32,3 +32,5 @@ jobs:
         run: moon test
       - name: Test all targets
         run: moon test --target all
+      - name: CLI smoke
+        run: moon run cmd/main -- gen --example

@@ -2,12 +2,16 @@
 /// Options for emitting MoonBit source from a parsed proto file.
 pub(all) struct CodegenOptions {
   emit_descriptor_functions : Bool
+  emit_runtime_helpers : Bool
 } derive(Debug, Eq)
 
 ///|
 /// Default generator settings used by examples and tests.
 pub fn CodegenOptions::default() -> CodegenOptions {
-  CodegenOptions::{ emit_descriptor_functions: true }
+  CodegenOptions::{
+    emit_descriptor_functions: true,
+    emit_runtime_helpers: true,
+  }
 }
 
 ///|
@@ -164,6 +168,71 @@ pub fn generate_descriptor_function(desc : MessageDescriptor) -> String {
 }
 
 ///|
+/// Emit a registry function used by generated runtime helpers to resolve
+/// nested message descriptors.
+pub fn generate_message_descriptor_registry(file : ProtoFile) -> String {
+  let lines : Array[String] = []
+  lines.push("pub fn message_descriptors() -> Array[MessageDescriptor] {")
+  lines.push("  [")
+  for msg in file.messages {
+    lines.push("    descriptor_" + msg.name + "(),")
+  }
+  lines.push("  ]")
+  lines.push("}")
+  join_strings(lines, "\n")
+}
+
+///|
+/// Emit dynamic encode/decode/JSON helper functions for one generated message.
+pub fn generate_message_runtime_helpers(desc : MessageDescriptor) -> String {
+  let lines : Array[String] = []
+  lines.push(
+    "pub fn encode_" +
+    desc.name +
+    "(value : MessageValue) -> EncodeMessageResult {",
+  )
+  lines.push(
+    "  encode_message_with_descriptors(descriptor_" +
+    desc.name +
+    "(), message_descriptors(), value)",
+  )
+  lines.push("}")
+  lines.push("")
+  lines.push(
+    "pub fn decode_" + desc.name + "(input : Bytes) -> DecodeMessageResult {",
+  )
+  lines.push(
+    "  decode_message_with_descriptors(descriptor_" +
+    desc.name +
+    "(), message_descriptors(), input)",
+  )
+  lines.push("}")
+  lines.push("")
+  lines.push(
+    "pub fn to_json_" +
+    desc.name +
+    "(value : MessageValue) -> JsonEncodeResult {",
+  )
+  lines.push(
+    "  message_to_json_with_descriptors(descriptor_" +
+    desc.name +
+    "(), message_descriptors(), value)",
+  )
+  lines.push("}")
+  lines.push("")
+  lines.push(
+    "pub fn from_json_" + desc.name + "(input : String) -> JsonDecodeResult {",
+  )
+  lines.push(
+    "  json_to_message_with_descriptors(descriptor_" +
+    desc.name +
+    "(), message_descriptors(), input)",
+  )
+  lines.push("}")
+  join_strings(lines, "\n")
+}
+
+///|
 /// Generate MoonBit declarations for all messages in a parsed proto file.
 pub fn generate_moonbit_source(
   file : ProtoFile,
@@ -180,6 +249,14 @@ pub fn generate_moonbit_source(
     chunks.push(generate_message_struct(msg))
     if options.emit_descriptor_functions {
       chunks.push(generate_descriptor_function(msg))
+    }
+  }
+  if options.emit_descriptor_functions &&
+    options.emit_runtime_helpers &&
+    file.messages.length() > 0 {
+    chunks.push(generate_message_descriptor_registry(file))
+    for msg in file.messages {
+      chunks.push(generate_message_runtime_helpers(msg))
     }
   }
   join_strings(chunks, "\n\n")
