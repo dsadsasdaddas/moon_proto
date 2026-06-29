@@ -33,7 +33,7 @@ Current tests cover:
 - nested message binary and JSON roundtrip through descriptor registries;
 - proto3 map parser/codegen snapshot, schema validation, binary roundtrip and JSON object mapping;
 - proto3 oneof parser/codegen snapshot, encode-time conflict rejection, binary last-one-wins decode and JSON conflict rejection;
-- codegen runtime helper snapshots, inline/file-based CLI smoke generation, Schema Doctor diagnostics, compatibility checks, verify report generation, official differential report generation, descriptor verify/compat report generation, CI official source-contract checks, and generated-code compile checks;
+- codegen runtime helper snapshots, inline/file-based CLI smoke generation, Schema Doctor diagnostics, compatibility checks, verify report generation, official differential report generation, descriptor verify/compat/registry report generation, CI official source-contract checks, and generated-code compile checks;
 - deterministic property-style roundtrip corpora for varint, zig-zag, dynamic message binary and JSON;
 - official Python `google.protobuf` and Go `google.golang.org/protobuf` oracle fixtures for full scalar/repeated, map, oneof, 32-bit numeric boundary, float/double and special float messages.
 
@@ -55,6 +55,7 @@ python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report gen
 python3 scripts/moon_proto_official_diff.py --report generated/official_diff_report.md
 python3 scripts/moon_proto_descriptor.py verify tests/fixtures/user_descriptor_set.hex --report generated/descriptor_verify_report.md
 python3 scripts/moon_proto_descriptor.py compat tests/fixtures/user_descriptor_set.hex tests/fixtures/user_descriptor_set_reserved_v2.hex --report generated/descriptor_compat_report.md
+python3 scripts/moon_proto_descriptor.py registry tests/fixtures/user_descriptor_set.hex tests/fixtures/user_descriptor_set_reserved_v2.hex --name demo-user --report generated/descriptor_registry_report.md --json-out generated/descriptor_registry.json
 tests/codegen/compile_generated.sh
 ```
 
@@ -75,8 +76,8 @@ The project is positioned as a protobuf ecosystem verification lab for MoonBit. 
 - generated-code compile checks ensure generated MoonBit source actually builds;
 - verify reports make the result reviewable as Markdown/HTML artifacts.
 
-Completed parser/schema-tool verification now includes old/new compatibility checks, descriptor-set compatibility checks, larger conformance-lite oracle fixtures, import/option/reserved parser tolerance, and reserved contract validation. Planned next verification:
+Completed parser/schema-tool verification now includes old/new compatibility checks, descriptor-set compatibility checks, descriptor-registry release gates, larger conformance-lite oracle fixtures, import/option/reserved parser tolerance, and reserved contract validation. Planned next verification:
 
 - deeper differential tests against an installed official `protoc-gen-mbt` generator when its external registry dependencies resolve;
-- schema registry imports and richer descriptor-set registry workflows;
+- real remote schema registry adapters and richer release-policy DSL;
 - selected upstream protobuf conformance-suite cases.

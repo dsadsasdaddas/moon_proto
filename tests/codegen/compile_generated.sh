@@ -226,4 +226,27 @@ fi
 grep -Fq 'Overall status: **FAIL**' generated/descriptor_breaking_report.md
 grep -q 'field type changed' generated/descriptor_breaking_report.md
 
+python3 scripts/moon_proto_descriptor.py registry \
+  tests/fixtures/user_descriptor_set.hex \
+  tests/fixtures/user_descriptor_set_reserved_v2.hex \
+  --name demo-user \
+  --report generated/descriptor_registry_report.md \
+  --json-out generated/descriptor_registry.json
+grep -Fq 'Overall status: **PASS**' generated/descriptor_registry_report.md
+grep -q 'schema compatible' generated/descriptor_registry_report.md
+grep -q '"overall_status": "PASS"' generated/descriptor_registry.json
+
+if python3 scripts/moon_proto_descriptor.py registry \
+  tests/fixtures/user_descriptor_set.hex \
+  tests/fixtures/user_descriptor_set_breaking.hex \
+  --name demo-user-breaking \
+  --report generated/descriptor_registry_breaking_report.md \
+  --json-out generated/descriptor_registry_breaking.json; then
+  echo "expected descriptor registry failure" >&2
+  exit 1
+fi
+grep -Fq 'Overall status: **FAIL**' generated/descriptor_registry_breaking_report.md
+grep -q 'field type changed' generated/descriptor_registry_breaking_report.md
+grep -q '"overall_status": "FAIL"' generated/descriptor_registry_breaking.json
+
 echo "Generated MoonBit source compiles"

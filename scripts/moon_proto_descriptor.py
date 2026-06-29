@@ -8,6 +8,7 @@ subset, and fed into the existing doctor/codegen/compile verification pipeline.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
 import json
 import sys
@@ -35,6 +36,30 @@ class DescriptorStep:
     name: str
     ok: bool
     details: str
+
+
+@dataclass
+class RegistryVersion:
+    index: int
+    path: Path
+    ok: bool
+    digest: str
+    files: list[str]
+    packages: list[str]
+    messages: list[str]
+    enums: list[str]
+    proto_text: str
+    details: str
+
+
+@dataclass
+class RegistryEdge:
+    old_index: int
+    new_index: int
+    old_path: Path
+    new_path: Path
+    compatible: bool
+    output: str
 
 
 PROTO_TYPE_NAMES = {
@@ -87,6 +112,40 @@ def write_descriptor_set(path: Path, fds: descriptor_pb2.FileDescriptorSet) -> N
         path.write_text(fds.SerializeToString().hex() + '\n', encoding='utf-8')
     else:
         path.write_bytes(fds.SerializeToString())
+
+
+def descriptor_digest(fds: descriptor_pb2.FileDescriptorSet) -> str:
+    return hashlib.sha256(fds.SerializeToString()).hexdigest()
+
+
+def collect_schema_names(fds: descriptor_pb2.FileDescriptorSet) -> tuple[list[str], list[str], list[str], list[str]]:
+    files: list[str] = []
+    packages: list[str] = []
+    messages: list[str] = []
+    enums: list[str] = []
+
+    def visit_message(message: descriptor_pb2.DescriptorProto, prefix: str) -> None:
+        name = f'{prefix}.{message.name}' if prefix else message.name
+        if not message.options.map_entry:
+            messages.append(name)
+        for enum_desc in message.enum_type:
+            enums.append(f'{name}.{enum_desc.name}')
+        for nested in message.nested_type:
+            visit_message(nested, name)
+
+    for file_desc in fds.file:
+        files.append(file_desc.name)
+        if file_desc.package and file_desc.package not in packages:
+            packages.append(file_desc.package)
+        for enum_desc in file_desc.enum_type:
+            enums.append(enum_desc.name)
+        for message in file_desc.message_type:
+            visit_message(message, '')
+    return files, packages, messages, enums
+
+
+def markdown_table_cell(text: str) -> str:
+    return text.replace('|', '\\|').replace('\n', '<br>')
 
 
 def type_name_tail(type_name: str, package: str) -> str:
@@ -375,6 +434,111 @@ def descriptor_compat_report(
     return '\n'.join(lines) + '\n'
 
 
+def registry_manifest(
+    name: str,
+    versions: list[RegistryVersion],
+    edges: list[RegistryEdge],
+) -> dict:
+    return {
+        'name': name,
+        'generated_at': datetime.now(timezone.utc).isoformat(),
+        'overall_status': 'PASS' if all(v.ok for v in versions) and all(e.compatible for e in edges) else 'FAIL',
+        'versions': [
+            {
+                'index': version.index,
+                'path': str(version.path),
+                'status': 'PASS' if version.ok else 'FAIL',
+                'sha256': version.digest,
+                'files': version.files,
+                'packages': version.packages,
+                'messages': version.messages,
+                'enums': version.enums,
+                'details': version.details,
+            }
+            for version in versions
+        ],
+        'compatibility_edges': [
+            {
+                'old_index': edge.old_index,
+                'new_index': edge.new_index,
+                'old_path': str(edge.old_path),
+                'new_path': str(edge.new_path),
+                'status': 'PASS' if edge.compatible else 'FAIL',
+                'output': edge.output,
+            }
+            for edge in edges
+        ],
+    }
+
+
+def descriptor_registry_report(
+    name: str,
+    versions: list[RegistryVersion],
+    edges: list[RegistryEdge],
+) -> str:
+    ok = all(version.ok for version in versions) and all(edge.compatible for edge in edges)
+    lines = [
+        '# Moon Proto Lab descriptor registry report',
+        '',
+        f'- Registry: `{name}`',
+        f'- Generated at: `{datetime.now(timezone.utc).isoformat()}`',
+        f'- Overall status: **{"PASS" if ok else "FAIL"}**',
+        f'- Versions: `{len(versions)}`',
+        f'- Compatibility edges: `{len(edges)}`',
+        '',
+        '## Imported versions',
+        '',
+        '| Version | Status | Input | SHA-256 | Files | Packages | Messages | Enums | Details |',
+        '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+    ]
+    for version in versions:
+        lines.append(
+            '| '
+            + ' | '.join([
+                str(version.index),
+                'PASS' if version.ok else 'FAIL',
+                f'`{version.path}`',
+                f'`{version.digest[:16]}`',
+                markdown_table_cell(', '.join(version.files)),
+                markdown_table_cell(', '.join(version.packages)),
+                markdown_table_cell(', '.join(version.messages)),
+                markdown_table_cell(', '.join(version.enums)),
+                markdown_table_cell(version.details),
+            ])
+            + ' |'
+        )
+    lines.extend([
+        '',
+        '## Adjacent compatibility checks',
+        '',
+        '| Old | New | Status | Diagnostics |',
+        '| --- | --- | --- | --- |',
+    ])
+    for edge in edges:
+        diagnostics = edge.output.strip() or 'no output'
+        lines.append(
+            f'| {edge.old_index} `{edge.old_path.name}` | '
+            f'{edge.new_index} `{edge.new_path.name}` | '
+            f'{"PASS" if edge.compatible else "FAIL"} | '
+            f'{markdown_table_cell(diagnostics)} |'
+        )
+    lines.extend([
+        '',
+        '## Reconstructed proto previews',
+    ])
+    for version in versions:
+        preview = '\n'.join(version.proto_text.splitlines()[:80])
+        lines.extend([
+            '',
+            f'### Version {version.index}: `{version.path}`',
+            '',
+            '```proto',
+            preview.strip(),
+            '```',
+        ])
+    return '\n'.join(lines) + '\n'
+
+
 def write_text_report(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.suffix.lower() in {'.html', '.htm'}:
@@ -472,6 +636,108 @@ def command_compat(args: argparse.Namespace) -> int:
     return 0 if compatible else 1
 
 
+DESCRIPTOR_INPUT_SUFFIXES = {'.bin', '.pb', '.hex', '.json'}
+
+
+def expand_registry_inputs(inputs: list[str]) -> list[Path]:
+    paths: list[Path] = []
+    for item in inputs:
+        path = Path(item)
+        if path.is_dir():
+            for child in sorted(path.iterdir()):
+                if child.is_file() and child.suffix.lower() in DESCRIPTOR_INPUT_SUFFIXES:
+                    paths.append(child)
+        else:
+            paths.append(path)
+    return paths
+
+
+def command_registry(args: argparse.Namespace) -> int:
+    root = repo_root()
+    paths = expand_registry_inputs(args.descriptors)
+    if not paths:
+        print('error: descriptor registry input is empty', file=sys.stderr)
+        return 2
+
+    versions: list[RegistryVersion] = []
+    for index, path in enumerate(paths):
+        try:
+            fds = load_descriptor_set(path)
+            proto_text = descriptor_set_to_proto_text(fds)
+            files, packages, messages, enums = collect_schema_names(fds)
+            doctor = run_moon_doctor(proto_text, args.moon_bin, root)
+            ok = schema_is_valid(doctor)
+            details = doctor.splitlines()[0] if doctor else 'no output'
+            versions.append(RegistryVersion(
+                index=index,
+                path=path,
+                ok=ok,
+                digest=descriptor_digest(fds),
+                files=files,
+                packages=packages,
+                messages=messages,
+                enums=enums,
+                proto_text=proto_text,
+                details=details,
+            ))
+        except Exception as exc:
+            versions.append(RegistryVersion(
+                index=index,
+                path=path,
+                ok=False,
+                digest='',
+                files=[],
+                packages=[],
+                messages=[],
+                enums=[],
+                proto_text='',
+                details=str(exc),
+            ))
+
+    edges: list[RegistryEdge] = []
+    for index in range(1, len(versions)):
+        old = versions[index - 1]
+        new = versions[index]
+        if old.ok and new.ok:
+            try:
+                output = run_moon_compat(old.proto_text, new.proto_text, args.moon_bin, root)
+                compatible = schema_is_compatible(output)
+            except RuntimeError as exc:
+                output = str(exc)
+                compatible = False
+        else:
+            output = 'skipped because one side failed descriptor import or schema doctor'
+            compatible = False
+        edges.append(RegistryEdge(
+            old_index=old.index,
+            new_index=new.index,
+            old_path=old.path,
+            new_path=new.path,
+            compatible=compatible,
+            output=output,
+        ))
+
+    ok = all(version.ok for version in versions) and all(edge.compatible for edge in edges)
+    if args.report:
+        write_text_report(Path(args.report), descriptor_registry_report(args.name, versions, edges))
+        print(f'report: {args.report}')
+    if args.json_out:
+        out = Path(args.json_out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(registry_manifest(args.name, versions, edges), indent=2, sort_keys=True) + '\n', encoding='utf-8')
+        print(f'json: {args.json_out}')
+
+    print('Moon Proto Lab descriptor registry: ' + ('PASS' if ok else 'FAIL'))
+    print(f'versions: {len(versions)}')
+    print(f'compatibility edges: {len(edges)}')
+    for version in versions:
+        print(f'- version {version.index}: {"PASS" if version.ok else "FAIL"} {version.path} {version.details}')
+    for edge in edges:
+        first = edge.output.splitlines()[0] if edge.output else 'no output'
+        print(f'- edge {edge.old_index}->{edge.new_index}: {"PASS" if edge.compatible else "FAIL"} {first}')
+    return 0 if ok else 1
+
+
 def command_verify(args: argparse.Namespace) -> int:
     root = repo_root()
     descriptor_path = Path(args.descriptor)
@@ -550,6 +816,14 @@ def build_parser() -> argparse.ArgumentParser:
     compat.add_argument('--report')
     compat.add_argument('--moon-bin', default='moon')
     compat.set_defaults(func=command_compat)
+
+    registry = sub.add_parser('registry', help='import descriptor versions into a small registry and check adjacent compatibility')
+    registry.add_argument('descriptors', nargs='+', help='descriptor files or directories, ordered from oldest to newest')
+    registry.add_argument('--name', default='moon-proto-lab-registry')
+    registry.add_argument('--report')
+    registry.add_argument('--json-out')
+    registry.add_argument('--moon-bin', default='moon')
+    registry.set_defaults(func=command_registry)
 
     verify = sub.add_parser('verify', help='convert descriptor set and run doctor/codegen/compile checks')
     verify.add_argument('descriptor')

@@ -73,6 +73,6 @@ These intentionally start with the same `examples/simple/user.proto` feature set
 
 Descriptor sets are the interchange format behind protobuf reflection. Supporting them gives Moon Proto Lab a path to integrate with existing protobuf tools without requiring users to keep original `.proto` text around. It also creates a foundation for future work:
 
-- schema registry imports;
+- descriptor registry imports and release gates;
 - differential tests against descriptors emitted by official code generators;
 - richer reflection-based debugging reports.
