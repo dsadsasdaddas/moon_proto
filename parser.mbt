@@ -214,12 +214,62 @@ fn ProtoParser::parse_message(self : ProtoParser) -> MessageDescriptor? {
 }
 
 ///|
-/// Parse a proto3 subset: syntax/package declarations and message fields.
+fn ProtoParser::parse_enum_value(self : ProtoParser) -> EnumValueDescriptor? {
+  let name = match self.consume_ident() {
+    Some(n) => n
+    None => return None
+  }
+  if !self.consume_sym("=") {
+    return None
+  }
+  let number = match self.consume_int() {
+    Some(n) => n
+    None => return None
+  }
+  let _ = self.consume_sym(";")
+  Some(EnumValueDescriptor::{ name, number })
+}
+
+///|
+fn ProtoParser::parse_enum(self : ProtoParser) -> EnumDescriptor? {
+  let name = match self.consume_ident() {
+    Some(n) => n
+    None => return None
+  }
+  if !self.consume_sym("{") {
+    return None
+  }
+  let values : Array[EnumValueDescriptor] = []
+  let mut done = false
+  while !done {
+    match self.peek() {
+      Some(Sym(s)) =>
+        if s == "}" {
+          let _ = self.advance()
+          done = true
+        } else {
+          return None
+        }
+      Some(_) =>
+        match self.parse_enum_value() {
+          Some(v) => values.push(v)
+          None => return None
+        }
+      None => return None
+    }
+  }
+  Some(EnumDescriptor::{ name, values })
+}
+
+///|
+/// Parse a proto3 subset: syntax/package declarations, messages, fields and
+/// top-level enums.
 pub fn parse_proto(src : String) -> ParseProtoResult {
   let p = ProtoParser::{ tokens: lex_proto(src), i: 0 }
   let mut syntax = "proto3"
   let mut package_name = ""
   let messages : Array[MessageDescriptor] = []
+  let enums : Array[EnumDescriptor] = []
   while p.i < p.tokens.length() {
     match p.consume_ident() {
       Some("syntax") => {
@@ -244,9 +294,14 @@ pub fn parse_proto(src : String) -> ParseProtoResult {
           Some(m) => messages.push(m)
           None => return ProtoErr(Expected("message"))
         }
+      Some("enum") =>
+        match p.parse_enum() {
+          Some(e) => enums.push(e)
+          None => return ProtoErr(Expected("enum"))
+        }
       Some(other) => return ProtoErr(Expected("top-level item, got " + other))
       None => return ProtoErr(UnexpectedEofInSchema)
     }
   }
-  ProtoOk(ProtoFile::{ syntax, package_name, messages })
+  ProtoOk(ProtoFile::{ syntax, package_name, messages, enums })
 }

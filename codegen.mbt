@@ -86,6 +86,41 @@ fn field_label_source(label : FieldLabel) -> String {
 }
 
 ///|
+/// Emit a MoonBit enum declaration for one enum descriptor.
+pub fn generate_enum(desc : EnumDescriptor) -> String {
+  let lines : Array[String] = []
+  lines.push("pub(all) enum " + desc.name + " {")
+  for value in desc.values {
+    lines.push("  " + value.name)
+  }
+  lines.push("} derive(Debug, Eq)")
+  join_strings(lines, "\n")
+}
+
+///|
+/// Emit a descriptor function for one enum descriptor.
+pub fn generate_enum_descriptor_function(desc : EnumDescriptor) -> String {
+  let lines : Array[String] = []
+  lines.push("pub fn descriptor_" + desc.name + "() -> EnumDescriptor {")
+  lines.push("  EnumDescriptor::{")
+  lines.push("    name : \"" + desc.name + "\",")
+  lines.push("    values : [")
+  for value in desc.values {
+    lines.push(
+      "      EnumValueDescriptor::{ name : \"" +
+      value.name +
+      "\", number : " +
+      value.number.to_string() +
+      " },",
+    )
+  }
+  lines.push("    ],")
+  lines.push("  }")
+  lines.push("}")
+  join_strings(lines, "\n")
+}
+
+///|
 /// Emit a MoonBit struct declaration for one message descriptor.
 pub fn generate_message_struct(desc : MessageDescriptor) -> String {
   let lines : Array[String] = []
@@ -133,6 +168,12 @@ pub fn generate_moonbit_source(
   options? : CodegenOptions = CodegenOptions::default(),
 ) -> String {
   let chunks : Array[String] = []
+  for enum_desc in file.enums {
+    chunks.push(generate_enum(enum_desc))
+    if options.emit_descriptor_functions {
+      chunks.push(generate_enum_descriptor_function(enum_desc))
+    }
+  }
   for msg in file.messages {
     chunks.push(generate_message_struct(msg))
     if options.emit_descriptor_functions {

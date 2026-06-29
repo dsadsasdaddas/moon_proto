@@ -77,6 +77,7 @@ test "parse simple proto" {
       assert_eq(file.messages[0].name, "User")
       assert_eq(file.messages[0].fields.length(), 3)
       assert_true(file.messages[0].fields[2].label == Repeated)
+      assert_eq(file.enums.length(), 0)
     }
     ProtoErr(_) => fail("expected parser to accept simple proto")
   }
@@ -306,6 +307,63 @@ test "codegen emits moonbit struct and descriptor" {
 }
 
 ///|
+test "parse enum and codegen enum descriptor" {
+  let src =
+    #|syntax = "proto3";
+    #|package demo;
+    #|enum Color {
+    #|  COLOR_UNSPECIFIED = 0;
+    #|  RED = 1;
+    #|  BLUE = 2;
+    #|}
+    #|message Paint {
+    #|  Color color = 1;
+    #|}
+  match parse_proto(src) {
+    ProtoErr(_) => fail("enum parser failed")
+    ProtoOk(file) => {
+      assert_eq(file.enums.length(), 1)
+      assert_eq(file.enums[0].name, "Color")
+      assert_eq(file.enums[0].values.length(), 3)
+      assert_eq(file.enums[0].values[2].name, "BLUE")
+      assert_true(file.messages[0].fields[0].typ == NamedType("Color"))
+      let generated = generate_moonbit_source(file)
+      let expected =
+        #|pub(all) enum Color {
+        #|  COLOR_UNSPECIFIED
+        #|  RED
+        #|  BLUE
+        #|} derive(Debug, Eq)
+        #|
+        #|pub fn descriptor_Color() -> EnumDescriptor {
+        #|  EnumDescriptor::{
+        #|    name : "Color",
+        #|    values : [
+        #|      EnumValueDescriptor::{ name : "COLOR_UNSPECIFIED", number : 0 },
+        #|      EnumValueDescriptor::{ name : "RED", number : 1 },
+        #|      EnumValueDescriptor::{ name : "BLUE", number : 2 },
+        #|    ],
+        #|  }
+        #|}
+        #|
+        #|pub(all) struct Paint {
+        #|  color : Color
+        #|} derive(Debug, Eq)
+        #|
+        #|pub fn descriptor_Paint() -> MessageDescriptor {
+        #|  MessageDescriptor::{
+        #|    name : "Paint",
+        #|    fields : [
+        #|      FieldDescriptor::{ name : "color", typ : NamedType("Color"), number : 1, label : Singular },
+        #|    ],
+        #|  }
+        #|}
+      assert_eq(generated, expected)
+    }
+  }
+}
+
+///|
 test "proto3 repeated numeric fields use packed encoding" {
   let desc = MessageDescriptor::{
     name: "Metrics",
@@ -374,5 +432,106 @@ test "packed decoder also accepts unpacked repeated numeric fields" {
         ]),
       )
     }
+  }
+}
+
+///|
+test "json string escaping and base64" {
+  assert_eq(json_escape_string("a\"b\\c\n"), "\"a\\\"b\\\\c\\n\"")
+  assert_eq(base64_encode(b""), "")
+  assert_eq(base64_encode(b"\xff\x00"), "/wA=")
+  assert_eq(base64_encode(b"abc"), "YWJj")
+}
+
+///|
+test "message to protobuf style json" {
+  let desc = MessageDescriptor::{
+    name: "User",
+    fields: [
+      FieldDescriptor::{
+        name: "id",
+        typ: UInt64Type,
+        number: 1,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "name",
+        typ: StringType,
+        number: 2,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "active",
+        typ: BoolType,
+        number: 3,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "tags",
+        typ: StringType,
+        number: 4,
+        label: Repeated,
+      },
+      FieldDescriptor::{
+        name: "score",
+        typ: SInt64Type,
+        number: 5,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "blob",
+        typ: BytesType,
+        number: 6,
+        label: Singular,
+      },
+    ],
+  }
+  let msg = message_value([
+    message_field("blob", BytesValue(b"\xff\x00")),
+    repeated_message_field("tags", [StringValue("admin"), StringValue("tester")]),
+    message_field("active", BoolValue(true)),
+    message_field("name", StringValue("Alice \"A\"")),
+    message_field("score", Int64Value(-2L)),
+    message_field("id", UInt64Value(150UL)),
+  ])
+  match message_to_json(desc, msg) {
+    JsonErr(_) => fail("JSON mapping failed")
+    JsonOk(json) =>
+      assert_eq(
+        json, "{\"id\":\"150\",\"name\":\"Alice \\\"A\\\"\",\"active\":true,\"tags\":[\"admin\",\"tester\"],\"score\":\"-2\",\"blob\":\"/wA=\"}",
+      )
+  }
+}
+
+///|
+test "message to json rejects unknown or mismatched fields" {
+  let desc = MessageDescriptor::{
+    name: "User",
+    fields: [
+      FieldDescriptor::{
+        name: "id",
+        typ: UInt64Type,
+        number: 1,
+        label: Singular,
+      },
+    ],
+  }
+  match
+    message_to_json(
+      desc,
+      message_value([message_field("oops", UInt64Value(1UL))]),
+    ) {
+    JsonOk(_) => fail("unknown field should be rejected")
+    JsonErr(Unsupported(_)) => ()
+    JsonErr(_) => fail("unexpected json error")
+  }
+  match
+    message_to_json(
+      desc,
+      message_value([message_field("id", StringValue("wrong"))]),
+    ) {
+    JsonOk(_) => fail("bad field value should be rejected")
+    JsonErr(Unsupported(_)) => ()
+    JsonErr(_) => fail("unexpected json error")
   }
 }

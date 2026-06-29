@@ -44,11 +44,26 @@ pub(all) struct MessageDescriptor {
 } derive(Debug, Eq)
 
 ///|
+/// A parsed enum value descriptor.
+pub(all) struct EnumValueDescriptor {
+  name : String
+  number : Int
+} derive(Debug, Eq)
+
+///|
+/// A parsed enum descriptor.
+pub(all) struct EnumDescriptor {
+  name : String
+  values : Array[EnumValueDescriptor]
+} derive(Debug, Eq)
+
+///|
 /// Top-level proto file model used by parser and codegen.
 pub(all) struct ProtoFile {
   syntax : String
   package_name : String
   messages : Array[MessageDescriptor]
+  enums : Array[EnumDescriptor]
 } derive(Debug, Eq)
 
 ///|
@@ -94,5 +109,5 @@ pub fn ScalarType::wire_type(self : ScalarType) -> WireType {
 ///|
 /// Empty proto file constructor used by tests and future codegen.
 pub fn ProtoFile::empty() -> ProtoFile {
-  ProtoFile::{ syntax: "proto3", package_name: "", messages: [] }
+  ProtoFile::{ syntax: "proto3", package_name: "", messages: [], enums: [] }
 }

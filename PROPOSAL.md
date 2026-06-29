@@ -28,10 +28,11 @@ Moon Proto 计划为 MoonBit 生态补齐 Protocol Buffers 基础能力，使 Mo
 - repeated 字段编码与解码聚合；
 - proto3 数值型 repeated 字段 packed 编码/解码；
 - 解码时跳过 unknown fields，便于向前/向后兼容；
-- proto3 schema AST；
-- `.proto` lexer/parser 子集：syntax、package、message、optional/repeated、标量字段；
-- MoonBit 代码生成雏形：根据 message descriptor 生成 struct 与 descriptor 函数；
-- golden tests 覆盖 varint 向量、field bytes、schema parser、动态 message roundtrip、unknown field、packed repeated、codegen 快照。
+- protobuf-style JSON writer，支持标量、repeated、bytes base64、64-bit 整数字符串化；
+- proto3 schema AST，覆盖 message、field、top-level enum；
+- `.proto` lexer/parser 子集：syntax、package、message、enum、optional/repeated、标量字段；
+- MoonBit 代码生成雏形：根据 message/enum descriptor 生成 struct、enum 与 descriptor 函数；
+- golden tests 覆盖 varint 向量、field bytes、schema parser、动态 message roundtrip、unknown field、packed repeated、codegen 快照、JSON 转义与输出、enum parser/codegen。
 
 ## 核心功能规划
 
