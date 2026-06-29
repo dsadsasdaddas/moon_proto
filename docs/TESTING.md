@@ -28,7 +28,7 @@ Current tests cover:
 - nested message binary and JSON roundtrip through descriptor registries;
 - proto3 map parser/codegen snapshot, schema validation, binary roundtrip and JSON object mapping;
 - proto3 oneof parser/codegen snapshot, encode-time conflict rejection, binary last-one-wins decode and JSON conflict rejection;
-- codegen runtime helper snapshots, inline/file-based CLI smoke generation, and generated-code compile checks;
+- codegen runtime helper snapshots, inline/file-based CLI smoke generation, Schema Doctor diagnostics, verify report generation, and generated-code compile checks;
 - deterministic property-style roundtrip corpora for varint, zig-zag, dynamic message binary and JSON;
 - official Python `google.protobuf` and Go `google.golang.org/protobuf` oracle fixtures for full scalar/repeated, map and oneof messages.
 
@@ -43,6 +43,8 @@ moon test
 moon test --target all
 moon run cmd/main -- gen --example
 python3 scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/
+python3 scripts/moon_proto_lab.py doctor examples/simple/user.proto
+python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md
 tests/codegen/compile_generated.sh
 ```
 
@@ -60,10 +62,12 @@ The project is positioned as a protobuf ecosystem verification lab for MoonBit. 
 - JSON roundtrip tests detect mapping drift;
 - Python/Go oracles make behavior comparable with mature ecosystems;
 - negative tests reject invalid AI-generated schemas or dynamic messages;
-- generated-code compile checks ensure generated MoonBit source actually builds.
+- generated-code compile checks ensure generated MoonBit source actually builds;
+- verify reports make the result reviewable as Markdown/HTML artifacts.
 
 Planned next verification:
 
+- schema compatibility checks across old/new `.proto` versions;
 - differential tests against existing MoonBit protobuf packages where APIs are compatible;
 - larger conformance-lite corpus;
 - import/option/reserved schema validation tests.

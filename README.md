@@ -43,6 +43,8 @@ The project has a small but end-to-end verifiable protobuf laboratory pipeline:
 - protobuf-style JSON writer/parser for scalar/repeated/map/nested/oneof dynamic messages;
 - MoonBit source generator for message structs, enums, descriptor registries and helper functions;
 - file-based generator wrapper for `.proto` input and generated `.mbt` output;
+- file-based Schema Doctor CLI for stable diagnostics on valid and invalid schemas;
+- AI verification CLI that runs doctor, schema inspection, codegen, generated-code compile checks, and Markdown/HTML report generation;
 - Python and Go official protobuf oracle fixtures for cross-language compatibility checks;
 - deterministic property-style roundtrip corpora for binary and JSON paths;
 - generated-code compile checks and GitHub Actions CI.
@@ -99,17 +101,28 @@ match parse_proto(src) {
 }
 ```
 
-Run the bundled CLI smoke generator:
+Run the bundled CLI smoke generator and schema tools:
 
 ```bash
 moon run cmd/main -- gen --example
 moon run cmd/main -- gen --schema 'syntax = "proto3"; message User { uint64 id = 1; }'
+moon run cmd/main -- doctor --schema 'syntax = "proto3"; message User { uint64 id = 1; }'
+moon run cmd/main -- inspect --schema 'syntax = "proto3"; message User { uint64 id = 1; }'
 ```
 
 Generate from a `.proto` file into a project directory:
 
 ```bash
 python3 scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/
+```
+
+Run the file-based Schema Doctor and AI verification report workflow:
+
+```bash
+python3 scripts/moon_proto_lab.py doctor examples/simple/user.proto
+python3 scripts/moon_proto_lab.py inspect examples/simple/user.proto
+python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md
+python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.html
 ```
 
 Convert a dynamic message to protobuf-style JSON:
@@ -141,12 +154,15 @@ moon test
 moon test --target all
 moon run cmd/main -- gen --example
 python3 scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/
+python3 scripts/moon_proto_lab.py doctor examples/simple/user.proto
+python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md
 tests/codegen/compile_generated.sh
 ```
 
 ## Documentation
 
 - [Ecosystem positioning](docs/ECOSYSTEM_POSITIONING.md)
+- [Schema Doctor and verify reports](docs/SCHEMA_DOCTOR.md)
 - [Testing strategy](docs/TESTING.md)
 - [Development report](docs/DEVELOPMENT_REPORT.md)
 - [Submission checklist](docs/SUBMISSION_CHECKLIST.md)
@@ -169,8 +185,10 @@ tests/codegen/compile_generated.sh
 - M13: proto3 maps. Done.
 - M14: oneof groups. Done.
 - M15: file-based CLI wrapper `moon_proto gen schema.proto -o generated/`. Done.
-- M16: adapters and differential tests around existing MoonBit protobuf packages. Planned.
-- M17: larger conformance-lite corpus and import/option/reserved schema support. Planned.
+- M16: Schema Doctor CLI for stable diagnostics. Done.
+- M17: AI verify command with generated-code compile check and Markdown/HTML reports. Done.
+- M18: adapters and differential tests around existing MoonBit protobuf packages. Planned.
+- M19: larger conformance-lite corpus and import/option/reserved schema support. Planned.
 
 ## License
 

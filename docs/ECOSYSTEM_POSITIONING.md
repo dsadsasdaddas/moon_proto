@@ -21,7 +21,8 @@ Moon Proto Lab focuses on the tooling and verification layer around protobuf dev
 2. **AI-generated schema/code verification**
    - validate field numbers, duplicate names/numbers, enum invariants and map constraints;
    - reject invalid JSON or oneof conflicts;
-   - compile-check generated MoonBit source instead of trusting text-only output.
+   - compile-check generated MoonBit source instead of trusting text-only output;
+   - generate Markdown/HTML verification reports for review and CI artifacts.
 
 3. **Cross-language compatibility oracle**
    - compare MoonBit behavior with Python `google.protobuf`;
@@ -50,6 +51,7 @@ The contest encourages useful MoonBit open-source infrastructure and explicitly 
 - `.proto` schemas can be parsed and checked;
 - dynamic messages can be encoded/decoded and compared against mature language ecosystems;
 - generated MoonBit code is built in CI;
+- Schema Doctor and verify reports expose diagnostics as reviewable artifacts;
 - documentation and fixtures make behavior reproducible.
 
 Therefore the project should be submitted as:

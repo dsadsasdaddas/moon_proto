@@ -12,7 +12,7 @@
 
 ## 项目简介
 
-Moon Proto Lab 面向 MoonBit protobuf 生态，提供动态 `.proto` schema 解析、schema validation、动态 message 二进制/JSON 编解码、MoonBit 代码生成实验、跨语言 oracle fixture 和生成代码可编译检查。项目不定位为官方 protobuf runtime 的替代品，而是作为 MoonBit protobuf 生态的验证与工具层，帮助开发者在云计算、边缘计算、WebAssembly 服务、AI agent 工具协议和多语言数据交换场景中更可靠地使用 protobuf。
+Moon Proto Lab 面向 MoonBit protobuf 生态，提供动态 `.proto` schema 解析、Schema Doctor 诊断、schema validation、动态 message 二进制/JSON 编解码、MoonBit 代码生成实验、AI verify 报告、跨语言 oracle fixture 和生成代码可编译检查。项目不定位为官方 protobuf runtime 的替代品，而是作为 MoonBit protobuf 生态的验证与工具层，帮助开发者在云计算、边缘计算、WebAssembly 服务、AI agent 工具协议和多语言数据交换场景中更可靠地使用 protobuf。
 
 项目特别关注 AI 时代的软件工程痛点：AI 可以快速生成 `.proto` schema 或 MoonBit 代码，但这些输出经常难以验证、难以维护。本项目通过 parser、validator、golden fixtures、Python/Go 官方 protobuf oracle、CI 和 generated-code compile check，把“看起来正确”的输出转化为可测试、可复现、可长期维护的工程资产。
 
@@ -22,7 +22,7 @@ Moon Proto Lab 面向 MoonBit protobuf 生态，提供动态 `.proto` schema 解
 
 - 不宣称替代官方 protobuf 包；
 - 不把重点放在完整生产级 runtime 竞争上；
-- 重点提供动态 schema lab、兼容性 fixture、AI 生成代码验证、JSON mapping 测试和 generated-code compile check；
+- 重点提供动态 schema lab、Schema Doctor、兼容性 fixture、AI verify 报告、JSON mapping 测试和 generated-code compile check；
 - 后续可以作为官方 protobuf 包的 differential testing harness 或 schema/debugging 辅助工具。
 
 ## 当前已完成内容
@@ -37,12 +37,13 @@ Moon Proto Lab 面向 MoonBit protobuf 生态，提供动态 `.proto` schema 解
 - 常用字段编码 helper：uint64、bool、sint64、string、bytes；
 - proto3 schema AST：message、field、label、scalar type、enum、named message、map type、oneof group；
 - `.proto` lexer/parser 子集：syntax、package、message、enum、optional/repeated、map、oneof、标量字段；
-- schema validator：字段号范围、重复字段名/号、proto3 enum 首值为 0、顶层命名冲突、map key/value 约束；
+- schema validator 与 Schema Doctor：字段号范围、重复字段名/号、proto3 enum 首值为 0、顶层命名冲突、map key/value 约束，并输出稳定诊断路径；
 - schema-driven 动态 message 编解码，覆盖标量、repeated、packed repeated、enum、nested message、map、oneof；
 - 解码时跳过 unknown fields，便于向前/向后兼容；
 - protobuf-style JSON writer/parser，支持标量、repeated、bytes base64、64-bit 整数字符串化、nested message、map object mapping、oneof 冲突拒绝；
 - MoonBit 代码生成：根据 message/enum descriptor 生成 struct、enum、descriptor registry、encode/decode/JSON helper；
 - `scripts/moon_proto_gen.py` 文件版生成入口：`python3 scripts/moon_proto_gen.py gen schema.proto -o generated/`；
+- `scripts/moon_proto_lab.py doctor/inspect/verify` 提供文件版 Schema Doctor、schema summary、AI verify 与 Markdown/HTML 报告生成；
 - `tests/codegen/compile_generated.sh` 实际生成 MoonBit 源码并执行 `moon check`，验证生成代码可编译；
 - Python `google.protobuf` 与 Go `google.golang.org/protobuf` oracle fixtures，用于验证 scalar/repeated/map/oneof golden bytes/JSON 与成熟生态一致；
 - deterministic property-style tests 覆盖 varint、zig-zag、动态 message 二进制和 JSON roundtrip；
@@ -51,11 +52,12 @@ Moon Proto Lab 面向 MoonBit protobuf 生态，提供动态 `.proto` schema 解
 ## 核心功能范围
 
 1. **动态 schema lab**：解析 proto3 schema 子集，构建 MoonBit descriptor，支持开发者快速检查 schema 结构。
-2. **schema validation**：检查字段号、重复定义、enum 规则、map 约束、oneof 冲突等常见错误，适合验证 AI 生成 schema。
+2. **Schema Doctor / schema validation**：检查字段号、重复定义、enum 规则、map 约束、oneof 冲突等常见错误，输出稳定诊断路径，适合验证 AI 生成 schema。
 3. **动态 message runtime**：在不依赖生成 typed struct 的情况下，对 descriptor-driven message 进行二进制和 JSON roundtrip。
 4. **兼容性 oracle**：使用 Python/Go 官方 protobuf 生成和验证 fixtures，减少“实现能跑但不兼容”的风险。
-5. **代码生成实验**：生成 MoonBit struct、enum、descriptor 和 helper，并通过 compile check 保证生成结果可构建。
-6. **工程化交付**：README、测试说明、开发报告、提交清单、公开 GitHub/Gitlink 仓库和 CI。
+5. **AI verify 报告**：一条命令完成 doctor、inspect、codegen、generated-code compile check，并输出 Markdown/HTML 报告。
+6. **代码生成实验**：生成 MoonBit struct、enum、descriptor 和 helper，并通过 compile check 保证生成结果可构建。
+7. **工程化交付**：README、测试说明、开发报告、提交清单、公开 GitHub/Gitlink 仓库和 CI。
 
 ## 为什么值得做
 
@@ -74,6 +76,8 @@ moon test
 moon test --target all
 moon run cmd/main -- gen --example
 python3 scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/
+python3 scripts/moon_proto_lab.py doctor examples/simple/user.proto
+python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md
 tests/codegen/compile_generated.sh
 ```
 

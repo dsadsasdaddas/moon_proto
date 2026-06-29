@@ -46,8 +46,40 @@ grep -q 'Oneof("contact")' generated/user.mbt
 
 cp generated/user.mbt generated_file_check.mbt
 moon check
+rm generated_file_check.mbt
 
 python3 scripts/moon_proto_gen.py gen examples/simple/user.proto --stdout --quiet \
   | grep -q 'pub fn decode_User'
+
+python3 scripts/moon_proto_lab.py doctor examples/simple/user.proto \
+  | grep -q 'schema valid'
+
+python3 scripts/moon_proto_lab.py inspect examples/simple/user.proto \
+  | grep -q 'message User fields='
+
+cat > invalid_duplicate.proto <<'EOF'
+syntax = "proto3";
+message Bad {
+  uint64 id = 1;
+  string name = 1;
+}
+EOF
+
+if python3 scripts/moon_proto_lab.py doctor invalid_duplicate.proto > invalid_doctor.txt 2>&1; then
+  echo "doctor unexpectedly accepted invalid_duplicate.proto" >&2
+  exit 1
+fi
+grep -q 'schema invalid' invalid_doctor.txt
+grep -q 'duplicate field number' invalid_doctor.txt
+
+python3 scripts/moon_proto_lab.py verify examples/simple/user.proto \
+  --report generated/verify_report.md
+grep -Fq 'Overall status: **PASS**' generated/verify_report.md
+grep -q 'Generated MoonBit source preview' generated/verify_report.md
+
+python3 scripts/moon_proto_lab.py verify examples/simple/user.proto \
+  --report generated/verify_report.html --skip-compile
+grep -q '<!doctype html>' generated/verify_report.html
+grep -q 'Moon Proto Lab verification report' generated/verify_report.html
 
 echo "Generated MoonBit source compiles"
