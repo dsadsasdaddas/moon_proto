@@ -160,6 +160,32 @@ fn ProtoParser::parse_field(self : ProtoParser) -> FieldDescriptor? {
       } else {
         word
       }
+      let typ = if typ_name == "map" {
+        if label != Singular {
+          return None
+        }
+        if !self.consume_sym("<") {
+          return None
+        }
+        let key_typ = match self.consume_ident() {
+          Some(t) => scalar_type_from_string(t)
+          None => return None
+        }
+        if !self.consume_sym(",") {
+          return None
+        }
+        let value_typ = match self.consume_ident() {
+          Some(t) => scalar_type_from_string(t)
+          None => return None
+        }
+        if !self.consume_sym(">") {
+          return None
+        }
+        label = Repeated
+        MapType(key_typ, value_typ)
+      } else {
+        scalar_type_from_string(typ_name)
+      }
       let name = match self.consume_ident() {
         Some(n) => n
         None => return None
@@ -172,12 +198,7 @@ fn ProtoParser::parse_field(self : ProtoParser) -> FieldDescriptor? {
         None => return None
       }
       let _ = self.consume_sym(";")
-      Some(FieldDescriptor::{
-        name,
-        typ: scalar_type_from_string(typ_name),
-        number,
-        label,
-      })
+      Some(FieldDescriptor::{ name, typ, number, label })
     }
   }
 }
@@ -280,6 +301,8 @@ fn resolve_type(typ : ScalarType, enums : Array[EnumDescriptor]) -> ScalarType {
       } else {
         NamedType(name)
       }
+    MapType(key_typ, value_typ) =>
+      MapType(resolve_type(key_typ, enums), resolve_type(value_typ, enums))
     other => other
   }
 }

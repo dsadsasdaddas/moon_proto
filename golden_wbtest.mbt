@@ -1021,6 +1021,260 @@ test "nested message binary and json roundtrip" {
 }
 
 ///|
+test "parse and codegen map fields" {
+  let src =
+    #|syntax = "proto3";
+    #|package demo;
+    #|message Bag {
+    #|  map<string, uint64> scores = 1;
+    #|  map<int64, string> labels = 2;
+    #|}
+  match parse_proto(src) {
+    ProtoErr(_) => fail("map parser failed")
+    ProtoOk(file) => {
+      assert_eq(file.messages.length(), 1)
+      assert_eq(file.messages[0].fields.length(), 2)
+      assert_true(
+        file.messages[0].fields[0].typ == MapType(StringType, UInt64Type),
+      )
+      assert_true(file.messages[0].fields[0].label == Repeated)
+      assert_true(
+        file.messages[0].fields[1].typ == MapType(Int64Type, StringType),
+      )
+      let generated = generate_moonbit_source(file)
+      let expected =
+        #|pub(all) struct Bag {
+        #|  scores : Array[MessageValue]
+        #|  labels : Array[MessageValue]
+        #|} derive(Debug, Eq)
+        #|
+        #|pub fn descriptor_Bag() -> MessageDescriptor {
+        #|  MessageDescriptor::{
+        #|    name : "Bag",
+        #|    fields : [
+        #|      FieldDescriptor::{ name : "scores", typ : MapType(StringType, UInt64Type), number : 1, label : Repeated },
+        #|      FieldDescriptor::{ name : "labels", typ : MapType(Int64Type, StringType), number : 2, label : Repeated },
+        #|    ],
+        #|  }
+        #|}
+        #|
+        #|pub fn message_descriptors() -> Array[MessageDescriptor] {
+        #|  [
+        #|    descriptor_Bag(),
+        #|  ]
+        #|}
+        #|
+        #|pub fn encode_Bag(value : MessageValue) -> EncodeMessageResult {
+        #|  encode_message_with_descriptors(descriptor_Bag(), message_descriptors(), value)
+        #|}
+        #|
+        #|pub fn decode_Bag(input : Bytes) -> DecodeMessageResult {
+        #|  decode_message_with_descriptors(descriptor_Bag(), message_descriptors(), input)
+        #|}
+        #|
+        #|pub fn to_json_Bag(value : MessageValue) -> JsonEncodeResult {
+        #|  message_to_json_with_descriptors(descriptor_Bag(), message_descriptors(), value)
+        #|}
+        #|
+        #|pub fn from_json_Bag(input : String) -> JsonDecodeResult {
+        #|  json_to_message_with_descriptors(descriptor_Bag(), message_descriptors(), input)
+        #|}
+      assert_eq(generated, expected)
+    }
+  }
+}
+
+///|
+test "map fields binary and json roundtrip" {
+  let desc = MessageDescriptor::{
+    name: "Bag",
+    fields: [
+      FieldDescriptor::{
+        name: "scores",
+        typ: MapType(StringType, UInt64Type),
+        number: 1,
+        label: Repeated,
+      },
+      FieldDescriptor::{
+        name: "labels",
+        typ: MapType(Int64Type, StringType),
+        number: 2,
+        label: Repeated,
+      },
+    ],
+  }
+  let msg = message_value([
+    repeated_message_field("scores", [
+      map_entry_value(StringValue("alice"), UInt64Value(150UL)),
+      map_entry_value(StringValue("bob"), UInt64Value(7UL)),
+    ]),
+    repeated_message_field("labels", [
+      map_entry_value(Int64Value(2L), StringValue("two")),
+      map_entry_value(Int64Value(7L), StringValue("seven")),
+    ]),
+  ])
+  let alice_entry = concat_bytes([
+    encode_string_field(1, "alice"),
+    encode_uint64_field(2, 150UL),
+  ])
+  let bob_entry = concat_bytes([
+    encode_string_field(1, "bob"),
+    encode_uint64_field(2, 7UL),
+  ])
+  let two_entry = concat_bytes([
+    encode_uint64_field(1, 2UL),
+    encode_string_field(2, "two"),
+  ])
+  let seven_entry = concat_bytes([
+    encode_uint64_field(1, 7UL),
+    encode_string_field(2, "seven"),
+  ])
+  let expected_bytes = concat_bytes([
+    encode_key(1, LengthDelimited),
+    encode_length_delimited(alice_entry),
+    encode_key(1, LengthDelimited),
+    encode_length_delimited(bob_entry),
+    encode_key(2, LengthDelimited),
+    encode_length_delimited(two_entry),
+    encode_key(2, LengthDelimited),
+    encode_length_delimited(seven_entry),
+  ])
+  assert_eq(
+    expected_bytes, b"\x0a\x0a\x0a\x05alice\x10\x96\x01\x0a\x07\x0a\x03bob\x10\x07\x12\x07\x08\x02\x12\x03two\x12\x09\x08\x07\x12\x05seven",
+  )
+  match encode_message(desc, msg) {
+    EncodeMessageErr(_) => fail("map encode failed")
+    EncodeMessageOk(bytes) => {
+      assert_eq(bytes, expected_bytes)
+      match decode_message(desc, bytes) {
+        DecodeMessageErr(_) => fail("map decode failed")
+        DecodeMessageOk(decoded, next) => {
+          assert_eq(next, bytes.length())
+          assert_true(decoded == msg)
+        }
+      }
+    }
+  }
+  let json = "{\"scores\":{\"alice\":\"150\",\"bob\":\"7\"},\"labels\":{\"2\":\"two\",\"7\":\"seven\"}}"
+  match message_to_json(desc, msg) {
+    JsonErr(_) => fail("map JSON encode failed")
+    JsonOk(encoded) => assert_eq(encoded, json)
+  }
+  match json_to_message(desc, json) {
+    JsonDecodeErr(_) => fail("map JSON decode failed")
+    JsonDecodeOk(decoded) => assert_true(decoded == msg)
+  }
+}
+
+///|
+test "map fields support nested message values" {
+  let address_desc = MessageDescriptor::{
+    name: "Address",
+    fields: [
+      FieldDescriptor::{
+        name: "street",
+        typ: StringType,
+        number: 1,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "zip",
+        typ: UInt64Type,
+        number: 2,
+        label: Singular,
+      },
+    ],
+  }
+  let book_desc = MessageDescriptor::{
+    name: "Book",
+    fields: [
+      FieldDescriptor::{
+        name: "contacts",
+        typ: MapType(StringType, NamedType("Address")),
+        number: 1,
+        label: Repeated,
+      },
+    ],
+  }
+  let address = message_value([
+    message_field("street", StringValue("Main")),
+    message_field("zip", UInt64Value(94107UL)),
+  ])
+  let msg = message_value([
+    repeated_message_field("contacts", [
+      map_entry_value(StringValue("home"), NestedMessageValue(address)),
+    ]),
+  ])
+  let address_bytes = concat_bytes([
+    encode_string_field(1, "Main"),
+    encode_uint64_field(2, 94107UL),
+  ])
+  let entry_bytes = concat_bytes([
+    encode_string_field(1, "home"),
+    concat_bytes([
+      encode_key(2, LengthDelimited),
+      encode_length_delimited(address_bytes),
+    ]),
+  ])
+  let expected_bytes = concat_bytes([
+    encode_key(1, LengthDelimited),
+    encode_length_delimited(entry_bytes),
+  ])
+  let descriptors = [address_desc]
+  match encode_message_with_descriptors(book_desc, descriptors, msg) {
+    EncodeMessageErr(_) => fail("nested map encode failed")
+    EncodeMessageOk(bytes) => {
+      assert_eq(bytes, expected_bytes)
+      match decode_message_with_descriptors(book_desc, descriptors, bytes) {
+        DecodeMessageErr(_) => fail("nested map decode failed")
+        DecodeMessageOk(decoded, next) => {
+          assert_eq(next, bytes.length())
+          assert_true(decoded == msg)
+        }
+      }
+    }
+  }
+  let json = "{\"contacts\":{\"home\":{\"street\":\"Main\",\"zip\":\"94107\"}}}"
+  match message_to_json_with_descriptors(book_desc, descriptors, msg) {
+    JsonErr(_) => fail("nested map JSON encode failed")
+    JsonOk(encoded) => assert_eq(encoded, json)
+  }
+  match json_to_message_with_descriptors(book_desc, descriptors, json) {
+    JsonDecodeErr(_) => fail("nested map JSON decode failed")
+    JsonDecodeOk(decoded) => assert_true(decoded == msg)
+  }
+}
+
+///|
+test "map schema validation rejects unsupported key and nested map value" {
+  let msg = MessageDescriptor::{
+    name: "BadMaps",
+    fields: [
+      FieldDescriptor::{
+        name: "bad_key",
+        typ: MapType(BytesType, UInt64Type),
+        number: 1,
+        label: Repeated,
+      },
+      FieldDescriptor::{
+        name: "bad_value",
+        typ: MapType(StringType, MapType(StringType, UInt64Type)),
+        number: 2,
+        label: Repeated,
+      },
+    ],
+  }
+  match validate_message_descriptor(msg) {
+    SchemaValid => fail("invalid map schema should fail validation")
+    SchemaInvalid(issues) => {
+      assert_eq(issues.length(), 2)
+      assert_eq(issues[0].message, "invalid map key type")
+      assert_eq(issues[1].message, "map value must not be a map")
+    }
+  }
+}
+
+///|
 fn deterministic_u64(seed : Int) -> UInt64 {
   let x = seed.to_uint64()
   (x * 9973UL) ^ (x << 9) ^ (x >> 3)

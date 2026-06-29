@@ -77,6 +77,15 @@ pub fn message_value(fields : Array[MessageField]) -> MessageValue {
 }
 
 ///|
+/// Convenience constructor for a protobuf map entry value. Map fields are
+/// represented as repeated `MapEntryValue` items in the dynamic API.
+pub fn map_entry_value(key : ProtoValue, value : ProtoValue) -> ProtoValue {
+  MapEntryValue(
+    message_value([message_field("key", key), message_field("value", value)]),
+  )
+}
+
+///|
 fn find_field_by_name(
   desc : MessageDescriptor,
   name : String,
@@ -129,6 +138,25 @@ fn bool_to_u64(value : Bool) -> UInt64 {
     1UL
   } else {
     0UL
+  }
+}
+
+///|
+fn map_entry_descriptor(
+  key_typ : ScalarType,
+  value_typ : ScalarType,
+) -> MessageDescriptor {
+  MessageDescriptor::{
+    name: "MapEntry",
+    fields: [
+      FieldDescriptor::{ name: "key", typ: key_typ, number: 1, label: Singular },
+      FieldDescriptor::{
+        name: "value",
+        typ: value_typ,
+        number: 2,
+        label: Singular,
+      },
+    ],
   }
 }
 
@@ -196,6 +224,15 @@ fn encode_length_payload(
       EncodeFieldErr(
         Unsupported("value does not match nested message: " + name),
       )
+    (MapType(key_typ, value_typ), MapEntryValue(entry)) => {
+      let entry_desc = map_entry_descriptor(key_typ, value_typ)
+      match encode_message_with_descriptors(entry_desc, descriptors, entry) {
+        EncodeMessageErr(e) => EncodeFieldErr(e)
+        EncodeMessageOk(bytes) => EncodedField(encode_length_delimited(bytes))
+      }
+    }
+    (MapType(_, _), _) =>
+      EncodeFieldErr(Unsupported("value does not match map entry type"))
     _ =>
       EncodeFieldErr(
         Unsupported("value does not match length-delimited scalar type"),
@@ -422,6 +459,27 @@ fn decode_scalar_payload(
                       }
                   }
               }
+          }
+        MapType(key_typ, value_typ) =>
+          match decode_length_delimited(input, offset~) {
+            BytesErr(e) => DecodeScalarErr(e)
+            BytesOk(payload, next) => {
+              let entry_desc = map_entry_descriptor(key_typ, value_typ)
+              match
+                decode_message_with_descriptors(
+                  entry_desc, descriptors, payload,
+                ) {
+                DecodeMessageErr(e) => DecodeScalarErr(e)
+                DecodeMessageOk(entry, payload_next) =>
+                  if payload_next != payload.length() {
+                    DecodeScalarErr(
+                      Unsupported("map entry decoder left trailing bytes"),
+                    )
+                  } else {
+                    DecodedScalar(MapEntryValue(entry), next)
+                  }
+              }
+            }
           }
         _ => DecodeScalarErr(Unsupported("unsupported length-delimited scalar"))
       }

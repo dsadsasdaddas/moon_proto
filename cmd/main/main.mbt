@@ -32,6 +32,7 @@ fn example_schema() -> String {
     #|  repeated string tags = 3;
     #|  Color favorite = 4;
     #|  Address address = 5;
+    #|  map<string, uint64> counters = 6;
     #|}
   schema
 }

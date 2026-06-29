@@ -13,6 +13,7 @@ pub(all) enum ProtoValue {
   StringValue(String)
   BytesValue(Bytes)
   NestedMessageValue(MessageValue)
+  MapEntryValue(MessageValue)
 } derive(Debug, Eq)
 
 ///|

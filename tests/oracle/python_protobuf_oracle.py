@@ -18,6 +18,9 @@ FIXTURES = ROOT / "tests" / "fixtures"
 BIN = FIXTURES / "user_full.bin"
 HEX = FIXTURES / "user_full.hex"
 JSON = FIXTURES / "user_full.json"
+BAG_BIN = FIXTURES / "bag_maps.bin"
+BAG_HEX = FIXTURES / "bag_maps.hex"
+BAG_JSON = FIXTURES / "bag_maps.json"
 
 
 def _field(message, name: str, number: int, typ: int, label: int) -> None:
@@ -25,6 +28,21 @@ def _field(message, name: str, number: int, typ: int, label: int) -> None:
     field.name = name
     field.number = number
     field.type = typ
+    field.label = label
+
+
+def _message_field(
+    message,
+    name: str,
+    number: int,
+    type_name: str,
+    label: int,
+) -> None:
+    field = message.field.add()
+    field.name = name
+    field.number = number
+    field.type = descriptor_pb2.FieldDescriptorProto.TYPE_MESSAGE
+    field.type_name = type_name
     field.label = label
 
 
@@ -69,10 +87,85 @@ def make_user():
     return user
 
 
+def make_bag_message_class():
+    file_desc = descriptor_pb2.FileDescriptorProto(
+        name="moon_proto_map_oracle.proto",
+        package="demo",
+        syntax="proto3",
+    )
+    msg = file_desc.message_type.add()
+    msg.name = "Bag"
+    label_optional = descriptor_pb2.FieldDescriptorProto.LABEL_OPTIONAL
+    label_repeated = descriptor_pb2.FieldDescriptorProto.LABEL_REPEATED
+
+    scores_entry = msg.nested_type.add()
+    scores_entry.name = "ScoresEntry"
+    scores_entry.options.map_entry = True
+    _field(
+        scores_entry,
+        "key",
+        1,
+        descriptor_pb2.FieldDescriptorProto.TYPE_STRING,
+        label_optional,
+    )
+    _field(
+        scores_entry,
+        "value",
+        2,
+        descriptor_pb2.FieldDescriptorProto.TYPE_UINT64,
+        label_optional,
+    )
+
+    labels_entry = msg.nested_type.add()
+    labels_entry.name = "LabelsEntry"
+    labels_entry.options.map_entry = True
+    _field(
+        labels_entry,
+        "key",
+        1,
+        descriptor_pb2.FieldDescriptorProto.TYPE_INT64,
+        label_optional,
+    )
+    _field(
+        labels_entry,
+        "value",
+        2,
+        descriptor_pb2.FieldDescriptorProto.TYPE_STRING,
+        label_optional,
+    )
+
+    _message_field(msg, "scores", 1, ".demo.Bag.ScoresEntry", label_repeated)
+    _message_field(msg, "labels", 2, ".demo.Bag.LabelsEntry", label_repeated)
+
+    pool = descriptor_pool.DescriptorPool()
+    pool.Add(file_desc)
+    descriptor = pool.FindMessageTypeByName("demo.Bag")
+    factory = message_factory.MessageFactory(pool)
+    return factory.GetPrototype(descriptor)
+
+
+def make_bag():
+    Bag = make_bag_message_class()
+    bag = Bag()
+    bag.scores["alice"] = 150
+    bag.scores["bob"] = 7
+    bag.labels[2] = "two"
+    bag.labels[7] = "seven"
+    return bag
+
+
 def oracle_values():
     user = make_user()
-    binary = user.SerializeToString()
+    binary = user.SerializeToString(deterministic=True)
     data = json_format.MessageToDict(user, preserving_proto_field_name=True)
+    canonical_json = json.dumps(data, ensure_ascii=False, separators=(",", ":")) + "\n"
+    return binary, binary.hex() + "\n", canonical_json
+
+
+def bag_oracle_values():
+    bag = make_bag()
+    binary = bag.SerializeToString(deterministic=True)
+    data = json_format.MessageToDict(bag, preserving_proto_field_name=True)
     canonical_json = json.dumps(data, ensure_ascii=False, separators=(",", ":")) + "\n"
     return binary, binary.hex() + "\n", canonical_json
 
@@ -83,14 +176,30 @@ def write_fixtures() -> None:
     BIN.write_bytes(binary)
     HEX.write_text(hex_text, encoding="utf-8")
     JSON.write_text(json_text, encoding="utf-8")
+    bag_binary, bag_hex_text, bag_json_text = bag_oracle_values()
+    BAG_BIN.write_bytes(bag_binary)
+    BAG_HEX.write_text(bag_hex_text, encoding="utf-8")
+    BAG_JSON.write_text(bag_json_text, encoding="utf-8")
 
 
 def verify_fixtures() -> None:
     binary, hex_text, json_text = oracle_values()
+    bag_binary, bag_hex_text, bag_json_text = bag_oracle_values()
     checks = [
         (BIN, binary, BIN.read_bytes() if BIN.exists() else None),
         (HEX, hex_text, HEX.read_text(encoding="utf-8") if HEX.exists() else None),
         (JSON, json_text, JSON.read_text(encoding="utf-8") if JSON.exists() else None),
+        (BAG_BIN, bag_binary, BAG_BIN.read_bytes() if BAG_BIN.exists() else None),
+        (
+            BAG_HEX,
+            bag_hex_text,
+            BAG_HEX.read_text(encoding="utf-8") if BAG_HEX.exists() else None,
+        ),
+        (
+            BAG_JSON,
+            bag_json_text,
+            BAG_JSON.read_text(encoding="utf-8") if BAG_JSON.exists() else None,
+        ),
     ]
     failures = []
     for path, expected, actual in checks:
@@ -105,6 +214,8 @@ def verify_fixtures() -> None:
     print("Python protobuf oracle fixtures verified")
     print("user_full.hex", hex_text.strip())
     print("user_full.json", json_text.strip())
+    print("bag_maps.hex", bag_hex_text.strip())
+    print("bag_maps.json", bag_json_text.strip())
 
 
 def main() -> None:

@@ -5,4 +5,5 @@ message User {
   uint32 id = 1;
   string name = 2;
   repeated string tags = 3;
+  map<string, uint64> counters = 4;
 }

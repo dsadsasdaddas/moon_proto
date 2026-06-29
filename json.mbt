@@ -285,6 +285,80 @@ fn validate_json_message(
 }
 
 ///|
+fn json_find_entry_field(entry : MessageValue, name : String) -> ProtoValue? {
+  for field in entry.fields {
+    if field.name == name && field.values.length() > 0 {
+      return Some(field.values[0])
+    }
+  }
+  None
+}
+
+///|
+fn map_key_to_json_property(
+  typ : ScalarType,
+  value : ProtoValue,
+) -> JsonEncodeResult {
+  match (typ, value) {
+    (StringType, StringValue(v)) => JsonOk(v)
+    (BoolType, BoolValue(v)) => JsonOk(if v { "true" } else { "false" })
+    (UInt32Type | UInt64Type | Fixed32Type | Fixed64Type, UInt64Value(v)) =>
+      JsonOk(v.to_string())
+    (
+      Int32Type
+      | Int64Type
+      | SInt32Type
+      | SInt64Type
+      | SFixed32Type
+      | SFixed64Type,
+      Int64Value(v),
+    ) => JsonOk(v.to_string())
+    _ => JsonErr(Unsupported("value does not match map key type"))
+  }
+}
+
+///|
+fn map_field_to_json(
+  desc : FieldDescriptor,
+  field : MessageField,
+  descriptors : Array[MessageDescriptor],
+) -> JsonEncodeResult {
+  match desc.typ {
+    MapType(key_typ, value_typ) => {
+      let props : Array[String] = []
+      for item in field.values {
+        match item {
+          MapEntryValue(entry) => {
+            let key = match json_find_entry_field(entry, "key") {
+              None => return JsonErr(Unsupported("map entry missing key"))
+              Some(k) => k
+            }
+            let value = match json_find_entry_field(entry, "value") {
+              None => return JsonErr(Unsupported("map entry missing value"))
+              Some(v) => v
+            }
+            let key_text = match map_key_to_json_property(key_typ, key) {
+              JsonErr(e) => return JsonErr(e)
+              JsonOk(text) => text
+            }
+            let value_text = match
+              scalar_to_json_with_descriptors(value_typ, value, descriptors) {
+              JsonErr(e) => return JsonErr(e)
+              JsonOk(text) => text
+            }
+            props.push(json_escape_string(key_text) + ":" + value_text)
+          }
+          _ =>
+            return JsonErr(Unsupported("value does not match map entry type"))
+        }
+      }
+      JsonOk("{" + json_join(props, ",") + "}")
+    }
+    _ => JsonErr(Unsupported("field is not a map"))
+  }
+}
+
+///|
 fn scalar_to_json(typ : ScalarType, value : ProtoValue) -> JsonEncodeResult {
   match (typ, value) {
     (StringType, StringValue(v)) => JsonOk(json_escape_string(v))
@@ -315,6 +389,8 @@ fn scalar_to_json(typ : ScalarType, value : ProtoValue) -> JsonEncodeResult {
       JsonErr(Unsupported("missing descriptor for nested message: " + name))
     (NamedType(name), _) =>
       JsonErr(Unsupported("value does not match nested message: " + name))
+    (MapType(_, _), _) =>
+      JsonErr(Unsupported("map value must be encoded as a JSON object"))
     (FloatType | DoubleType, _) =>
       JsonErr(Unsupported("float/double JSON is not implemented"))
     _ => JsonErr(Unsupported("value does not match JSON scalar type"))
@@ -327,6 +403,10 @@ fn field_to_json(
   field : MessageField,
   descriptors : Array[MessageDescriptor],
 ) -> JsonEncodeResult {
+  match desc.typ {
+    MapType(_, _) => return map_field_to_json(desc, field, descriptors)
+    _ => ()
+  }
   if desc.label == Repeated {
     let items : Array[String] = []
     for value in field.values {
@@ -643,8 +723,113 @@ fn parse_scalar_from_json(
             JsonDecodeOk(message) => JsonScalarOk(NestedMessageValue(message))
           }
       }
+    MapType(_, _) =>
+      JsonScalarErr(Unsupported("map JSON value must be parsed as object"))
     FloatType | DoubleType =>
       JsonScalarErr(Unsupported("float/double JSON is not implemented"))
+  }
+}
+
+///|
+fn json_string_array_contains(values : Array[String], value : String) -> Bool {
+  for item in values {
+    if item == value {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn parse_map_key_from_json_property(
+  key_typ : ScalarType,
+  key : String,
+) -> JsonScalarDecodeResult {
+  match key_typ {
+    StringType => JsonScalarOk(StringValue(key))
+    BoolType =>
+      if key == "true" {
+        JsonScalarOk(BoolValue(true))
+      } else if key == "false" {
+        JsonScalarOk(BoolValue(false))
+      } else {
+        JsonScalarErr(Unsupported("invalid bool map key JSON"))
+      }
+    UInt32Type | UInt64Type | Fixed32Type | Fixed64Type =>
+      match parse_u64_digits(key) {
+        Some(v) => JsonScalarOk(UInt64Value(v))
+        None => JsonScalarErr(Unsupported("invalid unsigned map key JSON"))
+      }
+    Int32Type
+    | Int64Type
+    | SInt32Type
+    | SInt64Type
+    | SFixed32Type
+    | SFixed64Type =>
+      match parse_i64_digits(key) {
+        Some(v) => JsonScalarOk(Int64Value(v))
+        None => JsonScalarErr(Unsupported("invalid signed map key JSON"))
+      }
+    _ => JsonScalarErr(Unsupported("unsupported map key JSON type"))
+  }
+}
+
+///|
+fn parse_json_map_field(
+  parser : JsonParser,
+  fd : FieldDescriptor,
+  descriptors : Array[MessageDescriptor],
+) -> JsonDecodeResult {
+  match fd.typ {
+    MapType(key_typ, value_typ) => {
+      if !parser.consume('{') {
+        return JsonDecodeErr(Unsupported("expected map JSON object"))
+      }
+      let values : Array[ProtoValue] = []
+      let seen : Array[String] = []
+      parser.skip_ws()
+      if parser.consume('}') {
+        return JsonDecodeOk(
+          message_value([repeated_message_field(fd.name, values)]),
+        )
+      }
+      let mut done = false
+      while !done {
+        let key_text = match parser.parse_string() {
+          JsonStringErr(e) => return JsonDecodeErr(e)
+          JsonStringOk(k) => k
+        }
+        if json_string_array_contains(seen, key_text) {
+          return JsonDecodeErr(
+            Unsupported("duplicate map JSON key: " + key_text),
+          )
+        }
+        seen.push(key_text)
+        if !parser.consume(':') {
+          return JsonDecodeErr(Unsupported("expected map JSON colon"))
+        }
+        let key = match parse_map_key_from_json_property(key_typ, key_text) {
+          JsonScalarErr(e) => return JsonDecodeErr(e)
+          JsonScalarOk(v) => v
+        }
+        let value = match
+          parse_scalar_from_json(parser, value_typ, descriptors) {
+          JsonScalarErr(e) => return JsonDecodeErr(e)
+          JsonScalarOk(v) => v
+        }
+        values.push(map_entry_value(key, value))
+        parser.skip_ws()
+        if parser.consume(',') {
+          ()
+        } else if parser.consume('}') {
+          done = true
+        } else {
+          return JsonDecodeErr(Unsupported("expected comma or map object end"))
+        }
+      }
+      JsonDecodeOk(message_value([repeated_message_field(fd.name, values)]))
+    }
+    _ => JsonDecodeErr(Unsupported("field is not a map"))
   }
 }
 
@@ -654,6 +839,10 @@ fn parse_json_field(
   fd : FieldDescriptor,
   descriptors : Array[MessageDescriptor],
 ) -> JsonDecodeResult {
+  match fd.typ {
+    MapType(_, _) => return parse_json_map_field(parser, fd, descriptors)
+    _ => ()
+  }
   if fd.label == Repeated {
     if !parser.consume('[') {
       return JsonDecodeErr(Unsupported("expected repeated JSON array"))

@@ -58,6 +58,47 @@ fn validate_field_descriptor(
   match field.label {
     Singular | Optional | Repeated => ()
   }
+  match field.typ {
+    MapType(key_typ, value_typ) => {
+      if field.label != Repeated {
+        push_issue(issues, path + ".label", "map field must be repeated")
+      }
+      if !is_valid_map_key_type(key_typ) {
+        push_issue(issues, path + ".key", "invalid map key type")
+      }
+      match value_typ {
+        MapType(_, _) =>
+          push_issue(issues, path + ".value", "map value must not be a map")
+        _ => ()
+      }
+    }
+    _ => ()
+  }
+}
+
+///|
+/// Protobuf map keys may be integral, bool or string scalar types.
+pub fn is_valid_map_key_type(typ : ScalarType) -> Bool {
+  match typ {
+    Int32Type
+    | Int64Type
+    | UInt32Type
+    | UInt64Type
+    | SInt32Type
+    | SInt64Type
+    | Fixed32Type
+    | Fixed64Type
+    | SFixed32Type
+    | SFixed64Type
+    | BoolType
+    | StringType => true
+    DoubleType
+    | FloatType
+    | BytesType
+    | EnumType(_)
+    | NamedType(_)
+    | MapType(_, _) => false
+  }
 }
 
 ///|

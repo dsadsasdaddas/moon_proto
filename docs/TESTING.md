@@ -26,9 +26,10 @@ Current tests cover:
 - enum field binary and JSON roundtrip;
 - schema validator positive and negative cases;
 - nested message binary and JSON roundtrip through descriptor registries;
+- proto3 map parser/codegen snapshot, schema validation, binary roundtrip and JSON object mapping;
 - codegen runtime helper snapshots, CLI smoke generation, and generated-code compile checks;
 - deterministic property-style roundtrip corpora for varint, zig-zag, dynamic message binary and JSON;
-- official Python `google.protobuf` and Go `google.golang.org/protobuf` oracle fixtures for a full scalar/repeated user message.
+- official Python `google.protobuf` and Go `google.golang.org/protobuf` oracle fixtures for full scalar/repeated and map messages.
 
 Run the full matrix:
 

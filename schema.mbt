@@ -18,6 +18,7 @@ pub(all) enum ScalarType {
   BytesType
   EnumType(String)
   NamedType(String)
+  MapType(ScalarType, ScalarType)
 } derive(Debug, Eq)
 
 ///|
@@ -104,6 +105,7 @@ pub fn ScalarType::wire_type(self : ScalarType) -> WireType {
     StringType => LengthDelimited
     BytesType => LengthDelimited
     NamedType(_) => LengthDelimited
+    MapType(_, _) => LengthDelimited
     _ => Varint
   }
 }
