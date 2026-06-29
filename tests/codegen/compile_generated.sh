@@ -176,4 +176,10 @@ python3 scripts/moon_proto_lab.py verify examples/simple/user.proto \
 grep -q '<!doctype html>' generated/verify_report.html
 grep -q 'Moon Proto Lab verification report' generated/verify_report.html
 
+python3 scripts/moon_proto_official_diff.py \
+  --report generated/official_diff_report.md
+grep -Fq 'Overall status: **PASS**' generated/official_diff_report.md
+grep -q 'official protoc-gen-mbt' generated/official_diff_report.md
+grep -q 'SKIP' generated/official_diff_report.md
+
 echo "Generated MoonBit source compiles"

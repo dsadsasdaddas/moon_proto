@@ -1,0 +1,46 @@
+{
+  "official": {
+    "name": "moonbitlang/protoc-gen-mbt",
+    "repository": "https://github.com/moonbitlang/protoc-gen-mbt",
+    "observed_commit": "9ac87899cf20ea88e31ba77330958ba389eab5fd",
+    "runtime_package": "moonbitlang/protobuf@0.1.3",
+    "source_files": [
+      "README.md",
+      "doc/spec.md"
+    ],
+    "notes": [
+      "README says extensions and custom options are ignored.",
+      "doc/spec.md documents scalar, optional, repeated, oneof and map MoonBit mappings."
+    ]
+  },
+  "cases": [
+    {
+      "name": "simple_user",
+      "proto": "examples/simple/user.proto",
+      "expected_messages": ["User"],
+      "expected_enums": [],
+      "expected_inspect": [
+        "message User fields=6",
+        "4 counters : repeated map<string, uint64>",
+        "5 email : oneof contact string",
+        "6 phone : oneof contact string"
+      ],
+      "official_features": ["scalar", "repeated", "map", "oneof"]
+    },
+    {
+      "name": "decorated_telemetry",
+      "proto": "examples/decorated/telemetry.proto",
+      "expected_messages": ["Metadata", "TelemetryEvent"],
+      "expected_enums": ["Severity"],
+      "expected_inspect": [
+        "package: moon.proto.lab.demo.v1",
+        "message TelemetryEvent fields=7",
+        "reserved numbers: 7, 9 to 12",
+        "reserved names: old_payload",
+        "enum Severity values=4",
+        "reserved numbers: 9 to 12"
+      ],
+      "official_features": ["import", "option ignored by generator", "reserved", "enum", "optional", "map", "oneof"]
+    }
+  ]
+}

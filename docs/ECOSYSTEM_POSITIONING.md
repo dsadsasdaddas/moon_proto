@@ -40,8 +40,8 @@ Moon Proto Lab focuses on the tooling and verification layer around protobuf dev
    - oneof groups.
 
 5. **Future integration path**
-   - add adapters that read schemas or generated descriptors from official MoonBit protobuf packages;
-   - use this repository as a differential testing harness;
+   - maintain `scripts/moon_proto_official_diff.py` and `tests/differential/official_cases.json` as a first differential testing harness;
+   - add deeper adapters that read schemas or generated descriptors from official MoonBit protobuf packages;
    - keep experimental dynamic tooling here while stable runtime/codegen can live in or interoperate with existing ecosystem packages.
 
 ## Contest positioning

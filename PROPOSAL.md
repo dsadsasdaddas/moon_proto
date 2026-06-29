@@ -44,6 +44,7 @@ Moon Proto Lab 面向 MoonBit protobuf 生态，提供动态 `.proto` schema 解
 - MoonBit 代码生成：根据 message/enum descriptor 生成 struct、enum、descriptor registry、encode/decode/JSON helper；
 - `scripts/moon_proto_gen.py` 文件版生成入口：`python3 scripts/moon_proto_gen.py gen schema.proto -o generated/`；
 - `scripts/moon_proto_lab.py doctor/inspect/compat/verify` 提供文件版 Schema Doctor、schema summary、old/new schema 兼容性检查、AI verify 与 Markdown/HTML 报告生成；
+- `scripts/moon_proto_official_diff.py` 提供面向 `moonbitlang/protoc-gen-mbt` / `moonbitlang/protobuf` 的 differential harness manifest 与报告入口；
 - `tests/codegen/compile_generated.sh` 实际生成 MoonBit 源码并执行 `moon check`，验证生成代码可编译；
 - Python `google.protobuf` 与 Go `google.golang.org/protobuf` oracle fixtures，用于验证 scalar/repeated/map/oneof/32-bit numeric/float/double/special float golden bytes/JSON 与成熟生态一致；
 - deterministic property-style tests 覆盖 varint、zig-zag、动态 message 二进制和 JSON roundtrip；
@@ -54,12 +55,12 @@ Moon Proto Lab 面向 MoonBit protobuf 生态，提供动态 `.proto` schema 解
 1. **动态 schema lab**：解析 proto3 schema 子集，构建 MoonBit descriptor，支持开发者快速检查 schema 结构。
 2. **Schema Doctor / schema validation**：检查字段号、重复定义、enum 规则、map 约束、oneof 冲突、reserved number/name 复用等常见错误，输出稳定诊断路径，适合验证 AI 生成 schema。
 3. **动态 message runtime**：在不依赖生成 typed struct 的情况下，对 descriptor-driven message 进行二进制和 JSON roundtrip。
-4. **兼容性 oracle**：使用 Python/Go 官方 protobuf 生成和验证 fixtures，减少“实现能跑但不兼容”的风险。
+4. **兼容性 oracle 与官方生态对接**：使用 Python/Go 官方 protobuf 生成和验证 fixtures，并提供 MoonBit 官方 protobuf/protoc-gen-mbt differential harness，减少“实现能跑但不兼容”的风险。
 5. **schema 兼容性检查**：比较 old/new `.proto`，发现字段号复用、字段类型变化、字段迁移、enum 值变化、package 变化、reserved 契约弱化或复用等破坏性修改。
 6. **AI verify 报告**：一条命令完成 doctor、inspect、codegen、generated-code compile check，并输出 Markdown/HTML 报告。
 7. **真实 schema 容错解析**：支持常见 import、option、reserved、field option 与点分类型，并把 reserved 升级为可验证的 schema/compat 契约，使工具能处理更接近生产项目的 `.proto`。
 8. **代码生成实验**：生成 MoonBit struct、enum、descriptor 和 helper，并通过 compile check 保证生成结果可构建。
-9. **工程化交付**：README、测试说明、开发报告、提交清单、公开 GitHub/Gitlink 仓库和 CI。
+9. **工程化交付**：README、测试说明、开发报告、提交清单、official differential 文档、公开 GitHub/Gitlink 仓库和 CI。
 
 ## 为什么值得做
 
@@ -82,6 +83,7 @@ python3 scripts/moon_proto_lab.py doctor examples/simple/user.proto
 python3 scripts/moon_proto_lab.py doctor examples/decorated/telemetry.proto
 python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md
+python3 scripts/moon_proto_official_diff.py --report generated/official_diff_report.md
 tests/codegen/compile_generated.sh
 ```
 

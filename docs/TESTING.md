@@ -33,7 +33,7 @@ Current tests cover:
 - nested message binary and JSON roundtrip through descriptor registries;
 - proto3 map parser/codegen snapshot, schema validation, binary roundtrip and JSON object mapping;
 - proto3 oneof parser/codegen snapshot, encode-time conflict rejection, binary last-one-wins decode and JSON conflict rejection;
-- codegen runtime helper snapshots, inline/file-based CLI smoke generation, Schema Doctor diagnostics, compatibility checks, verify report generation, and generated-code compile checks;
+- codegen runtime helper snapshots, inline/file-based CLI smoke generation, Schema Doctor diagnostics, compatibility checks, verify report generation, official differential report generation, and generated-code compile checks;
 - deterministic property-style roundtrip corpora for varint, zig-zag, dynamic message binary and JSON;
 - official Python `google.protobuf` and Go `google.golang.org/protobuf` oracle fixtures for full scalar/repeated, map, oneof, 32-bit numeric boundary, float/double and special float messages.
 
@@ -52,6 +52,7 @@ python3 scripts/moon_proto_lab.py doctor examples/simple/user.proto
 python3 scripts/moon_proto_lab.py doctor examples/decorated/telemetry.proto
 python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md
+python3 scripts/moon_proto_official_diff.py --report generated/official_diff_report.md
 tests/codegen/compile_generated.sh
 ```
 
@@ -74,6 +75,6 @@ The project is positioned as a protobuf ecosystem verification lab for MoonBit. 
 
 Completed parser/schema-tool verification now includes old/new compatibility checks, larger conformance-lite oracle fixtures, import/option/reserved parser tolerance, and reserved contract validation. Planned next verification:
 
-- differential tests against existing MoonBit protobuf packages where APIs are compatible;
+- deeper differential tests against an installed official `protoc-gen-mbt` generator;
 - descriptor set / reflection fixtures;
 - selected upstream protobuf conformance-suite cases.

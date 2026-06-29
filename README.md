@@ -46,6 +46,7 @@ The project has a small but end-to-end verifiable protobuf laboratory pipeline:
 - file-based Schema Doctor CLI for stable diagnostics on valid and invalid schemas;
 - AI verification CLI that runs doctor, schema inspection, codegen, generated-code compile checks, and Markdown/HTML report generation;
 - old/new schema compatibility checker for detecting field, enum, package, type and reserved-contract breaking changes;
+- official MoonBit protobuf differential harness manifest/report for schemas overlapping with `moonbitlang/protoc-gen-mbt`;
 - Python and Go official protobuf oracle fixtures for cross-language compatibility checks, including 32-bit numeric boundary values, float/double values, and special NaN/Infinity JSON values;
 - deterministic property-style roundtrip corpora for binary and JSON paths;
 - generated-code compile checks and GitHub Actions CI.
@@ -127,6 +128,7 @@ python3 scripts/moon_proto_lab.py inspect examples/simple/user.proto
 python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.html
+python3 scripts/moon_proto_official_diff.py --report generated/official_diff_report.md
 ```
 
 Convert a dynamic message to protobuf-style JSON:
@@ -162,6 +164,7 @@ python3 scripts/moon_proto_lab.py doctor examples/simple/user.proto
 python3 scripts/moon_proto_lab.py doctor examples/decorated/telemetry.proto
 python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md
+python3 scripts/moon_proto_official_diff.py --report generated/official_diff_report.md
 tests/codegen/compile_generated.sh
 ```
 
@@ -169,6 +172,7 @@ tests/codegen/compile_generated.sh
 
 - [Ecosystem positioning](docs/ECOSYSTEM_POSITIONING.md)
 - [Schema Doctor and verify reports](docs/SCHEMA_DOCTOR.md)
+- [Official differential harness](docs/OFFICIAL_DIFFERENTIAL.md)
 - [Testing strategy](docs/TESTING.md)
 - [Development report](docs/DEVELOPMENT_REPORT.md)
 - [Submission checklist](docs/SUBMISSION_CHECKLIST.md)
@@ -197,8 +201,9 @@ tests/codegen/compile_generated.sh
 - M19: larger conformance-lite corpus and float/double/special-float oracle fixtures. Done.
 - M20: import/option/reserved/extensions/field-option parser tolerance for real-world `.proto` files. Done.
 - M21: reserved number/name validation and compatibility contracts. Done.
-- M22: adapters and differential tests around existing MoonBit protobuf packages. Planned.
-- M23: descriptor set / reflection import path. Planned.
+- M22: official MoonBit protobuf differential harness manifest and report. Done.
+- M23: deeper generated-code differential tests against an installed official generator. Planned.
+- M24: descriptor set / reflection import path. Planned.
 
 ## License
 

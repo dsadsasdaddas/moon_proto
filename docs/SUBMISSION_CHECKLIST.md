@@ -24,7 +24,7 @@
 | 清晰工程结构 | wire/schema/runtime/json/codegen/cli/tests/docs 分层 |
 | 示例 schema | `examples/simple/user.proto`、`examples/decorated/telemetry.proto` |
 | 文件版生成入口 | `scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/` |
-| Schema Doctor / compat / verify | `scripts/moon_proto_lab.py doctor examples/simple/user.proto` / `compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md` / `verify --report generated/verify_report.md` |
+| Schema Doctor / compat / verify / official diff | `scripts/moon_proto_lab.py doctor examples/simple/user.proto` / `compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md` / `verify --report generated/verify_report.md` / `scripts/moon_proto_official_diff.py --report generated/official_diff_report.md` |
 | 生态定位说明 | `docs/ECOSYSTEM_POSITIONING.md` |
 
 ## 核心能力
@@ -45,6 +45,7 @@
 - file-based generator wrapper；
 - Schema Doctor CLI；
 - old/new schema compatibility checker，包含 removed-but-reserved 与 reserved 契约保留检查；
+- official MoonBit protobuf differential harness manifest/report；
 - AI verify Markdown/HTML report generator；
 - Python/Go official protobuf oracle fixtures, including 32-bit numeric boundary, float/double and special float fixtures；
 - generated-code compile check，适合验证 AI 生成代码。
@@ -65,6 +66,7 @@
 | Schema Doctor | `python3 scripts/moon_proto_lab.py doctor examples/simple/user.proto` |
 | Compatibility report | `python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md` |
 | Verify report | `python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md` |
+| Official differential report | `python3 scripts/moon_proto_official_diff.py --report generated/official_diff_report.md` |
 | GitHub Actions | GitHub Actions 最新 main 分支 CI 需为 success：https://github.com/dsadsasdaddas/moon_proto/actions |
 
 ## 文档与交付物
@@ -74,6 +76,7 @@
 | README | `README.md` |
 | 生态定位说明 | `docs/ECOSYSTEM_POSITIONING.md` |
 | Schema Doctor 文档 | `docs/SCHEMA_DOCTOR.md` |
+| Official differential 文档 | `docs/OFFICIAL_DIFFERENTIAL.md` |
 | 测试说明 | `docs/TESTING.md` |
 | 开发报告 | `docs/DEVELOPMENT_REPORT.md` |
 | 提交清单 | `docs/SUBMISSION_CHECKLIST.md` |
@@ -96,5 +99,6 @@ python3 scripts/moon_proto_lab.py doctor examples/simple/user.proto
 python3 scripts/moon_proto_lab.py doctor examples/decorated/telemetry.proto
 python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md
+python3 scripts/moon_proto_official_diff.py --report generated/official_diff_report.md
 tests/codegen/compile_generated.sh
 ```
