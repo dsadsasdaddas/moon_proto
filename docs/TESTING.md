@@ -26,7 +26,7 @@ Current tests cover:
 - enum field binary and JSON roundtrip;
 - schema validator positive and negative cases;
 - nested message binary and JSON roundtrip through descriptor registries;
-- codegen runtime helper snapshots and CLI smoke generation;
+- codegen runtime helper snapshots, CLI smoke generation, and generated-code compile checks;
 - official Python `google.protobuf` and Go `google.golang.org/protobuf` oracle fixtures for a full scalar/repeated user message.
 
 Run the full matrix:
@@ -39,6 +39,7 @@ moon build
 moon test
 moon test --target all
 moon run cmd/main -- gen --example
+tests/codegen/compile_generated.sh
 ```
 
 Python/Go oracle fixtures live in `tests/fixtures/`. The Python script can
@@ -51,4 +52,4 @@ python3 tests/oracle/python_protobuf_oracle.py --write
 Planned next verification:
 
 - add property-style roundtrip tests for scalar and repeated fields.
-- add generated-code compile tests once CLI output is available.
+- add file-based CLI tests once file IO is available.

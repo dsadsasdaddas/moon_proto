@@ -128,6 +128,7 @@ moon build
 moon test
 moon test --target all
 moon run cmd/main -- gen --example
+tests/codegen/compile_generated.sh
 ```
 
 ## Roadmap
@@ -143,8 +144,9 @@ moon run cmd/main -- gen --example
 - M9: schema validator for AI/codegen safety. ✅
 - M10: nested message dynamic runtime/JSON support. ✅
 - M11: CLI smoke generator and runtime helper codegen. ✅
-- M12: oneof and maps.
-- M13: file-based CLI `moon_proto gen schema.proto -o generated/`.
+- M12: generated-code compile check. ✅
+- M13: oneof and maps.
+- M14: file-based CLI `moon_proto gen schema.proto -o generated/`.
 
 ## License
 
