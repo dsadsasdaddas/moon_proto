@@ -38,6 +38,7 @@ Moon Proto 计划为 MoonBit 生态补齐 Protocol Buffers 基础能力，使 Mo
 - schema validator 可检查字段号范围、重复字段名/号、proto3 enum 首值为 0、顶层命名冲突等问题，增强 AI 生成 schema/codegen 的可验证性；
 - descriptor registry 支持 message-valued nested field 的二进制与 JSON roundtrip；
 - codegen 默认生成 message descriptor registry 与 encode/decode/JSON helper，并提供 `moon run cmd/main -- gen --example` CLI smoke 入口；
+- `scripts/moon_proto_gen.py` 提供文件版生成入口，可执行 `python3 scripts/moon_proto_gen.py gen schema.proto -o generated/`；
 - `tests/codegen/compile_generated.sh` 会实际生成 MoonBit 源码并执行 `moon check`，验证生成代码可编译；
 - 官方 Python `google.protobuf` 与 Go `google.golang.org/protobuf` oracle fixtures，用于验证 MoonBit scalar/repeated/map/oneof golden bytes/JSON 与成熟生态一致；
 - deterministic property-style tests 批量覆盖 varint、zig-zag、动态 message 二进制和 JSON roundtrip；
@@ -49,7 +50,7 @@ Moon Proto 计划为 MoonBit 生态补齐 Protocol Buffers 基础能力，使 Mo
 2. **Schema Parser**：解析 proto3 message、enum、nested message、oneof、import、option 的可用子集。
 3. **MoonBit 代码生成**：根据 `.proto` 生成 struct、enum、encode/decode、JSON mapping。
 4. **跨语言兼容测试**：使用 Python/Go protobuf 作为 oracle，验证 MoonBit 编码输出可被其他语言读取，其他语言输出可被 MoonBit 读取。
-5. **CLI 工具**：提供 `moon_proto gen user.proto -o generated/` 与示例工程。
+5. **CLI 工具**：提供文件版 `python3 scripts/moon_proto_gen.py gen user.proto -o generated/` 与示例工程。
 
 ## 为什么值得做
 

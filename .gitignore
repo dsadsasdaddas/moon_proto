@@ -4,4 +4,5 @@ _build/
 *.js
 .DS_Store
 coverage/
+generated/
 tmp/

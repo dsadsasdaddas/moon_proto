@@ -32,6 +32,7 @@ a complete proto3 toolkit:
 - enum field resolution with protobuf varint runtime support;
 - a small `.proto` lexer/parser for `syntax`, `package`, `message`, `enum`, scalar fields, `optional`, `repeated`, `map`, and `oneof`;
 - MoonBit source generator for message structs, enums and descriptor functions;
+- file-based generator wrapper for `.proto` input and generated `.mbt` output;
 - schema validator for field numbers, duplicates and proto3 enum invariants;
 - official Python and Go protobuf oracle fixtures for cross-language scalar/repeated/map/oneof compatibility;
 - deterministic property-style roundtrip corpora for binary and JSON paths;
@@ -94,6 +95,12 @@ moon run cmd/main -- gen --example
 moon run cmd/main -- gen --schema 'syntax = "proto3"; message User { uint64 id = 1; }'
 ```
 
+Generate from a `.proto` file into a project directory:
+
+```bash
+python3 scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/
+```
+
 Convert a dynamic message to protobuf-style JSON:
 
 ```moonbit
@@ -131,6 +138,7 @@ moon build
 moon test
 moon test --target all
 moon run cmd/main -- gen --example
+python3 scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/
 tests/codegen/compile_generated.sh
 ```
 
@@ -150,7 +158,7 @@ tests/codegen/compile_generated.sh
 - M12: generated-code compile check. ✅
 - M13: proto3 maps. ✅
 - M14: oneof groups. ✅
-- M15: file-based CLI `moon_proto gen schema.proto -o generated/`.
+- M15: file-based CLI wrapper `moon_proto gen schema.proto -o generated/`. ✅
 
 ## License
 

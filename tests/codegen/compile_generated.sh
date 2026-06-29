@@ -37,4 +37,17 @@ grep -q 'pub fn encode_Smoke' generated_inline_check.mbt
 
 moon check
 
+rm generated_inline_check.mbt
+python3 scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/
+
+grep -q 'pub(all) struct User' generated/user.mbt
+grep -q 'MapType(StringType, UInt64Type)' generated/user.mbt
+grep -q 'Oneof("contact")' generated/user.mbt
+
+cp generated/user.mbt generated_file_check.mbt
+moon check
+
+python3 scripts/moon_proto_gen.py gen examples/simple/user.proto --stdout --quiet \
+  | grep -q 'pub fn decode_User'
+
 echo "Generated MoonBit source compiles"
