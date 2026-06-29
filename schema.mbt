@@ -1,4 +1,5 @@
-///| Proto3 scalar types supported by the stage-1 runtime/codegen plan.
+///|
+/// Proto3 scalar types supported by the stage-1 runtime/codegen plan.
 pub(all) enum ScalarType {
   DoubleType
   FloatType
@@ -18,14 +19,16 @@ pub(all) enum ScalarType {
   NamedType(String)
 } derive(Debug, Eq)
 
-///| Field cardinality as written in a proto3 schema.
+///|
+/// Field cardinality as written in a proto3 schema.
 pub(all) enum FieldLabel {
   Singular
   Optional
   Repeated
 } derive(Debug, Eq)
 
-///| A parsed field descriptor.
+///|
+/// A parsed field descriptor.
 pub(all) struct FieldDescriptor {
   name : String
   typ : ScalarType
@@ -33,20 +36,23 @@ pub(all) struct FieldDescriptor {
   label : FieldLabel
 } derive(Debug, Eq)
 
-///| A parsed message descriptor.
+///|
+/// A parsed message descriptor.
 pub(all) struct MessageDescriptor {
   name : String
   fields : Array[FieldDescriptor]
 } derive(Debug, Eq)
 
-///| Top-level proto file model used by parser and codegen.
+///|
+/// Top-level proto file model used by parser and codegen.
 pub(all) struct ProtoFile {
   syntax : String
   package_name : String
   messages : Array[MessageDescriptor]
 } derive(Debug, Eq)
 
-///| Convert a schema type token into a scalar or named message type.
+///|
+/// Convert a schema type token into a scalar or named message type.
 pub fn scalar_type_from_string(name : String) -> ScalarType {
   match name {
     "double" => DoubleType
@@ -68,7 +74,8 @@ pub fn scalar_type_from_string(name : String) -> ScalarType {
   }
 }
 
-///| Map a scalar type to its protobuf wire type.
+///|
+/// Map a scalar type to its protobuf wire type.
 pub fn ScalarType::wire_type(self : ScalarType) -> WireType {
   match self {
     DoubleType => Fixed64
@@ -84,7 +91,8 @@ pub fn ScalarType::wire_type(self : ScalarType) -> WireType {
   }
 }
 
-///| Empty proto file constructor used by tests and future codegen.
+///|
+/// Empty proto file constructor used by tests and future codegen.
 pub fn ProtoFile::empty() -> ProtoFile {
-  ProtoFile::{ syntax : "proto3", package_name : "", messages : [] }
+  ProtoFile::{ syntax: "proto3", package_name: "", messages: [] }
 }

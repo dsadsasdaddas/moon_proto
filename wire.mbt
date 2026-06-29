@@ -1,4 +1,5 @@
-///| Protobuf wire type numbers as defined by the encoding specification.
+///|
+/// Protobuf wire type numbers as defined by the encoding specification.
 pub(all) enum WireType {
   Varint
   Fixed64
@@ -8,7 +9,8 @@ pub(all) enum WireType {
   Fixed32
 } derive(Debug, Eq)
 
-///| Numeric tag used in the low three bits of a protobuf key.
+///|
+/// Numeric tag used in the low three bits of a protobuf key.
 pub fn WireType::number(self : WireType) -> Int {
   match self {
     Varint => 0
@@ -20,7 +22,8 @@ pub fn WireType::number(self : WireType) -> Int {
   }
 }
 
-///| Convert a raw wire type number to a typed value.
+///|
+/// Convert a raw wire type number to a typed value.
 pub fn wire_type_from_number(n : Int) -> WireType? {
   match n {
     0 => Some(Varint)
@@ -33,18 +36,21 @@ pub fn wire_type_from_number(n : Int) -> WireType? {
   }
 }
 
-///| Build a protobuf key: `(field_number << 3) | wire_type`.
+///|
+/// Build a protobuf key: `(field_number << 3) | wire_type`.
 pub fn make_key(field_number : Int, wire : WireType) -> UInt64 {
   (field_number.to_uint64() << 3) | wire.number().to_uint64()
 }
 
-///| Result of splitting a protobuf key into field number and wire type.
+///|
+/// Result of splitting a protobuf key into field number and wire type.
 pub(all) enum ParseKeyResult {
   KeyOk(Int, WireType)
   KeyErr(DecodeError)
 } derive(Debug, Eq)
 
-///| Parse a raw protobuf key varint value.
+///|
+/// Parse a raw protobuf key varint value.
 pub fn parse_key(raw : UInt64) -> ParseKeyResult {
   let field_number = (raw >> 3).to_int()
   let wire_num = (raw & 7UL).to_int()
@@ -58,7 +64,8 @@ pub fn parse_key(raw : UInt64) -> ParseKeyResult {
   }
 }
 
-///| Encode a key as a protobuf varint.
+///|
+/// Encode a key as a protobuf varint.
 pub fn encode_key(field_number : Int, wire : WireType) -> Bytes {
   encode_varint_u64(make_key(field_number, wire))
 }

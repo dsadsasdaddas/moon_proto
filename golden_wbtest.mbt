@@ -29,7 +29,10 @@ test "key encode parse" {
 test "fixed little endian" {
   assert_eq(encode_fixed32(0x12345678U), b"\x78\x56\x34\x12")
   assert_true(decode_fixed32(b"\x78\x56\x34\x12") == U32Ok(0x12345678U, 4))
-  assert_eq(encode_fixed64(0x0102030405060708UL), b"\x08\x07\x06\x05\x04\x03\x02\x01")
+  assert_eq(
+    encode_fixed64(0x0102030405060708UL),
+    b"\x08\x07\x06\x05\x04\x03\x02\x01",
+  )
 }
 
 ///|
@@ -58,7 +61,8 @@ test "proto lexer" {
 
 ///|
 test "parse simple proto" {
-  let src = #|syntax = "proto3";
+  let src =
+    #|syntax = "proto3";
     #|package demo;
     #|message User {
     #|  uint32 id = 1;
@@ -75,5 +79,300 @@ test "parse simple proto" {
       assert_true(file.messages[0].fields[2].label == Repeated)
     }
     ProtoErr(_) => fail("expected parser to accept simple proto")
+  }
+}
+
+///|
+test "schema driven message encode golden bytes" {
+  let desc = MessageDescriptor::{
+    name: "User",
+    fields: [
+      FieldDescriptor::{
+        name: "id",
+        typ: UInt64Type,
+        number: 1,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "name",
+        typ: StringType,
+        number: 2,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "active",
+        typ: BoolType,
+        number: 3,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "tags",
+        typ: StringType,
+        number: 4,
+        label: Repeated,
+      },
+      FieldDescriptor::{
+        name: "score",
+        typ: SInt64Type,
+        number: 5,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "blob",
+        typ: BytesType,
+        number: 6,
+        label: Singular,
+      },
+    ],
+  }
+  let msg = message_value([
+    message_field("id", UInt64Value(150UL)),
+    message_field("name", StringValue("Alice")),
+    message_field("active", BoolValue(true)),
+    repeated_message_field("tags", [StringValue("admin"), StringValue("tester")]),
+    message_field("score", Int64Value(-2L)),
+    message_field("blob", BytesValue(b"\xff\x00")),
+  ])
+  match encode_message(desc, msg) {
+    EncodeMessageOk(bytes) =>
+      assert_eq(
+        bytes, b"\x08\x96\x01\x12\x05Alice\x18\x01\x22\x05admin\x22\x06tester\x28\x03\x32\x02\xff\x00",
+      )
+    EncodeMessageErr(_) => fail("dynamic encode failed")
+  }
+}
+
+///|
+test "schema driven message decode roundtrip" {
+  let desc = MessageDescriptor::{
+    name: "User",
+    fields: [
+      FieldDescriptor::{
+        name: "id",
+        typ: UInt64Type,
+        number: 1,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "name",
+        typ: StringType,
+        number: 2,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "active",
+        typ: BoolType,
+        number: 3,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "tags",
+        typ: StringType,
+        number: 4,
+        label: Repeated,
+      },
+      FieldDescriptor::{
+        name: "score",
+        typ: SInt64Type,
+        number: 5,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "blob",
+        typ: BytesType,
+        number: 6,
+        label: Singular,
+      },
+    ],
+  }
+  let msg = message_value([
+    message_field("id", UInt64Value(150UL)),
+    message_field("name", StringValue("Alice")),
+    message_field("active", BoolValue(true)),
+    repeated_message_field("tags", [StringValue("admin"), StringValue("tester")]),
+    message_field("score", Int64Value(-2L)),
+    message_field("blob", BytesValue(b"\xff\x00")),
+  ])
+  match encode_message(desc, msg) {
+    EncodeMessageErr(_) => fail("dynamic encode failed")
+    EncodeMessageOk(bytes) =>
+      match decode_message(desc, bytes) {
+        DecodeMessageErr(_) => fail("dynamic decode failed")
+        DecodeMessageOk(decoded, next) => {
+          assert_eq(next, bytes.length())
+          assert_true(decoded == msg)
+        }
+      }
+  }
+}
+
+///|
+test "message decode skips unknown fields" {
+  let desc = MessageDescriptor::{
+    name: "User",
+    fields: [
+      FieldDescriptor::{
+        name: "id",
+        typ: UInt64Type,
+        number: 1,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "name",
+        typ: StringType,
+        number: 2,
+        label: Singular,
+      },
+    ],
+  }
+  let bytes = concat_bytes([
+    encode_uint64_field(99, 1234UL),
+    encode_string_field(2, "Bob"),
+    encode_uint64_field(1, 7UL),
+  ])
+  match decode_message(desc, bytes) {
+    DecodeMessageErr(_) => fail("decode with unknown field failed")
+    DecodeMessageOk(decoded, next) => {
+      assert_eq(next, bytes.length())
+      assert_true(
+        decoded ==
+        message_value([
+          message_field("name", StringValue("Bob")),
+          message_field("id", UInt64Value(7UL)),
+        ]),
+      )
+    }
+  }
+}
+
+///|
+test "message encode rejects bad dynamic values" {
+  let desc = MessageDescriptor::{
+    name: "User",
+    fields: [
+      FieldDescriptor::{
+        name: "id",
+        typ: UInt64Type,
+        number: 1,
+        label: Singular,
+      },
+    ],
+  }
+  match
+    encode_message(
+      desc,
+      message_value([message_field("id", StringValue("wrong"))]),
+    ) {
+    EncodeMessageOk(_) => fail("bad value should be rejected")
+    EncodeMessageErr(Unsupported(_)) => ()
+    EncodeMessageErr(_) => fail("unexpected error")
+  }
+}
+
+///|
+test "codegen emits moonbit struct and descriptor" {
+  let src =
+    #|syntax = "proto3";
+    #|package demo;
+    #|message User {
+    #|  uint64 id = 1;
+    #|  string name = 2;
+    #|  repeated string tags = 3;
+    #|}
+  match parse_proto(src) {
+    ProtoErr(_) => fail("parser failed before codegen")
+    ProtoOk(file) => {
+      let generated = generate_moonbit_source(file)
+      let expected =
+        #|pub(all) struct User {
+        #|  id : UInt64
+        #|  name : String
+        #|  tags : Array[String]
+        #|} derive(Debug, Eq)
+        #|
+        #|pub fn descriptor_User() -> MessageDescriptor {
+        #|  MessageDescriptor::{
+        #|    name : "User",
+        #|    fields : [
+        #|      FieldDescriptor::{ name : "id", typ : UInt64Type, number : 1, label : Singular },
+        #|      FieldDescriptor::{ name : "name", typ : StringType, number : 2, label : Singular },
+        #|      FieldDescriptor::{ name : "tags", typ : StringType, number : 3, label : Repeated },
+        #|    ],
+        #|  }
+        #|}
+      assert_eq(generated, expected)
+    }
+  }
+}
+
+///|
+test "proto3 repeated numeric fields use packed encoding" {
+  let desc = MessageDescriptor::{
+    name: "Metrics",
+    fields: [
+      FieldDescriptor::{
+        name: "samples",
+        typ: UInt64Type,
+        number: 7,
+        label: Repeated,
+      },
+      FieldDescriptor::{
+        name: "deltas",
+        typ: SInt64Type,
+        number: 8,
+        label: Repeated,
+      },
+    ],
+  }
+  let msg = message_value([
+    repeated_message_field("samples", [UInt64Value(1UL), UInt64Value(150UL)]),
+    repeated_message_field("deltas", [Int64Value(-1L), Int64Value(2L)]),
+  ])
+  match encode_message(desc, msg) {
+    EncodeMessageErr(_) => fail("packed encode failed")
+    EncodeMessageOk(bytes) => {
+      assert_eq(bytes, b"\x3a\x03\x01\x96\x01\x42\x02\x01\x04")
+      match decode_message(desc, bytes) {
+        DecodeMessageErr(_) => fail("packed decode failed")
+        DecodeMessageOk(decoded, next) => {
+          assert_eq(next, bytes.length())
+          assert_true(decoded == msg)
+        }
+      }
+    }
+  }
+}
+
+///|
+test "packed decoder also accepts unpacked repeated numeric fields" {
+  let desc = MessageDescriptor::{
+    name: "Metrics",
+    fields: [
+      FieldDescriptor::{
+        name: "samples",
+        typ: UInt64Type,
+        number: 7,
+        label: Repeated,
+      },
+    ],
+  }
+  let unpacked = concat_bytes([
+    encode_uint64_field(7, 1UL),
+    encode_uint64_field(7, 150UL),
+  ])
+  match decode_message(desc, unpacked) {
+    DecodeMessageErr(_) => fail("unpacked repeated numeric decode failed")
+    DecodeMessageOk(decoded, next) => {
+      assert_eq(next, unpacked.length())
+      assert_true(
+        decoded ==
+        message_value([
+          repeated_message_field("samples", [
+            UInt64Value(1UL),
+            UInt64Value(150UL),
+          ]),
+        ]),
+      )
+    }
   }
 }

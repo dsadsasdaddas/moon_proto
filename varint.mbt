@@ -1,4 +1,5 @@
-///| Encode a UInt64 using protobuf's unsigned base-128 varint format.
+///|
+/// Encode a UInt64 using protobuf's unsigned base-128 varint format.
 pub fn encode_varint_u64(value : UInt64) -> Bytes {
   let out : Array[Byte] = []
   for v = value {
@@ -13,12 +14,14 @@ pub fn encode_varint_u64(value : UInt64) -> Bytes {
   Bytes::from_array(out)
 }
 
-///| Encode a UInt32/UInt as a protobuf varint.
+///|
+/// Encode a UInt32/UInt as a protobuf varint.
 pub fn encode_varint_uint(value : UInt) -> Bytes {
   encode_varint_u64(value.to_uint64())
 }
 
-///| Decode a UInt64 varint from `input` starting at `offset`.
+///|
+/// Decode a UInt64 varint from `input` starting at `offset`.
 pub fn decode_varint_u64(input : Bytes, offset? : Int = 0) -> DecodeU64Result {
   let bytes = input.to_array()
   if offset < 0 || offset > bytes.length() {

@@ -1,4 +1,5 @@
-///| Encode a fixed32 value in protobuf little-endian order.
+///|
+/// Encode a fixed32 value in protobuf little-endian order.
 pub fn encode_fixed32(value : UInt) -> Bytes {
   Bytes::from_array([
     (value & 0xffU).to_byte(),
@@ -8,7 +9,8 @@ pub fn encode_fixed32(value : UInt) -> Bytes {
   ])
 }
 
-///| Decode a fixed32 value from protobuf little-endian order.
+///|
+/// Decode a fixed32 value from protobuf little-endian order.
 pub fn decode_fixed32(input : Bytes, offset? : Int = 0) -> DecodeU32Result {
   let b = input.to_array()
   if offset < 0 || offset + 4 > b.length() {
@@ -21,7 +23,8 @@ pub fn decode_fixed32(input : Bytes, offset? : Int = 0) -> DecodeU32Result {
   U32Ok(v, offset + 4)
 }
 
-///| Encode a fixed64 value in protobuf little-endian order.
+///|
+/// Encode a fixed64 value in protobuf little-endian order.
 pub fn encode_fixed64(value : UInt64) -> Bytes {
   Bytes::from_array([
     (value & 0xffUL).to_byte(),
@@ -35,7 +38,8 @@ pub fn encode_fixed64(value : UInt64) -> Bytes {
   ])
 }
 
-///| Decode a fixed64 value from protobuf little-endian order.
+///|
+/// Decode a fixed64 value from protobuf little-endian order.
 pub fn decode_fixed64(input : Bytes, offset? : Int = 0) -> DecodeU64FixedResult {
   let b = input.to_array()
   if offset < 0 || offset + 8 > b.length() {

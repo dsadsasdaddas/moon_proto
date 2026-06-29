@@ -3,8 +3,8 @@
 ## 基本信息
 
 - **项目名称**：Moon Proto：面向 MoonBit 的 proto3 Protocol Buffers 编解码与代码生成工具链
-- **参赛者**：王月
-- **联系方式**：待填写
+- **参赛者 / 队伍**：王越的战队（王越）
+- **联系方式**：15372503381
 - **GitHub 仓库链接**：https://github.com/dsadsasdaddas/moon_proto
 - **Gitlink 仓库链接**：https://gitlink.org.cn/wangyue111/moon_proto
 - **项目方向**：MoonBit 基础序列化工具 / 云与边缘计算数据交换基础设施
@@ -14,9 +14,9 @@
 
 Moon Proto 计划为 MoonBit 生态补齐 Protocol Buffers 基础能力，使 MoonBit 程序能够按照 `.proto` schema 高效读写标准 protobuf 二进制数据，并逐步提供 MoonBit 类型代码生成、JSON mapping 和跨语言兼容性测试。项目面向 WebAssembly 服务、云边协同、RPC-like 协议、数据文件交换、AI agent 工具协议等场景，强调标准兼容、强测试、可维护和可复用。
 
-## 第一阶段已完成内容
+## 当前已完成内容
 
-第一阶段聚焦最小可验证闭环：
+项目已形成从 schema 子集解析到二进制编解码、动态 message runtime、代码生成雏形的可验证闭环：
 
 - protobuf wire type、key packing/parsing；
 - UInt64 varint 编解码；
@@ -24,9 +24,14 @@ Moon Proto 计划为 MoonBit 生态补齐 Protocol Buffers 基础能力，使 Mo
 - fixed32/fixed64 小端编解码；
 - length-delimited bytes/string 编解码；
 - 常用字段编码 helper：uint64、bool、sint64、string、bytes；
+- schema-driven 动态 message 编解码，覆盖 uint64、bool、sint64、string、bytes 等常见字段；
+- repeated 字段编码与解码聚合；
+- proto3 数值型 repeated 字段 packed 编码/解码；
+- 解码时跳过 unknown fields，便于向前/向后兼容；
 - proto3 schema AST；
 - `.proto` lexer/parser 子集：syntax、package、message、optional/repeated、标量字段；
-- golden tests 覆盖官方常见 varint 向量、field bytes、schema parser。
+- MoonBit 代码生成雏形：根据 message descriptor 生成 struct 与 descriptor 函数；
+- golden tests 覆盖 varint 向量、field bytes、schema parser、动态 message roundtrip、unknown field、packed repeated、codegen 快照。
 
 ## 核心功能规划
 
@@ -42,7 +47,7 @@ Protocol Buffers 是云计算、RPC、边缘通信和多语言系统中最常见
 
 ## 测试与质量保障
 
-项目采用测试驱动开发：每个 wire primitive 均有 golden vector；每个新增 schema 能力均有 parser 快照测试；后续代码生成会使用 `moon check && moon test` 验证生成代码；跨语言兼容由 Python/Go 官方 protobuf 生成 fixtures 作为 oracle。
+项目采用测试驱动开发：每个 wire primitive 均有 golden vector；每个新增 schema 能力均有 parser 或 codegen 快照测试；runtime 使用手写 protobuf golden bytes 与 roundtrip 测试；当前验证命令为 `moon check && moon build && moon test && moon test --target all`，覆盖 wasm、wasm-gc、js、native target。后续跨语言兼容由 Python/Go 官方 protobuf 生成 fixtures 作为 oracle。
 
 ## 许可证
 

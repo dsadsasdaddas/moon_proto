@@ -2,7 +2,7 @@
 
 moon_proto is designed for verification-first development.
 
-Stage 1 tests cover:
+Current tests cover:
 
 - protobuf varint golden vectors: `0`, `1`, `127`, `128`, `300`;
 - zig-zag golden vectors for signed integer mapping;
@@ -10,7 +10,23 @@ Stage 1 tests cover:
 - little-endian fixed32/fixed64 encoding;
 - length-delimited string encoding;
 - a hand-checked `User` message byte stream;
-- a small proto3 lexer/parser smoke test.
+- a small proto3 lexer/parser smoke test;
+- schema-driven dynamic message encode golden bytes;
+- schema-driven dynamic message decode roundtrip;
+- unknown-field skipping;
+- invalid dynamic value rejection;
+- MoonBit struct/descriptor codegen snapshot;
+- proto3 packed repeated numeric encode/decode;
+- unpacked repeated numeric decode compatibility.
+
+Run the full matrix:
+
+```bash
+moon check
+moon build
+moon test
+moon test --target all
+```
 
 Planned Stage 2 verification:
 
