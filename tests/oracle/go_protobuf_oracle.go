@@ -281,6 +281,44 @@ func makeNumbers32Message() proto.Message {
 	return message.Interface()
 }
 
+func makeFloatsDescriptor() protoreflect.MessageDescriptor {
+	optional := descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL
+	file := &descriptorpb.FileDescriptorProto{
+		Name:    str("moon_proto_floats_oracle.proto"),
+		Package: str("demo"),
+		Syntax:  str("proto3"),
+		MessageType: []*descriptorpb.DescriptorProto{
+			{
+				Name: str("Floats"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					field("f", 1, descriptorpb.FieldDescriptorProto_TYPE_FLOAT, optional),
+					field("d", 2, descriptorpb.FieldDescriptorProto_TYPE_DOUBLE, optional),
+				},
+			},
+		},
+	}
+	files, err := protodesc.NewFiles(&descriptorpb.FileDescriptorSet{
+		File: []*descriptorpb.FileDescriptorProto{file},
+	})
+	if err != nil {
+		panic(err)
+	}
+	desc, err := files.FindDescriptorByName("demo.Floats")
+	if err != nil {
+		panic(err)
+	}
+	return desc.(protoreflect.MessageDescriptor)
+}
+
+func makeFloatsMessage() proto.Message {
+	desc := makeFloatsDescriptor()
+	message := dynamicpb.NewMessageType(desc).New()
+	fields := desc.Fields()
+	message.Set(fields.ByName("f"), protoreflect.ValueOfFloat32(1.5))
+	message.Set(fields.ByName("d"), protoreflect.ValueOfFloat64(-2.25))
+	return message.Interface()
+}
+
 func oracleValues() ([]byte, string, string) {
 	message := makeUserMessage()
 	binary, err := proto.MarshalOptions{Deterministic: true}.Marshal(message)
@@ -333,6 +371,19 @@ func numbers32OracleValues() ([]byte, string, string) {
 	return binary, hex.EncodeToString(binary) + "\n", string(jsonBytes) + "\n"
 }
 
+func floatsOracleValues() ([]byte, string, string) {
+	message := makeFloatsMessage()
+	binary, err := proto.MarshalOptions{Deterministic: true}.Marshal(message)
+	if err != nil {
+		panic(err)
+	}
+	jsonBytes, err := protojson.MarshalOptions{UseProtoNames: true}.Marshal(message)
+	if err != nil {
+		panic(err)
+	}
+	return binary, hex.EncodeToString(binary) + "\n", string(jsonBytes) + "\n"
+}
+
 func verifyFile(path string, expected []byte) error {
 	actual, err := os.ReadFile(path)
 	if err != nil {
@@ -369,6 +420,7 @@ func main() {
 	bagBinary, bagHexText, bagJSONText := bagOracleValues()
 	contactBinary, contactHexText, contactJSONText := contactOracleValues()
 	numbers32Binary, numbers32HexText, numbers32JSONText := numbers32OracleValues()
+	floatsBinary, floatsHexText, floatsJSONText := floatsOracleValues()
 	checks := map[string][]byte{
 		filepath.Join(root, "tests", "fixtures", "user_full.bin"):     binary,
 		filepath.Join(root, "tests", "fixtures", "user_full.hex"):     []byte(hexText),
@@ -378,6 +430,8 @@ func main() {
 		filepath.Join(root, "tests", "fixtures", "contact_oneof.hex"): []byte(contactHexText),
 		filepath.Join(root, "tests", "fixtures", "numbers32.bin"):     numbers32Binary,
 		filepath.Join(root, "tests", "fixtures", "numbers32.hex"):     []byte(numbers32HexText),
+		filepath.Join(root, "tests", "fixtures", "floats.bin"):        floatsBinary,
+		filepath.Join(root, "tests", "fixtures", "floats.hex"):        []byte(floatsHexText),
 	}
 	for path, expected := range checks {
 		if err := verifyFile(path, expected); err != nil {
@@ -396,6 +450,9 @@ func main() {
 	if err := verifyJSONFile(filepath.Join(root, "tests", "fixtures", "numbers32.json"), []byte(numbers32JSONText)); err != nil {
 		panic(err)
 	}
+	if err := verifyJSONFile(filepath.Join(root, "tests", "fixtures", "floats.json"), []byte(floatsJSONText)); err != nil {
+		panic(err)
+	}
 	fmt.Println("Go protobuf oracle fixtures verified")
 	fmt.Println("user_full.hex", hexText[:len(hexText)-1])
 	fmt.Println("user_full.json", jsonText[:len(jsonText)-1])
@@ -405,4 +462,6 @@ func main() {
 	fmt.Println("contact_oneof.json", contactJSONText[:len(contactJSONText)-1])
 	fmt.Println("numbers32.hex", numbers32HexText[:len(numbers32HexText)-1])
 	fmt.Println("numbers32.json", numbers32JSONText[:len(numbers32JSONText)-1])
+	fmt.Println("floats.hex", floatsHexText[:len(floatsHexText)-1])
+	fmt.Println("floats.json", floatsJSONText[:len(floatsJSONText)-1])
 }

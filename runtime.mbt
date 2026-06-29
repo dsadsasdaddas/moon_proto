@@ -278,8 +278,10 @@ fn encode_fixed32_payload(
       } else {
         EncodeFieldErr(Unsupported("sfixed32 value out of range"))
       }
+    (FloatType, FloatValue(v)) =>
+      EncodedField(encode_fixed32(v.reinterpret_as_uint()))
     (FloatType, _) =>
-      EncodeFieldErr(Unsupported("float encoding is not implemented"))
+      EncodeFieldErr(Unsupported("value does not match float scalar type"))
     _ => EncodeFieldErr(Unsupported("value does not match fixed32 scalar type"))
   }
 }
@@ -293,8 +295,10 @@ fn encode_fixed64_payload(
     (Fixed64Type, UInt64Value(v)) => EncodedField(encode_fixed64(v))
     (SFixed64Type, Int64Value(v)) =>
       EncodedField(encode_fixed64(v.reinterpret_as_uint64()))
+    (DoubleType, DoubleValue(v)) =>
+      EncodedField(encode_fixed64(v.reinterpret_as_uint64()))
     (DoubleType, _) =>
-      EncodeFieldErr(Unsupported("double encoding is not implemented"))
+      EncodeFieldErr(Unsupported("value does not match double scalar type"))
     _ => EncodeFieldErr(Unsupported("value does not match fixed64 scalar type"))
   }
 }
@@ -562,7 +566,7 @@ fn decode_scalar_payload(
                 next,
               )
             FloatType =>
-              DecodeScalarErr(Unsupported("float decoding is not implemented"))
+              DecodedScalar(FloatValue(Float::reinterpret_from_uint(raw)), next)
             _ => DecodeScalarErr(Unsupported("unsupported fixed32 scalar"))
           }
       }
@@ -575,7 +579,7 @@ fn decode_scalar_payload(
             SFixed64Type =>
               DecodedScalar(Int64Value(raw.reinterpret_as_int64()), next)
             DoubleType =>
-              DecodeScalarErr(Unsupported("double decoding is not implemented"))
+              DecodedScalar(DoubleValue(raw.reinterpret_as_double()), next)
             _ => DecodeScalarErr(Unsupported("unsupported fixed64 scalar"))
           }
       }

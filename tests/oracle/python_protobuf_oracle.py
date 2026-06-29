@@ -27,6 +27,9 @@ CONTACT_JSON = FIXTURES / "contact_oneof.json"
 NUMBERS32_BIN = FIXTURES / "numbers32.bin"
 NUMBERS32_HEX = FIXTURES / "numbers32.hex"
 NUMBERS32_JSON = FIXTURES / "numbers32.json"
+FLOATS_BIN = FIXTURES / "floats.bin"
+FLOATS_HEX = FIXTURES / "floats.hex"
+FLOATS_JSON = FIXTURES / "floats.json"
 
 
 def _field(
@@ -236,6 +239,30 @@ def make_numbers32():
     return Numbers32(u=4294967295, i=-1, s=-2, f=4294967295, sf=-3)
 
 
+def make_floats_message_class():
+    file_desc = descriptor_pb2.FileDescriptorProto(
+        name="moon_proto_floats_oracle.proto",
+        package="demo",
+        syntax="proto3",
+    )
+    msg = file_desc.message_type.add()
+    msg.name = "Floats"
+    label_optional = descriptor_pb2.FieldDescriptorProto.LABEL_OPTIONAL
+    _field(msg, "f", 1, descriptor_pb2.FieldDescriptorProto.TYPE_FLOAT, label_optional)
+    _field(msg, "d", 2, descriptor_pb2.FieldDescriptorProto.TYPE_DOUBLE, label_optional)
+
+    pool = descriptor_pool.DescriptorPool()
+    pool.Add(file_desc)
+    descriptor = pool.FindMessageTypeByName("demo.Floats")
+    factory = message_factory.MessageFactory(pool)
+    return factory.GetPrototype(descriptor)
+
+
+def make_floats():
+    Floats = make_floats_message_class()
+    return Floats(f=1.5, d=-2.25)
+
+
 def oracle_values():
     user = make_user()
     binary = user.SerializeToString(deterministic=True)
@@ -268,6 +295,14 @@ def numbers32_oracle_values():
     return binary, binary.hex() + "\n", canonical_json
 
 
+def floats_oracle_values():
+    floats = make_floats()
+    binary = floats.SerializeToString(deterministic=True)
+    data = json_format.MessageToDict(floats, preserving_proto_field_name=True)
+    canonical_json = json.dumps(data, ensure_ascii=False, separators=(",", ":")) + "\n"
+    return binary, binary.hex() + "\n", canonical_json
+
+
 def write_fixtures() -> None:
     FIXTURES.mkdir(parents=True, exist_ok=True)
     binary, hex_text, json_text = oracle_values()
@@ -286,6 +321,10 @@ def write_fixtures() -> None:
     NUMBERS32_BIN.write_bytes(numbers32_binary)
     NUMBERS32_HEX.write_text(numbers32_hex_text, encoding="utf-8")
     NUMBERS32_JSON.write_text(numbers32_json_text, encoding="utf-8")
+    floats_binary, floats_hex_text, floats_json_text = floats_oracle_values()
+    FLOATS_BIN.write_bytes(floats_binary)
+    FLOATS_HEX.write_text(floats_hex_text, encoding="utf-8")
+    FLOATS_JSON.write_text(floats_json_text, encoding="utf-8")
 
 
 def verify_fixtures() -> None:
@@ -293,6 +332,7 @@ def verify_fixtures() -> None:
     bag_binary, bag_hex_text, bag_json_text = bag_oracle_values()
     contact_binary, contact_hex_text, contact_json_text = contact_oracle_values()
     numbers32_binary, numbers32_hex_text, numbers32_json_text = numbers32_oracle_values()
+    floats_binary, floats_hex_text, floats_json_text = floats_oracle_values()
     checks = [
         (BIN, binary, BIN.read_bytes() if BIN.exists() else None),
         (HEX, hex_text, HEX.read_text(encoding="utf-8") if HEX.exists() else None),
@@ -338,6 +378,21 @@ def verify_fixtures() -> None:
             numbers32_json_text,
             NUMBERS32_JSON.read_text(encoding="utf-8") if NUMBERS32_JSON.exists() else None,
         ),
+        (
+            FLOATS_BIN,
+            floats_binary,
+            FLOATS_BIN.read_bytes() if FLOATS_BIN.exists() else None,
+        ),
+        (
+            FLOATS_HEX,
+            floats_hex_text,
+            FLOATS_HEX.read_text(encoding="utf-8") if FLOATS_HEX.exists() else None,
+        ),
+        (
+            FLOATS_JSON,
+            floats_json_text,
+            FLOATS_JSON.read_text(encoding="utf-8") if FLOATS_JSON.exists() else None,
+        ),
     ]
     failures = []
     for path, expected, actual in checks:
@@ -358,6 +413,8 @@ def verify_fixtures() -> None:
     print("contact_oneof.json", contact_json_text.strip())
     print("numbers32.hex", numbers32_hex_text.strip())
     print("numbers32.json", numbers32_json_text.strip())
+    print("floats.hex", floats_hex_text.strip())
+    print("floats.json", floats_json_text.strip())
 
 
 def main() -> None:

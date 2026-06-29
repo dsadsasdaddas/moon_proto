@@ -46,7 +46,7 @@ The project has a small but end-to-end verifiable protobuf laboratory pipeline:
 - file-based Schema Doctor CLI for stable diagnostics on valid and invalid schemas;
 - AI verification CLI that runs doctor, schema inspection, codegen, generated-code compile checks, and Markdown/HTML report generation;
 - old/new schema compatibility checker for detecting field, enum, package and type breaking changes;
-- Python and Go official protobuf oracle fixtures for cross-language compatibility checks, including 32-bit numeric boundary values;
+- Python and Go official protobuf oracle fixtures for cross-language compatibility checks, including 32-bit numeric boundary values and float/double values;
 - deterministic property-style roundtrip corpora for binary and JSON paths;
 - generated-code compile checks and GitHub Actions CI.
 

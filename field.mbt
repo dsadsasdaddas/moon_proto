@@ -9,6 +9,8 @@
 pub(all) enum ProtoValue {
   UInt64Value(UInt64)
   Int64Value(Int64)
+  FloatValue(Float)
+  DoubleValue(Double)
   BoolValue(Bool)
   StringValue(String)
   BytesValue(Bytes)

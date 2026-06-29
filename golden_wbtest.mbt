@@ -976,6 +976,54 @@ test "official python protobuf oracle 32-bit numeric bytes and json" {
 }
 
 ///|
+test "official python protobuf oracle float and double bytes and json" {
+  let desc = MessageDescriptor::{
+    name: "Floats",
+    fields: [
+      FieldDescriptor::{
+        name: "f",
+        typ: FloatType,
+        number: 1,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "d",
+        typ: DoubleType,
+        number: 2,
+        label: Singular,
+      },
+    ],
+  }
+  let msg = message_value([
+    message_field("f", FloatValue(Float::from_double(1.5))),
+    message_field("d", DoubleValue(-2.25)),
+  ])
+  let oracle_bytes = b"\x0d\x00\x00\xc0\x3f\x11\x00\x00\x00\x00\x00\x00\x02\xc0"
+  let oracle_json = "{\"f\":1.5,\"d\":-2.25}"
+  match encode_message(desc, msg) {
+    EncodeMessageErr(_) => fail("encoding floats oracle failed")
+    EncodeMessageOk(bytes) => {
+      assert_eq(bytes, oracle_bytes)
+      match decode_message(desc, bytes) {
+        DecodeMessageErr(_) => fail("decoding floats oracle failed")
+        DecodeMessageOk(decoded, next) => {
+          assert_eq(next, bytes.length())
+          assert_true(decoded == msg)
+        }
+      }
+    }
+  }
+  match message_to_json(desc, msg) {
+    JsonErr(_) => fail("floats oracle JSON render failed")
+    JsonOk(json) => assert_eq(json, oracle_json)
+  }
+  match json_to_message(desc, oracle_json) {
+    JsonDecodeErr(_) => fail("floats oracle JSON parse failed")
+    JsonDecodeOk(decoded) => assert_true(decoded == msg)
+  }
+}
+
+///|
 test "schema validator accepts parsed supported proto" {
   let src =
     #|syntax = "proto3";

@@ -433,14 +433,16 @@ fn scalar_to_json(typ : ScalarType, value : ProtoValue) -> JsonEncodeResult {
       } else {
         JsonOk(v.to_string())
       }
+    (FloatType, FloatValue(v)) => JsonOk(v.to_double().to_string())
+    (DoubleType, DoubleValue(v)) => JsonOk(v.to_string())
     (NamedType(name), NestedMessageValue(_)) =>
       JsonErr(Unsupported("missing descriptor for nested message: " + name))
     (NamedType(name), _) =>
       JsonErr(Unsupported("value does not match nested message: " + name))
     (MapType(_, _), _) =>
       JsonErr(Unsupported("map value must be encoded as a JSON object"))
-    (FloatType | DoubleType, _) =>
-      JsonErr(Unsupported("float/double JSON is not implemented"))
+    (FloatType, _) => JsonErr(Unsupported("value does not match float type"))
+    (DoubleType, _) => JsonErr(Unsupported("value does not match double type"))
     _ => JsonErr(Unsupported("value does not match JSON scalar type"))
   }
 }
@@ -624,18 +626,24 @@ fn is_json_digit(c : Char) -> Bool {
 }
 
 ///|
+fn is_json_number_char(c : Char) -> Bool {
+  is_json_digit(c) || c == '-' || c == '+' || c == '.' || c == 'e' || c == 'E'
+}
+
+///|
 fn JsonParser::parse_number_token(self : JsonParser) -> JsonStringResult {
   self.skip_ws()
   let start = self.i
-  if self.i < self.chars.length() && self.chars[self.i] == '-' {
+  let mut saw_digit = false
+  while self.i < self.chars.length() &&
+    is_json_number_char(self.chars[self.i]) {
+    if is_json_digit(self.chars[self.i]) {
+      saw_digit = true
+    }
     self.i = self.i + 1
   }
-  let digit_start = self.i
-  while self.i < self.chars.length() && is_json_digit(self.chars[self.i]) {
-    self.i = self.i + 1
-  }
-  if self.i == digit_start {
-    return JsonStringErr(Unsupported("expected JSON integer"))
+  if !saw_digit || self.i == start {
+    return JsonStringErr(Unsupported("expected JSON number"))
   }
   JsonStringOk(self.src[start:self.i].to_owned())
 }
@@ -695,6 +703,15 @@ fn parse_i64_digits(text : String) -> Int64? {
     Some(-value)
   } else {
     Some(value)
+  }
+}
+
+///|
+fn parse_json_double_value(text : String) -> Double? {
+  try @string.parse_double(text) catch {
+    _ => None
+  } noraise {
+    v => Some(v)
   }
 }
 
@@ -782,6 +799,24 @@ fn parse_scalar_from_json(
             None => JsonScalarErr(Unsupported("invalid enum integer JSON"))
           }
       }
+    FloatType =>
+      match parser.parse_number_or_string_token() {
+        JsonStringErr(e) => JsonScalarErr(e)
+        JsonStringOk(text) =>
+          match parse_json_double_value(text) {
+            Some(v) => JsonScalarOk(FloatValue(Float::from_double(v)))
+            None => JsonScalarErr(Unsupported("invalid float JSON"))
+          }
+      }
+    DoubleType =>
+      match parser.parse_number_or_string_token() {
+        JsonStringErr(e) => JsonScalarErr(e)
+        JsonStringOk(text) =>
+          match parse_json_double_value(text) {
+            Some(v) => JsonScalarOk(DoubleValue(v))
+            None => JsonScalarErr(Unsupported("invalid double JSON"))
+          }
+      }
     NamedType(name) =>
       match json_find_message_descriptor(descriptors, name) {
         None =>
@@ -796,8 +831,6 @@ fn parse_scalar_from_json(
       }
     MapType(_, _) =>
       JsonScalarErr(Unsupported("map JSON value must be parsed as object"))
-    FloatType | DoubleType =>
-      JsonScalarErr(Unsupported("float/double JSON is not implemented"))
   }
 }
 
