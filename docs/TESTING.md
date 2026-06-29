@@ -19,6 +19,7 @@ Current tests cover:
 - proto3 packed repeated numeric encode/decode;
 - uint32/int32/sint32/fixed32/sfixed32 boundary encoding, JSON parsing and overflow rejection;
 - float/double binary encoding, decoding and protobuf-style JSON roundtrip;
+- float/double protobuf JSON special strings: `"NaN"`, `"Infinity"`, `"-Infinity"`;
 - unpacked repeated numeric decode compatibility;
 - JSON string escaping and bytes base64 vectors;
 - protobuf-style JSON output for descriptor-driven dynamic messages;
@@ -32,7 +33,7 @@ Current tests cover:
 - proto3 oneof parser/codegen snapshot, encode-time conflict rejection, binary last-one-wins decode and JSON conflict rejection;
 - codegen runtime helper snapshots, inline/file-based CLI smoke generation, Schema Doctor diagnostics, compatibility checks, verify report generation, and generated-code compile checks;
 - deterministic property-style roundtrip corpora for varint, zig-zag, dynamic message binary and JSON;
-- official Python `google.protobuf` and Go `google.golang.org/protobuf` oracle fixtures for full scalar/repeated, map, oneof, 32-bit numeric boundary and float/double messages.
+- official Python `google.protobuf` and Go `google.golang.org/protobuf` oracle fixtures for full scalar/repeated, map, oneof, 32-bit numeric boundary, float/double and special float messages.
 
 Run the full matrix:
 

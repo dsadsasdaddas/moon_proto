@@ -1024,6 +1024,68 @@ test "official python protobuf oracle float and double bytes and json" {
 }
 
 ///|
+test "official python protobuf oracle float special JSON strings" {
+  let desc = MessageDescriptor::{
+    name: "FloatSpecials",
+    fields: [
+      FieldDescriptor::{
+        name: "f_nan",
+        typ: FloatType,
+        number: 1,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "f_inf",
+        typ: FloatType,
+        number: 2,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "d_neg_inf",
+        typ: DoubleType,
+        number: 3,
+        label: Singular,
+      },
+    ],
+  }
+  let msg = message_value([
+    message_field("f_nan", FloatValue(Float::reinterpret_from_uint(0x7fc00000U))),
+    message_field("f_inf", FloatValue(Float::reinterpret_from_uint(0x7f800000U))),
+    message_field(
+      "d_neg_inf",
+      DoubleValue(0xfff0000000000000UL.reinterpret_as_double()),
+    ),
+  ])
+  let oracle_bytes = b"\x0d\x00\x00\xc0\x7f\x15\x00\x00\x80\x7f\x19\x00\x00\x00\x00\x00\x00\xf0\xff"
+  let oracle_json = "{\"f_nan\":\"NaN\",\"f_inf\":\"Infinity\",\"d_neg_inf\":\"-Infinity\"}"
+  match encode_message(desc, msg) {
+    EncodeMessageErr(_) => fail("encoding float specials oracle failed")
+    EncodeMessageOk(bytes) => assert_eq(bytes, oracle_bytes)
+  }
+  match message_to_json(desc, msg) {
+    JsonErr(_) => fail("float specials oracle JSON render failed")
+    JsonOk(json) => assert_eq(json, oracle_json)
+  }
+  match json_to_message(desc, oracle_json) {
+    JsonDecodeErr(_) => fail("float specials oracle JSON parse failed")
+    JsonDecodeOk(decoded) => {
+      match decoded.fields[0].values[0] {
+        FloatValue(v) => assert_true(v.is_nan())
+        _ => fail("f_nan should parse as FloatValue")
+      }
+      match decoded.fields[1].values[0] {
+        FloatValue(v) => assert_true(v.is_pos_inf())
+        _ => fail("f_inf should parse as FloatValue")
+      }
+      match decoded.fields[2].values[0] {
+        DoubleValue(v) => assert_true(v.is_neg_inf())
+        _ => fail("d_neg_inf should parse as DoubleValue")
+      }
+    }
+  }
+}
+
+///|
 test "schema validator accepts parsed supported proto" {
   let src =
     #|syntax = "proto3";

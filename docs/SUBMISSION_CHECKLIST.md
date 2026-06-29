@@ -46,7 +46,7 @@
 - Schema Doctor CLI；
 - old/new schema compatibility checker；
 - AI verify Markdown/HTML report generator；
-- Python/Go official protobuf oracle fixtures, including 32-bit numeric boundary and float/double fixtures；
+- Python/Go official protobuf oracle fixtures, including 32-bit numeric boundary, float/double and special float fixtures；
 - generated-code compile check，适合验证 AI 生成代码。
 
 ## 测试与 CI
@@ -57,7 +57,7 @@
 | Go oracle | `(cd tests/oracle && go run .)` |
 | MoonBit check | `moon check` |
 | MoonBit build | `moon build` |
-| MoonBit tests | `moon test`，当前 `39/39 passed` |
+| MoonBit tests | `moon test`，当前 `40/40 passed` |
 | All targets | `moon test --target all` 覆盖 wasm/wasm-gc/js/native |
 | CLI smoke | `moon run cmd/main -- gen --example` |
 | File-based generator | `python3 scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/` |

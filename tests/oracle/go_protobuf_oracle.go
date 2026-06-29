@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -319,6 +320,46 @@ func makeFloatsMessage() proto.Message {
 	return message.Interface()
 }
 
+func makeFloatSpecialsDescriptor() protoreflect.MessageDescriptor {
+	optional := descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL
+	file := &descriptorpb.FileDescriptorProto{
+		Name:    str("moon_proto_float_specials_oracle.proto"),
+		Package: str("demo"),
+		Syntax:  str("proto3"),
+		MessageType: []*descriptorpb.DescriptorProto{
+			{
+				Name: str("FloatSpecials"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					field("f_nan", 1, descriptorpb.FieldDescriptorProto_TYPE_FLOAT, optional),
+					field("f_inf", 2, descriptorpb.FieldDescriptorProto_TYPE_FLOAT, optional),
+					field("d_neg_inf", 3, descriptorpb.FieldDescriptorProto_TYPE_DOUBLE, optional),
+				},
+			},
+		},
+	}
+	files, err := protodesc.NewFiles(&descriptorpb.FileDescriptorSet{
+		File: []*descriptorpb.FileDescriptorProto{file},
+	})
+	if err != nil {
+		panic(err)
+	}
+	desc, err := files.FindDescriptorByName("demo.FloatSpecials")
+	if err != nil {
+		panic(err)
+	}
+	return desc.(protoreflect.MessageDescriptor)
+}
+
+func makeFloatSpecialsMessage() proto.Message {
+	desc := makeFloatSpecialsDescriptor()
+	message := dynamicpb.NewMessageType(desc).New()
+	fields := desc.Fields()
+	message.Set(fields.ByName("f_nan"), protoreflect.ValueOfFloat32(math.Float32frombits(0x7fc00000)))
+	message.Set(fields.ByName("f_inf"), protoreflect.ValueOfFloat32(float32(math.Inf(1))))
+	message.Set(fields.ByName("d_neg_inf"), protoreflect.ValueOfFloat64(math.Inf(-1)))
+	return message.Interface()
+}
+
 func oracleValues() ([]byte, string, string) {
 	message := makeUserMessage()
 	binary, err := proto.MarshalOptions{Deterministic: true}.Marshal(message)
@@ -384,6 +425,19 @@ func floatsOracleValues() ([]byte, string, string) {
 	return binary, hex.EncodeToString(binary) + "\n", string(jsonBytes) + "\n"
 }
 
+func floatSpecialsOracleValues() ([]byte, string, string) {
+	message := makeFloatSpecialsMessage()
+	binary, err := proto.MarshalOptions{Deterministic: true}.Marshal(message)
+	if err != nil {
+		panic(err)
+	}
+	jsonBytes, err := protojson.MarshalOptions{UseProtoNames: true}.Marshal(message)
+	if err != nil {
+		panic(err)
+	}
+	return binary, hex.EncodeToString(binary) + "\n", string(jsonBytes) + "\n"
+}
+
 func verifyFile(path string, expected []byte) error {
 	actual, err := os.ReadFile(path)
 	if err != nil {
@@ -421,17 +475,20 @@ func main() {
 	contactBinary, contactHexText, contactJSONText := contactOracleValues()
 	numbers32Binary, numbers32HexText, numbers32JSONText := numbers32OracleValues()
 	floatsBinary, floatsHexText, floatsJSONText := floatsOracleValues()
+	specialsBinary, specialsHexText, specialsJSONText := floatSpecialsOracleValues()
 	checks := map[string][]byte{
-		filepath.Join(root, "tests", "fixtures", "user_full.bin"):     binary,
-		filepath.Join(root, "tests", "fixtures", "user_full.hex"):     []byte(hexText),
-		filepath.Join(root, "tests", "fixtures", "bag_maps.bin"):      bagBinary,
-		filepath.Join(root, "tests", "fixtures", "bag_maps.hex"):      []byte(bagHexText),
-		filepath.Join(root, "tests", "fixtures", "contact_oneof.bin"): contactBinary,
-		filepath.Join(root, "tests", "fixtures", "contact_oneof.hex"): []byte(contactHexText),
-		filepath.Join(root, "tests", "fixtures", "numbers32.bin"):     numbers32Binary,
-		filepath.Join(root, "tests", "fixtures", "numbers32.hex"):     []byte(numbers32HexText),
-		filepath.Join(root, "tests", "fixtures", "floats.bin"):        floatsBinary,
-		filepath.Join(root, "tests", "fixtures", "floats.hex"):        []byte(floatsHexText),
+		filepath.Join(root, "tests", "fixtures", "user_full.bin"):      binary,
+		filepath.Join(root, "tests", "fixtures", "user_full.hex"):      []byte(hexText),
+		filepath.Join(root, "tests", "fixtures", "bag_maps.bin"):       bagBinary,
+		filepath.Join(root, "tests", "fixtures", "bag_maps.hex"):       []byte(bagHexText),
+		filepath.Join(root, "tests", "fixtures", "contact_oneof.bin"):  contactBinary,
+		filepath.Join(root, "tests", "fixtures", "contact_oneof.hex"):  []byte(contactHexText),
+		filepath.Join(root, "tests", "fixtures", "numbers32.bin"):      numbers32Binary,
+		filepath.Join(root, "tests", "fixtures", "numbers32.hex"):      []byte(numbers32HexText),
+		filepath.Join(root, "tests", "fixtures", "floats.bin"):         floatsBinary,
+		filepath.Join(root, "tests", "fixtures", "floats.hex"):         []byte(floatsHexText),
+		filepath.Join(root, "tests", "fixtures", "float_specials.bin"): specialsBinary,
+		filepath.Join(root, "tests", "fixtures", "float_specials.hex"): []byte(specialsHexText),
 	}
 	for path, expected := range checks {
 		if err := verifyFile(path, expected); err != nil {
@@ -453,6 +510,9 @@ func main() {
 	if err := verifyJSONFile(filepath.Join(root, "tests", "fixtures", "floats.json"), []byte(floatsJSONText)); err != nil {
 		panic(err)
 	}
+	if err := verifyJSONFile(filepath.Join(root, "tests", "fixtures", "float_specials.json"), []byte(specialsJSONText)); err != nil {
+		panic(err)
+	}
 	fmt.Println("Go protobuf oracle fixtures verified")
 	fmt.Println("user_full.hex", hexText[:len(hexText)-1])
 	fmt.Println("user_full.json", jsonText[:len(jsonText)-1])
@@ -464,4 +524,6 @@ func main() {
 	fmt.Println("numbers32.json", numbers32JSONText[:len(numbers32JSONText)-1])
 	fmt.Println("floats.hex", floatsHexText[:len(floatsHexText)-1])
 	fmt.Println("floats.json", floatsJSONText[:len(floatsJSONText)-1])
+	fmt.Println("float_specials.hex", specialsHexText[:len(specialsHexText)-1])
+	fmt.Println("float_specials.json", specialsJSONText[:len(specialsJSONText)-1])
 }

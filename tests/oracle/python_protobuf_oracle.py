@@ -30,6 +30,9 @@ NUMBERS32_JSON = FIXTURES / "numbers32.json"
 FLOATS_BIN = FIXTURES / "floats.bin"
 FLOATS_HEX = FIXTURES / "floats.hex"
 FLOATS_JSON = FIXTURES / "floats.json"
+FLOAT_SPECIALS_BIN = FIXTURES / "float_specials.bin"
+FLOAT_SPECIALS_HEX = FIXTURES / "float_specials.hex"
+FLOAT_SPECIALS_JSON = FIXTURES / "float_specials.json"
 
 
 def _field(
@@ -263,6 +266,31 @@ def make_floats():
     return Floats(f=1.5, d=-2.25)
 
 
+def make_float_specials_message_class():
+    file_desc = descriptor_pb2.FileDescriptorProto(
+        name="moon_proto_float_specials_oracle.proto",
+        package="demo",
+        syntax="proto3",
+    )
+    msg = file_desc.message_type.add()
+    msg.name = "FloatSpecials"
+    label_optional = descriptor_pb2.FieldDescriptorProto.LABEL_OPTIONAL
+    _field(msg, "f_nan", 1, descriptor_pb2.FieldDescriptorProto.TYPE_FLOAT, label_optional)
+    _field(msg, "f_inf", 2, descriptor_pb2.FieldDescriptorProto.TYPE_FLOAT, label_optional)
+    _field(msg, "d_neg_inf", 3, descriptor_pb2.FieldDescriptorProto.TYPE_DOUBLE, label_optional)
+
+    pool = descriptor_pool.DescriptorPool()
+    pool.Add(file_desc)
+    descriptor = pool.FindMessageTypeByName("demo.FloatSpecials")
+    factory = message_factory.MessageFactory(pool)
+    return factory.GetPrototype(descriptor)
+
+
+def make_float_specials():
+    FloatSpecials = make_float_specials_message_class()
+    return FloatSpecials(f_nan=float("nan"), f_inf=float("inf"), d_neg_inf=float("-inf"))
+
+
 def oracle_values():
     user = make_user()
     binary = user.SerializeToString(deterministic=True)
@@ -303,6 +331,14 @@ def floats_oracle_values():
     return binary, binary.hex() + "\n", canonical_json
 
 
+def float_specials_oracle_values():
+    specials = make_float_specials()
+    binary = specials.SerializeToString(deterministic=True)
+    data = json_format.MessageToDict(specials, preserving_proto_field_name=True)
+    canonical_json = json.dumps(data, ensure_ascii=False, separators=(",", ":")) + "\n"
+    return binary, binary.hex() + "\n", canonical_json
+
+
 def write_fixtures() -> None:
     FIXTURES.mkdir(parents=True, exist_ok=True)
     binary, hex_text, json_text = oracle_values()
@@ -325,6 +361,10 @@ def write_fixtures() -> None:
     FLOATS_BIN.write_bytes(floats_binary)
     FLOATS_HEX.write_text(floats_hex_text, encoding="utf-8")
     FLOATS_JSON.write_text(floats_json_text, encoding="utf-8")
+    specials_binary, specials_hex_text, specials_json_text = float_specials_oracle_values()
+    FLOAT_SPECIALS_BIN.write_bytes(specials_binary)
+    FLOAT_SPECIALS_HEX.write_text(specials_hex_text, encoding="utf-8")
+    FLOAT_SPECIALS_JSON.write_text(specials_json_text, encoding="utf-8")
 
 
 def verify_fixtures() -> None:
@@ -333,6 +373,7 @@ def verify_fixtures() -> None:
     contact_binary, contact_hex_text, contact_json_text = contact_oracle_values()
     numbers32_binary, numbers32_hex_text, numbers32_json_text = numbers32_oracle_values()
     floats_binary, floats_hex_text, floats_json_text = floats_oracle_values()
+    specials_binary, specials_hex_text, specials_json_text = float_specials_oracle_values()
     checks = [
         (BIN, binary, BIN.read_bytes() if BIN.exists() else None),
         (HEX, hex_text, HEX.read_text(encoding="utf-8") if HEX.exists() else None),
@@ -393,6 +434,21 @@ def verify_fixtures() -> None:
             floats_json_text,
             FLOATS_JSON.read_text(encoding="utf-8") if FLOATS_JSON.exists() else None,
         ),
+        (
+            FLOAT_SPECIALS_BIN,
+            specials_binary,
+            FLOAT_SPECIALS_BIN.read_bytes() if FLOAT_SPECIALS_BIN.exists() else None,
+        ),
+        (
+            FLOAT_SPECIALS_HEX,
+            specials_hex_text,
+            FLOAT_SPECIALS_HEX.read_text(encoding="utf-8") if FLOAT_SPECIALS_HEX.exists() else None,
+        ),
+        (
+            FLOAT_SPECIALS_JSON,
+            specials_json_text,
+            FLOAT_SPECIALS_JSON.read_text(encoding="utf-8") if FLOAT_SPECIALS_JSON.exists() else None,
+        ),
     ]
     failures = []
     for path, expected, actual in checks:
@@ -415,6 +471,8 @@ def verify_fixtures() -> None:
     print("numbers32.json", numbers32_json_text.strip())
     print("floats.hex", floats_hex_text.strip())
     print("floats.json", floats_json_text.strip())
+    print("float_specials.hex", specials_hex_text.strip())
+    print("float_specials.json", specials_json_text.strip())
 
 
 def main() -> None:

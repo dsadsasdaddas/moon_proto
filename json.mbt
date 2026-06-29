@@ -433,8 +433,8 @@ fn scalar_to_json(typ : ScalarType, value : ProtoValue) -> JsonEncodeResult {
       } else {
         JsonOk(v.to_string())
       }
-    (FloatType, FloatValue(v)) => JsonOk(v.to_double().to_string())
-    (DoubleType, DoubleValue(v)) => JsonOk(v.to_string())
+    (FloatType, FloatValue(v)) => JsonOk(float_double_to_json(v.to_double()))
+    (DoubleType, DoubleValue(v)) => JsonOk(float_double_to_json(v))
     (NamedType(name), NestedMessageValue(_)) =>
       JsonErr(Unsupported("missing descriptor for nested message: " + name))
     (NamedType(name), _) =>
@@ -444,6 +444,19 @@ fn scalar_to_json(typ : ScalarType, value : ProtoValue) -> JsonEncodeResult {
     (FloatType, _) => JsonErr(Unsupported("value does not match float type"))
     (DoubleType, _) => JsonErr(Unsupported("value does not match double type"))
     _ => JsonErr(Unsupported("value does not match JSON scalar type"))
+  }
+}
+
+///|
+fn float_double_to_json(v : Double) -> String {
+  if v.is_nan() {
+    json_escape_string("NaN")
+  } else if v.is_pos_inf() {
+    json_escape_string("Infinity")
+  } else if v.is_neg_inf() {
+    json_escape_string("-Infinity")
+  } else {
+    v.to_string()
   }
 }
 
@@ -708,10 +721,16 @@ fn parse_i64_digits(text : String) -> Int64? {
 
 ///|
 fn parse_json_double_value(text : String) -> Double? {
-  try @string.parse_double(text) catch {
-    _ => None
-  } noraise {
-    v => Some(v)
+  match text {
+    "NaN" => Some(0x7FF8000000000001UL.reinterpret_as_double())
+    "Infinity" => Some(0x7FF0000000000000UL.reinterpret_as_double())
+    "-Infinity" => Some(0xFFF0000000000000UL.reinterpret_as_double())
+    _ =>
+      try @string.parse_double(text) catch {
+        _ => None
+      } noraise {
+        v => Some(v)
+      }
   }
 }
 
