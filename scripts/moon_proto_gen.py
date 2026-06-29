@@ -86,8 +86,20 @@ def run_moon_inspect(schema: str, moon_bin: str, root: Path) -> str:
     return run_moon_cli(['inspect', '--schema', schema], moon_bin, root)
 
 
+def run_moon_compat(old_schema: str, new_schema: str, moon_bin: str, root: Path) -> str:
+    return run_moon_cli(
+        ['compat', '--old-schema', old_schema, '--new-schema', new_schema],
+        moon_bin,
+        root,
+    )
+
+
 def schema_is_valid(doctor_output: str) -> bool:
     return doctor_output.splitlines()[0:1] == ['schema valid']
+
+
+def schema_is_compatible(compat_output: str) -> bool:
+    return compat_output.splitlines()[0:1] == ['schema compatible']
 
 
 def command_gen(args: argparse.Namespace) -> int:
@@ -132,6 +144,23 @@ def command_inspect(args: argparse.Namespace) -> int:
         return 1 if isinstance(exc, RuntimeError) else 2
     print(output, end='' if output.endswith('\n') else '\n')
     return 0
+
+
+def command_compat(args: argparse.Namespace) -> int:
+    root = repo_root()
+    try:
+        old_proto, old_schema = read_schema(args.old_proto)
+        new_proto, new_schema = read_schema(args.new_proto)
+        output = run_moon_compat(old_schema, new_schema, args.moon_bin, root)
+    except (FileNotFoundError, RuntimeError) as exc:
+        print(f'error: {exc}', file=sys.stderr)
+        return 1 if isinstance(exc, RuntimeError) else 2
+    ok = schema_is_compatible(output)
+    print(output, end='' if output.endswith('\n') else '\n')
+    if args.report:
+        write_compat_report(Path(args.report), old_proto, new_proto, ok, output)
+        print(f'report: {args.report}')
+    return 0 if ok else 1
 
 
 def copy_repo_for_compile(root: Path, tmp_path: Path) -> None:
@@ -247,6 +276,72 @@ pre {{ white-space: pre-wrap; background: #f6f8fa; border: 1px solid #d0d7de; bo
 </body>
 </html>
 '''
+
+
+def compat_markdown_report(
+    old_proto: Path,
+    new_proto: Path,
+    status: bool,
+    compat_output: str,
+) -> str:
+    lines = [
+        '# Moon Proto Lab schema compatibility report',
+        '',
+        f'- Old schema: `{old_proto}`',
+        f'- New schema: `{new_proto}`',
+        f'- Generated at: `{datetime.now(timezone.utc).isoformat()}`',
+        f'- Overall status: **{"PASS" if status else "FAIL"}**',
+        '',
+        '## Compatibility output',
+        '',
+        '```text',
+        compat_output.strip(),
+        '```',
+    ]
+    return '\n'.join(lines) + '\n'
+
+
+def compat_html_report(
+    old_proto: Path,
+    new_proto: Path,
+    status: bool,
+    compat_output: str,
+) -> str:
+    md = compat_markdown_report(old_proto, new_proto, status, compat_output)
+    escaped_blocks = html.escape(md)
+    color = '#16833a' if status else '#b42318'
+    return f'''<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Moon Proto Lab schema compatibility report</title>
+<style>
+body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 32px; color: #1f2937; }}
+pre {{ white-space: pre-wrap; background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 8px; padding: 16px; }}
+.badge {{ display: inline-block; padding: 4px 10px; border-radius: 999px; color: #fff; background: {color}; }}
+</style>
+</head>
+<body>
+<h1>Moon Proto Lab schema compatibility report <span class="badge">{'PASS' if status else 'FAIL'}</span></h1>
+<pre>{escaped_blocks}</pre>
+</body>
+</html>
+'''
+
+
+def write_compat_report(
+    path: Path,
+    old_proto: Path,
+    new_proto: Path,
+    status: bool,
+    compat_output: str,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.suffix.lower() in {'.html', '.htm'}:
+        text = compat_html_report(old_proto, new_proto, status, compat_output)
+    else:
+        text = compat_markdown_report(old_proto, new_proto, status, compat_output)
+    path.write_text(text, encoding='utf-8')
 
 
 def write_report(
@@ -372,6 +467,13 @@ def build_parser() -> argparse.ArgumentParser:
     inspect.add_argument('proto', help='input .proto schema path')
     add_common_moon_arg(inspect)
     inspect.set_defaults(func=command_inspect)
+
+    compat = sub.add_parser('compat', help='check old/new schema compatibility')
+    compat.add_argument('old_proto', help='old .proto schema path')
+    compat.add_argument('new_proto', help='new .proto schema path')
+    compat.add_argument('--report', help='write a Markdown or HTML compatibility report')
+    add_common_moon_arg(compat)
+    compat.set_defaults(func=command_compat)
 
     verify = sub.add_parser('verify', help='run schema doctor, codegen, compile check, and optional report')
     verify.add_argument('proto', help='input .proto schema path')

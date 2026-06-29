@@ -57,6 +57,28 @@ python3 scripts/moon_proto_lab.py doctor examples/simple/user.proto \
 python3 scripts/moon_proto_lab.py inspect examples/simple/user.proto \
   | grep -q 'message User fields='
 
+python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto \
+  --report generated/compat_report.md
+grep -q 'schema compatible' generated/compat_report.md
+grep -Fq 'Overall status: **PASS**' generated/compat_report.md
+
+cat > user_v2_breaking.proto <<'EOF'
+syntax = "proto3";
+package demo;
+message User {
+  string id = 1;
+  string name = 3;
+}
+EOF
+
+if python3 scripts/moon_proto_lab.py compat examples/simple/user.proto user_v2_breaking.proto > compat_breaking.txt 2>&1; then
+  echo "compat unexpectedly accepted user_v2_breaking.proto" >&2
+  exit 1
+fi
+grep -q 'schema incompatible' compat_breaking.txt
+grep -q 'field type changed' compat_breaking.txt
+grep -q 'field number changed' compat_breaking.txt
+
 cat > invalid_duplicate.proto <<'EOF'
 syntax = "proto3";
 message Bad {

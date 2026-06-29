@@ -50,6 +50,31 @@ python3 scripts/moon_proto_lab.py inspect examples/simple/user.proto
 
 The output includes package, message count, enum count, fields, labels, numbers and resolved scalar/named types.
 
+
+## Schema compatibility check
+
+Check whether a new schema preserves the contracts used by an old schema:
+
+```bash
+python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto \
+  --report generated/compat_report.md
+```
+
+The compatibility checker treats these changes as breaking:
+
+- old message removed;
+- old field number removed;
+- old field number reused with a different name;
+- old field type changed;
+- old field label changed, including singular/repeated/optional/oneof changes;
+- old field name moved to a different number;
+- old enum removed;
+- old enum value removed or moved to a different number;
+- package or syntax changed;
+- either old or new schema fails Schema Doctor validation.
+
+Adding new fields or new enum values is accepted. The command returns a non-zero exit status for incompatible schemas and can emit Markdown or HTML reports by choosing the report file suffix.
+
 ## AI verify workflow
 
 Run the full verification workflow:
@@ -81,6 +106,7 @@ Use `--skip-compile` only when a fast report is needed and the caller will run c
 AI can produce plausible `.proto` schemas and generated MoonBit code, but plausibility is not enough for maintainable infrastructure. This workflow turns AI output into checked artifacts:
 
 - invalid schemas fail early;
+- old/new schema compatibility regressions are caught before codegen;
 - diagnostics are stable enough for CI and documentation;
 - generated MoonBit source must compile;
 - Markdown/HTML reports make the verification result reviewable in a contest demo or code review.

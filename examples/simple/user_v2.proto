@@ -1,0 +1,14 @@
+syntax = "proto3";
+package demo;
+
+message User {
+  uint32 id = 1;
+  string name = 2;
+  repeated string tags = 3;
+  map<string, uint64> counters = 4;
+  oneof contact {
+    string email = 5;
+    string phone = 6;
+  }
+  uint64 created_at = 9;
+}

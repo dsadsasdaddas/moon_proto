@@ -45,6 +45,7 @@ The project has a small but end-to-end verifiable protobuf laboratory pipeline:
 - file-based generator wrapper for `.proto` input and generated `.mbt` output;
 - file-based Schema Doctor CLI for stable diagnostics on valid and invalid schemas;
 - AI verification CLI that runs doctor, schema inspection, codegen, generated-code compile checks, and Markdown/HTML report generation;
+- old/new schema compatibility checker for detecting field, enum, package and type breaking changes;
 - Python and Go official protobuf oracle fixtures for cross-language compatibility checks;
 - deterministic property-style roundtrip corpora for binary and JSON paths;
 - generated-code compile checks and GitHub Actions CI.
@@ -121,6 +122,7 @@ Run the file-based Schema Doctor and AI verification report workflow:
 ```bash
 python3 scripts/moon_proto_lab.py doctor examples/simple/user.proto
 python3 scripts/moon_proto_lab.py inspect examples/simple/user.proto
+python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.html
 ```
@@ -155,6 +157,7 @@ moon test --target all
 moon run cmd/main -- gen --example
 python3 scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/
 python3 scripts/moon_proto_lab.py doctor examples/simple/user.proto
+python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md
 tests/codegen/compile_generated.sh
 ```
@@ -187,8 +190,9 @@ tests/codegen/compile_generated.sh
 - M15: file-based CLI wrapper `moon_proto gen schema.proto -o generated/`. Done.
 - M16: Schema Doctor CLI for stable diagnostics. Done.
 - M17: AI verify command with generated-code compile check and Markdown/HTML reports. Done.
-- M18: adapters and differential tests around existing MoonBit protobuf packages. Planned.
-- M19: larger conformance-lite corpus and import/option/reserved schema support. Planned.
+- M18: old/new schema compatibility checking with Markdown/HTML reports. Done.
+- M19: adapters and differential tests around existing MoonBit protobuf packages. Planned.
+- M20: larger conformance-lite corpus and import/option/reserved schema support. Planned.
 
 ## License
 

@@ -8,12 +8,15 @@ fn usage() -> String {
     #|  moon run cmd/main -- gen --schema '<proto3 source>'
     #|  moon run cmd/main -- doctor --schema '<proto3 source>'
     #|  moon run cmd/main -- inspect --schema '<proto3 source>'
+    #|  moon run cmd/main -- compat --old-schema '<old proto3>' --new-schema '<new proto3>'
     #|
     #|Commands:
     #|  gen --example          Generate MoonBit source for a built-in demo schema.
     #|  gen --schema <text>    Parse, validate, and generate MoonBit source from inline proto3 text.
     #|  doctor --schema <text> Parse and validate inline proto3 text, printing stable diagnostics.
     #|  inspect --schema <text> Print a compact schema summary for reports and debugging.
+    #|  compat --old-schema <old> --new-schema <new>
+    #|                         Check whether a new schema preserves old field and enum contracts.
   text
 }
 
@@ -171,6 +174,20 @@ fn parse_or_print_error(schema : String) -> @proto.ProtoFile? {
 }
 
 ///|
+fn parse_or_print_named_error(
+  label : String,
+  schema : String,
+) -> @proto.ProtoFile? {
+  match @proto.parse_proto(schema) {
+    @proto.ProtoErr(_) => {
+      println("error: failed to parse " + label + " proto3 schema")
+      None
+    }
+    @proto.ProtoOk(file) => Some(file)
+  }
+}
+
+///|
 fn generate(schema : String) -> Unit {
   match parse_or_print_error(schema) {
     None => ()
@@ -202,6 +219,314 @@ fn inspect(schema : String) -> Unit {
 }
 
 ///|
+fn find_message(
+  messages : Array[@proto.MessageDescriptor],
+  name : String,
+) -> @proto.MessageDescriptor? {
+  for msg in messages {
+    if msg.name == name {
+      return Some(msg)
+    }
+  }
+  None
+}
+
+///|
+fn find_field_by_number(
+  fields : Array[@proto.FieldDescriptor],
+  number : Int,
+) -> @proto.FieldDescriptor? {
+  for field in fields {
+    if field.number == number {
+      return Some(field)
+    }
+  }
+  None
+}
+
+///|
+fn find_field_by_name(
+  fields : Array[@proto.FieldDescriptor],
+  name : String,
+) -> @proto.FieldDescriptor? {
+  for field in fields {
+    if field.name == name {
+      return Some(field)
+    }
+  }
+  None
+}
+
+///|
+fn find_enum(
+  enums : Array[@proto.EnumDescriptor],
+  name : String,
+) -> @proto.EnumDescriptor? {
+  for enum_desc in enums {
+    if enum_desc.name == name {
+      return Some(enum_desc)
+    }
+  }
+  None
+}
+
+///|
+fn find_enum_value_by_number(
+  values : Array[@proto.EnumValueDescriptor],
+  number : Int,
+) -> @proto.EnumValueDescriptor? {
+  for value in values {
+    if value.number == number {
+      return Some(value)
+    }
+  }
+  None
+}
+
+///|
+fn find_enum_value_by_name(
+  values : Array[@proto.EnumValueDescriptor],
+  name : String,
+) -> @proto.EnumValueDescriptor? {
+  for value in values {
+    if value.name == name {
+      return Some(value)
+    }
+  }
+  None
+}
+
+///|
+fn push_compat_issue(
+  issues : Array[String],
+  path : String,
+  message : String,
+) -> Unit {
+  issues.push(path + ": " + message)
+}
+
+///|
+fn append_validation_issues(
+  issues : Array[String],
+  prefix : String,
+  result : @proto.SchemaValidationResult,
+) -> Unit {
+  match result {
+    @proto.SchemaValid => ()
+    @proto.SchemaInvalid(schema_issues) =>
+      for issue in schema_issues {
+        push_compat_issue(
+          issues,
+          prefix + "." + issue.path,
+          issue.message,
+        )
+      }
+  }
+}
+
+///|
+fn compare_field_compat(
+  issues : Array[String],
+  message_name : String,
+  old_field : @proto.FieldDescriptor,
+  new_fields : Array[@proto.FieldDescriptor],
+) -> Unit {
+  let path = "message." + message_name + ".field." + old_field.number.to_string()
+  match find_field_by_number(new_fields, old_field.number) {
+    Some(new_field) => {
+      if new_field.name != old_field.name {
+        push_compat_issue(
+          issues,
+          path,
+          "field name changed from " + old_field.name + " to " + new_field.name,
+        )
+      }
+      if new_field.typ != old_field.typ {
+        push_compat_issue(
+          issues,
+          path,
+          "field type changed from " +
+          scalar_type_name(old_field.typ) +
+          " to " +
+          scalar_type_name(new_field.typ),
+        )
+      }
+      if new_field.label != old_field.label {
+        push_compat_issue(
+          issues,
+          path,
+          "field label changed from " +
+          field_label_name(old_field.label) +
+          " to " +
+          field_label_name(new_field.label),
+        )
+      }
+    }
+    None =>
+      match find_field_by_name(new_fields, old_field.name) {
+        Some(new_field) =>
+          push_compat_issue(
+            issues,
+            "message." + message_name + ".field." + old_field.name,
+            "field number changed from " +
+            old_field.number.to_string() +
+            " to " +
+            new_field.number.to_string(),
+          )
+        None =>
+          push_compat_issue(
+            issues,
+            path,
+            "field removed: " + old_field.name,
+          )
+      }
+  }
+}
+
+///|
+fn compare_message_compat(
+  issues : Array[String],
+  old_msg : @proto.MessageDescriptor,
+  new_msg : @proto.MessageDescriptor,
+) -> Unit {
+  for old_field in old_msg.fields {
+    compare_field_compat(issues, old_msg.name, old_field, new_msg.fields)
+  }
+}
+
+///|
+fn compare_enum_compat(
+  issues : Array[String],
+  old_enum : @proto.EnumDescriptor,
+  new_enum : @proto.EnumDescriptor,
+) -> Unit {
+  for old_value in old_enum.values {
+    let path =
+      "enum." + old_enum.name + ".value." + old_value.number.to_string()
+    match find_enum_value_by_number(new_enum.values, old_value.number) {
+      Some(new_value) =>
+        if new_value.name != old_value.name {
+          push_compat_issue(
+            issues,
+            path,
+            "enum value name changed from " +
+            old_value.name +
+            " to " +
+            new_value.name,
+          )
+        }
+      None =>
+        match find_enum_value_by_name(new_enum.values, old_value.name) {
+          Some(new_value) =>
+            push_compat_issue(
+              issues,
+              "enum." + old_enum.name + ".value." + old_value.name,
+              "enum value number changed from " +
+              old_value.number.to_string() +
+              " to " +
+              new_value.number.to_string(),
+            )
+          None =>
+            push_compat_issue(
+              issues,
+              path,
+              "enum value removed: " + old_value.name,
+            )
+        }
+    }
+  }
+}
+
+///|
+fn compatibility_issues(
+  old_file : @proto.ProtoFile,
+  new_file : @proto.ProtoFile,
+) -> Array[String] {
+  let issues : Array[String] = []
+  append_validation_issues(
+    issues,
+    "old",
+    @proto.validate_proto_file(old_file),
+  )
+  append_validation_issues(
+    issues,
+    "new",
+    @proto.validate_proto_file(new_file),
+  )
+  if issues.length() > 0 {
+    return issues
+  }
+  if old_file.syntax != new_file.syntax {
+    push_compat_issue(
+      issues,
+      "syntax",
+      "changed from " + old_file.syntax + " to " + new_file.syntax,
+    )
+  }
+  if old_file.package_name != new_file.package_name {
+    push_compat_issue(
+      issues,
+      "package",
+      "changed from " + old_file.package_name + " to " + new_file.package_name,
+    )
+  }
+  for old_msg in old_file.messages {
+    match find_message(new_file.messages, old_msg.name) {
+      None =>
+        push_compat_issue(
+          issues,
+          "message." + old_msg.name,
+          "message removed",
+        )
+      Some(new_msg) => compare_message_compat(issues, old_msg, new_msg)
+    }
+  }
+  for old_enum in old_file.enums {
+    match find_enum(new_file.enums, old_enum.name) {
+      None =>
+        push_compat_issue(
+          issues,
+          "enum." + old_enum.name,
+          "enum removed",
+        )
+      Some(new_enum) => compare_enum_compat(issues, old_enum, new_enum)
+    }
+  }
+  issues
+}
+
+///|
+fn compat_report(old_file : @proto.ProtoFile, new_file : @proto.ProtoFile) -> String {
+  let issues = compatibility_issues(old_file, new_file)
+  let lines : Array[String] = []
+  if issues.length() == 0 {
+    lines.push("schema compatible")
+    lines.push("old messages: " + old_file.messages.length().to_string())
+    lines.push("new messages: " + new_file.messages.length().to_string())
+    lines.push("old enums: " + old_file.enums.length().to_string())
+    lines.push("new enums: " + new_file.enums.length().to_string())
+  } else {
+    lines.push("schema incompatible")
+    lines.push("issues: " + issues.length().to_string())
+    for issue in issues {
+      lines.push(issue)
+    }
+  }
+  join_lines(lines)
+}
+
+///|
+fn compat(old_schema : String, new_schema : String) -> Unit {
+  match (
+    parse_or_print_named_error("old", old_schema),
+    parse_or_print_named_error("new", new_schema),
+  ) {
+    (Some(old_file), Some(new_file)) => println(compat_report(old_file, new_file))
+    _ => ()
+  }
+}
+
+///|
 fn arg_at(args : Array[String], index : Int) -> String? {
   if index < args.length() {
     Some(args[index])
@@ -213,13 +538,30 @@ fn arg_at(args : Array[String], index : Int) -> String? {
 ///|
 fn main {
   let args = @env.args()
-  match (arg_at(args, 1), arg_at(args, 2), arg_at(args, 3)) {
-    (Some("gen"), Some("--example"), _) => generate(example_schema())
-    (Some("gen"), Some("--schema"), Some(schema)) => generate(schema)
-    (Some("doctor"), Some("--schema"), Some(schema)) => doctor(schema)
-    (Some("inspect"), Some("--schema"), Some(schema)) => inspect(schema)
-    (Some("--help"), _, _) | (Some("help"), _, _) | (None, _, _) =>
-      println(usage())
+  match arg_at(args, 1) {
+    Some("gen") =>
+      match (arg_at(args, 2), arg_at(args, 3)) {
+        (Some("--example"), _) => generate(example_schema())
+        (Some("--schema"), Some(schema)) => generate(schema)
+        _ => println(usage())
+      }
+    Some("doctor") =>
+      match (arg_at(args, 2), arg_at(args, 3)) {
+        (Some("--schema"), Some(schema)) => doctor(schema)
+        _ => println(usage())
+      }
+    Some("inspect") =>
+      match (arg_at(args, 2), arg_at(args, 3)) {
+        (Some("--schema"), Some(schema)) => inspect(schema)
+        _ => println(usage())
+      }
+    Some("compat") =>
+      match (arg_at(args, 2), arg_at(args, 3), arg_at(args, 4), arg_at(args, 5)) {
+        (Some("--old-schema"), Some(old_schema), Some("--new-schema"), Some(new_schema)) =>
+          compat(old_schema, new_schema)
+        _ => println(usage())
+      }
+    Some("--help") | Some("help") | None => println(usage())
     _ => println(usage())
   }
 }

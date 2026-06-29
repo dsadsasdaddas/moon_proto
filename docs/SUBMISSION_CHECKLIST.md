@@ -24,7 +24,7 @@
 | 清晰工程结构 | wire/schema/runtime/json/codegen/cli/tests/docs 分层 |
 | 示例 schema | `examples/simple/user.proto` |
 | 文件版生成入口 | `scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/` |
-| Schema Doctor / verify | `scripts/moon_proto_lab.py doctor examples/simple/user.proto` / `verify --report generated/verify_report.md` |
+| Schema Doctor / compat / verify | `scripts/moon_proto_lab.py doctor examples/simple/user.proto` / `compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md` / `verify --report generated/verify_report.md` |
 | 生态定位说明 | `docs/ECOSYSTEM_POSITIONING.md` |
 
 ## 核心能力
@@ -44,6 +44,7 @@
 - MoonBit source code generator；
 - file-based generator wrapper；
 - Schema Doctor CLI；
+- old/new schema compatibility checker；
 - AI verify Markdown/HTML report generator；
 - Python/Go official protobuf oracle fixtures；
 - generated-code compile check，适合验证 AI 生成代码。
@@ -62,6 +63,7 @@
 | File-based generator | `python3 scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/` |
 | Generated code compile | `tests/codegen/compile_generated.sh` |
 | Schema Doctor | `python3 scripts/moon_proto_lab.py doctor examples/simple/user.proto` |
+| Compatibility report | `python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md` |
 | Verify report | `python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md` |
 | GitHub Actions | GitHub Actions 最新 main 分支 CI 需为 success：https://github.com/dsadsasdaddas/moon_proto/actions |
 
@@ -91,6 +93,7 @@ moon test --target all
 moon run cmd/main -- gen --example
 python3 scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/
 python3 scripts/moon_proto_lab.py doctor examples/simple/user.proto
+python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md
 tests/codegen/compile_generated.sh
 ```
