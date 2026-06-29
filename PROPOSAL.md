@@ -38,6 +38,7 @@ Moon Proto 计划为 MoonBit 生态补齐 Protocol Buffers 基础能力，使 Mo
 - codegen 默认生成 message descriptor registry 与 encode/decode/JSON helper，并提供 `moon run cmd/main -- gen --example` CLI smoke 入口；
 - `tests/codegen/compile_generated.sh` 会实际生成 MoonBit 源码并执行 `moon check`，验证生成代码可编译；
 - 官方 Python `google.protobuf` 与 Go `google.golang.org/protobuf` oracle fixtures，用于验证 MoonBit golden bytes/JSON 与成熟生态一致；
+- deterministic property-style tests 批量覆盖 varint、zig-zag、动态 message 二进制和 JSON roundtrip；
 - golden tests 覆盖 varint 向量、field bytes、schema parser、动态 message roundtrip、unknown field、packed repeated、codegen 快照、JSON 转义/输出/解析、enum parser/codegen、Python/Go oracle 兼容样例。
 
 ## 核心功能规划

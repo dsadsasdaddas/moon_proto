@@ -1019,3 +1019,139 @@ test "nested message binary and json roundtrip" {
     JsonDecodeOk(decoded) => assert_true(decoded == person)
   }
 }
+
+///|
+fn deterministic_u64(seed : Int) -> UInt64 {
+  let x = seed.to_uint64()
+  (x * 9973UL) ^ (x << 9) ^ (x >> 3)
+}
+
+///|
+fn deterministic_i64(seed : Int) -> Int64 {
+  if seed % 2 == 0 {
+    (seed * 7919).to_int64()
+  } else {
+    (-(seed * 7919)).to_int64()
+  }
+}
+
+///|
+test "property varint roundtrip deterministic corpus" {
+  for i = 0; i < 256; i = i + 1 {
+    let value = deterministic_u64(i)
+    let encoded = encode_varint_u64(value)
+    match decode_varint_u64(encoded) {
+      U64Err(_) => fail("varint deterministic corpus decode failed")
+      U64Ok(decoded, next) => {
+        assert_eq(decoded, value)
+        assert_eq(next, encoded.length())
+      }
+    }
+  }
+  let edge_cases = [
+    0UL, 1UL, 127UL, 128UL, 16383UL, 16384UL, 0xffffffffUL, 0xffffffffffffffffUL,
+  ]
+  for value in edge_cases {
+    let encoded = encode_varint_u64(value)
+    match decode_varint_u64(encoded) {
+      U64Err(_) => fail("varint edge decode failed")
+      U64Ok(decoded, next) => {
+        assert_eq(decoded, value)
+        assert_eq(next, encoded.length())
+      }
+    }
+  }
+}
+
+///|
+test "property zigzag roundtrip deterministic corpus" {
+  for i = -128; i <= 128; i = i + 1 {
+    assert_eq(decode_zigzag_int(encode_zigzag_int(i)), i)
+  }
+  for i = 0; i < 256; i = i + 1 {
+    let value = deterministic_i64(i)
+    assert_eq(decode_zigzag_i64(encode_zigzag_i64(value)), value)
+  }
+}
+
+///|
+test "property dynamic message binary and json roundtrip corpus" {
+  let desc = MessageDescriptor::{
+    name: "Sample",
+    fields: [
+      FieldDescriptor::{
+        name: "id",
+        typ: UInt64Type,
+        number: 1,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "name",
+        typ: StringType,
+        number: 2,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "active",
+        typ: BoolType,
+        number: 3,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "score",
+        typ: SInt64Type,
+        number: 4,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "tags",
+        typ: StringType,
+        number: 5,
+        label: Repeated,
+      },
+      FieldDescriptor::{
+        name: "samples",
+        typ: UInt64Type,
+        number: 6,
+        label: Repeated,
+      },
+    ],
+  }
+  for i = 0; i < 64; i = i + 1 {
+    let id = deterministic_u64(i)
+    let score = deterministic_i64(i)
+    let msg = message_value([
+      message_field("id", UInt64Value(id)),
+      message_field("name", StringValue("user" + i.to_string())),
+      message_field("active", BoolValue(i % 2 == 0)),
+      message_field("score", Int64Value(score)),
+      repeated_message_field("tags", [
+        StringValue("tag" + i.to_string()),
+        StringValue("group" + (i % 7).to_string()),
+      ]),
+      repeated_message_field("samples", [
+        UInt64Value(deterministic_u64(i + 1)),
+        UInt64Value(deterministic_u64(i + 2)),
+      ]),
+    ])
+    match encode_message(desc, msg) {
+      EncodeMessageErr(_) => fail("property message encode failed")
+      EncodeMessageOk(bytes) =>
+        match decode_message(desc, bytes) {
+          DecodeMessageErr(_) => fail("property message decode failed")
+          DecodeMessageOk(decoded, next) => {
+            assert_eq(next, bytes.length())
+            assert_true(decoded == msg)
+          }
+        }
+    }
+    match message_to_json(desc, msg) {
+      JsonErr(_) => fail("property message json encode failed")
+      JsonOk(json) =>
+        match json_to_message(desc, json) {
+          JsonDecodeErr(_) => fail("property message json decode failed")
+          JsonDecodeOk(decoded) => assert_true(decoded == msg)
+        }
+    }
+  }
+}

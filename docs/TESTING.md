@@ -27,6 +27,7 @@ Current tests cover:
 - schema validator positive and negative cases;
 - nested message binary and JSON roundtrip through descriptor registries;
 - codegen runtime helper snapshots, CLI smoke generation, and generated-code compile checks;
+- deterministic property-style roundtrip corpora for varint, zig-zag, dynamic message binary and JSON;
 - official Python `google.protobuf` and Go `google.golang.org/protobuf` oracle fixtures for a full scalar/repeated user message.
 
 Run the full matrix:
@@ -51,5 +52,4 @@ python3 tests/oracle/python_protobuf_oracle.py --write
 
 Planned next verification:
 
-- add property-style roundtrip tests for scalar and repeated fields.
 - add file-based CLI tests once file IO is available.

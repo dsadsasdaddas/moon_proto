@@ -32,6 +32,7 @@ a complete proto3 toolkit:
 - MoonBit source generator for message structs, enums and descriptor functions;
 - schema validator for field numbers, duplicates and proto3 enum invariants;
 - official Python and Go protobuf oracle fixtures for cross-language compatibility;
+- deterministic property-style roundtrip corpora for binary and JSON paths;
 - golden tests for all implemented pieces.
 
 ## Example
