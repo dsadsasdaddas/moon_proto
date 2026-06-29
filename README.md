@@ -31,7 +31,7 @@ a complete proto3 toolkit:
 - a small `.proto` lexer/parser for `syntax`, `package`, `message`, `enum`, scalar fields, `optional`, and `repeated`;
 - MoonBit source generator for message structs, enums and descriptor functions;
 - schema validator for field numbers, duplicates and proto3 enum invariants;
-- official Python protobuf oracle fixtures for cross-language compatibility;
+- official Python and Go protobuf oracle fixtures for cross-language compatibility;
 - golden tests for all implemented pieces.
 
 ## Example
@@ -115,6 +115,7 @@ match parse_proto(src) {
 
 ```bash
 python3 tests/oracle/python_protobuf_oracle.py
+(cd tests/oracle && go run .)
 moon check
 moon build
 moon test
@@ -130,12 +131,11 @@ moon test --target all
 - M5: protobuf-style JSON writer/parser for scalar/repeated messages. ✅
 - M6: top-level enum parser and codegen. ✅
 - M7: enum field runtime/JSON support. ✅
-- M8: Python protobuf oracle compatibility fixtures. ✅
+- M8: Python/Go protobuf oracle compatibility fixtures. ✅
 - M9: schema validator for AI/codegen safety. ✅
 - M10: nested message dynamic runtime/JSON support. ✅
 - M11: oneof and maps.
-- M12: Go oracle cross-language compatibility tests.
-- M13: CLI `moon_proto gen schema.proto -o generated/` and examples.
+- M12: CLI `moon_proto gen schema.proto -o generated/` and examples.
 
 ## License
 

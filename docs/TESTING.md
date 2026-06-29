@@ -26,19 +26,21 @@ Current tests cover:
 - enum field binary and JSON roundtrip;
 - schema validator positive and negative cases;
 - nested message binary and JSON roundtrip through descriptor registries;
-- official Python `google.protobuf` oracle fixtures for a full scalar/repeated user message.
+- official Python `google.protobuf` and Go `google.golang.org/protobuf` oracle fixtures for a full scalar/repeated user message.
 
 Run the full matrix:
 
 ```bash
 python3 tests/oracle/python_protobuf_oracle.py
+(cd tests/oracle && go run .)
 moon check
 moon build
 moon test
 moon test --target all
 ```
 
-Python oracle fixtures live in `tests/fixtures/` and can be regenerated with:
+Python/Go oracle fixtures live in `tests/fixtures/`. The Python script can
+regenerate the checked-in binary/hex/JSON fixtures:
 
 ```bash
 python3 tests/oracle/python_protobuf_oracle.py --write

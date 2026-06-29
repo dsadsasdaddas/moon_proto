@@ -13,6 +13,12 @@ jobs:
         run: python3 -m pip install --user 'protobuf==3.20.3'
       - name: Python protobuf oracle fixtures
         run: python3 tests/oracle/python_protobuf_oracle.py
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: Go protobuf oracle fixtures
+        run: cd tests/oracle && go run .
       - name: Install MoonBit toolchain
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
