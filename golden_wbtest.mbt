@@ -110,7 +110,16 @@ test "parser tolerates imports options reserved and field options" {
       assert_eq(file.package_name, "demo.v1")
       assert_eq(file.enums.length(), 1)
       assert_eq(file.enums[0].values.length(), 2)
+      assert_eq(file.enum_reservations.length(), 1)
+      assert_eq(file.enum_reservations[0].owner, "Status")
+      assert_eq(file.enum_reservations[0].numbers.length(), 1)
+      assert_eq(file.enum_reservations[0].numbers[0].start, 9)
+      assert_eq(file.enum_reservations[0].numbers[0].end, 12)
       assert_eq(file.messages.length(), 1)
+      assert_eq(file.message_reservations.length(), 1)
+      assert_eq(file.message_reservations[0].owner, "Event")
+      assert_eq(file.message_reservations[0].numbers.length(), 2)
+      assert_eq(file.message_reservations[0].names[0], "old_name")
       let fields = file.messages[0].fields
       assert_eq(fields.length(), 3)
       assert_true(fields[0].typ == UInt64Type)
@@ -121,6 +130,58 @@ test "parser tolerates imports options reserved and field options" {
       )
     }
     ProtoErr(_) => fail("expected parser to accept decorated proto schema")
+  }
+}
+
+///|
+test "schema validator rejects parsed reserved reuse" {
+  let src =
+    #|syntax = "proto3";
+    #|package demo;
+    #|enum BadStatus {
+    #|  reserved 2;
+    #|  reserved "BAD_NAME";
+    #|  STATUS_UNSPECIFIED = 0;
+    #|  BAD_NAME = 1;
+    #|  ALSO_BAD = 2;
+    #|}
+    #|message Bad {
+    #|  reserved 1, 5 to 6;
+    #|  reserved "old_name";
+    #|  uint64 id = 1;
+    #|  string old_name = 2;
+    #|  bool another = 5;
+    #|}
+  match parse_proto(src) {
+    ProtoErr(_) => fail("reserved reuse schema should parse")
+    ProtoOk(file) =>
+      match validate_proto_file(file) {
+        SchemaValid => fail("reserved reuse should fail validation")
+        SchemaInvalid(issues) => {
+          let mut saw_field_number = false
+          let mut saw_field_name = false
+          let mut saw_enum_number = false
+          let mut saw_enum_name = false
+          for issue in issues {
+            if issue.message == "field uses reserved number" {
+              saw_field_number = true
+            }
+            if issue.message == "field uses reserved name" {
+              saw_field_name = true
+            }
+            if issue.message == "enum value uses reserved number" {
+              saw_enum_number = true
+            }
+            if issue.message == "enum value uses reserved name" {
+              saw_enum_name = true
+            }
+          }
+          assert_true(saw_field_number)
+          assert_true(saw_field_name)
+          assert_true(saw_enum_number)
+          assert_true(saw_enum_name)
+        }
+      }
   }
 }
 
@@ -1209,6 +1270,8 @@ test "schema validator reports enum and top level issues" {
         ],
       },
     ],
+    message_reservations: [],
+    enum_reservations: [],
   }
   match validate_proto_file(file) {
     SchemaValid => fail("invalid proto file should fail validation")

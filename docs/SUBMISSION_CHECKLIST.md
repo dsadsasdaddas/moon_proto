@@ -20,7 +20,7 @@
 | 要求 | 证据 |
 | --- | --- |
 | MoonBit 为主要实现语言 | `*.mbt` runtime/parser/codegen/tests 共 15 个源文件 |
-| 项目规模 4k+ MoonBit LOC | 当前 MoonBit 源码约 `6012` 行 |
+| 项目规模 4k+ MoonBit LOC | 当前 MoonBit 源码约 `6663` 行 |
 | 清晰工程结构 | wire/schema/runtime/json/codegen/cli/tests/docs 分层 |
 | 示例 schema | `examples/simple/user.proto`、`examples/decorated/telemetry.proto` |
 | 文件版生成入口 | `scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/` |
@@ -31,8 +31,8 @@
 
 - protobuf wire type、key packing/parsing；
 - varint、zig-zag、fixed32/fixed64、length-delimited bytes/string；
-- proto3 schema parser 和 descriptor model，支持点分 package/type、import、option、reserved/extensions 与字段/枚举值 option 容错解析；
-- schema validation diagnostics；
+- proto3 schema parser 和 descriptor model，支持点分 package/type、import、option、真实 reserved number/name descriptor、extensions 与字段/枚举值 option 容错解析；
+- schema validation diagnostics，包含 reserved number/name 复用检查；
 - descriptor-driven dynamic message binary encode/decode；
 - repeated 与 proto3 packed repeated；
 - unknown field skipping；
@@ -44,7 +44,7 @@
 - MoonBit source code generator；
 - file-based generator wrapper；
 - Schema Doctor CLI；
-- old/new schema compatibility checker；
+- old/new schema compatibility checker，包含 removed-but-reserved 与 reserved 契约保留检查；
 - AI verify Markdown/HTML report generator；
 - Python/Go official protobuf oracle fixtures, including 32-bit numeric boundary, float/double and special float fixtures；
 - generated-code compile check，适合验证 AI 生成代码。
@@ -57,7 +57,7 @@
 | Go oracle | `(cd tests/oracle && go run .)` |
 | MoonBit check | `moon check` |
 | MoonBit build | `moon build` |
-| MoonBit tests | `moon test`，当前 `41/41 passed` |
+| MoonBit tests | `moon test`，当前 `42/42 passed` |
 | All targets | `moon test --target all` 覆盖 wasm/wasm-gc/js/native |
 | CLI smoke | `moon run cmd/main -- gen --example` |
 | File-based generator | `python3 scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/` |

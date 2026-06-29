@@ -36,8 +36,8 @@ The project has a small but end-to-end verifiable protobuf laboratory pipeline:
 - length-delimited bytes/string helpers;
 - field-level helpers for `uint64`, `bool`, `sint64`, `string`, `bytes`;
 - proto3 schema model for messages, fields, labels, scalar types, enums, named messages, maps and oneof groups;
-- `.proto` lexer/parser for `syntax`, dotted `package` names, `import`, top-level/message/enum `option`, `reserved`/`extensions`, `message`, `enum`, scalar/named fields, field/enum options, `optional`, `repeated`, `map`, and `oneof`;
-- schema validator for field numbers, duplicate names/numbers, proto3 enum invariants, top-level conflicts and map constraints;
+- `.proto` lexer/parser for `syntax`, dotted `package` names, `import`, top-level/message/enum `option`, real `reserved` number/name descriptors, `extensions`, `message`, `enum`, scalar/named fields, field/enum options, `optional`, `repeated`, `map`, and `oneof`;
+- schema validator for field numbers, duplicate names/numbers, proto3 enum invariants, top-level conflicts, map constraints, and field/enum reserved-number/name reuse;
 - schema-driven dynamic message encode/decode for scalar, repeated, packed repeated, enum, nested message, map and oneof fields;
 - unknown-field skipping during decode;
 - protobuf-style JSON writer/parser for scalar/repeated/map/nested/oneof dynamic messages;
@@ -45,7 +45,7 @@ The project has a small but end-to-end verifiable protobuf laboratory pipeline:
 - file-based generator wrapper for `.proto` input and generated `.mbt` output;
 - file-based Schema Doctor CLI for stable diagnostics on valid and invalid schemas;
 - AI verification CLI that runs doctor, schema inspection, codegen, generated-code compile checks, and Markdown/HTML report generation;
-- old/new schema compatibility checker for detecting field, enum, package and type breaking changes;
+- old/new schema compatibility checker for detecting field, enum, package, type and reserved-contract breaking changes;
 - Python and Go official protobuf oracle fixtures for cross-language compatibility checks, including 32-bit numeric boundary values, float/double values, and special NaN/Infinity JSON values;
 - deterministic property-style roundtrip corpora for binary and JSON paths;
 - generated-code compile checks and GitHub Actions CI.
@@ -196,8 +196,9 @@ tests/codegen/compile_generated.sh
 - M18: old/new schema compatibility checking with Markdown/HTML reports. Done.
 - M19: larger conformance-lite corpus and float/double/special-float oracle fixtures. Done.
 - M20: import/option/reserved/extensions/field-option parser tolerance for real-world `.proto` files. Done.
-- M21: adapters and differential tests around existing MoonBit protobuf packages. Planned.
-- M22: descriptor set / reflection import path. Planned.
+- M21: reserved number/name validation and compatibility contracts. Done.
+- M22: adapters and differential tests around existing MoonBit protobuf packages. Planned.
+- M23: descriptor set / reflection import path. Planned.
 
 ## License
 

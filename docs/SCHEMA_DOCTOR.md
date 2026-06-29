@@ -28,7 +28,7 @@ issues: 1
 message.Bad.field.1: duplicate field number
 ```
 
-The parser accepts common real-world proto decorations before diagnostics run: dotted package/type names, `import`, `option`, `reserved`, `extensions`, and field/enum value option brackets. The current diagnostics are backed by the MoonBit `validate_proto_file` implementation and cover:
+The parser accepts common real-world proto decorations before diagnostics run: dotted package/type names, `import`, `option`, `reserved`, `extensions`, and field/enum value option brackets. Reserved number/name declarations are retained as descriptors, so Schema Doctor and compat checks can enforce them. The current diagnostics are backed by the MoonBit `validate_proto_file` implementation and cover:
 
 - proto3 syntax check;
 - field number range and protobuf-reserved 19000..19999 numbers;
@@ -38,7 +38,9 @@ The parser accepts common real-world proto decorations before diagnostics run: d
 - duplicate enum names or values;
 - top-level message/enum name conflicts;
 - map key/value constraints;
-- oneof group name validation.
+- oneof group name validation;
+- field/enum value reuse of reserved numbers or names;
+- duplicate or overlapping reserved ranges and duplicate reserved names.
 
 ## Schema inspect
 
@@ -63,14 +65,15 @@ python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/sim
 The compatibility checker treats these changes as breaking:
 
 - old message removed;
-- old field number removed;
+- old field number removed without reserving its old number and name;
 - old field number reused with a different name;
 - old field type changed;
 - old field label changed, including singular/repeated/optional/oneof changes;
 - old field name moved to a different number;
 - old enum removed;
-- old enum value removed or moved to a different number;
+- old enum value removed without reserving its old number and name, or moved to a different number;
 - package or syntax changed;
+- old reserved number/name contracts are dropped or reused by new fields/enum values;
 - either old or new schema fails Schema Doctor validation.
 
 Adding new fields or new enum values is accepted. The command returns a non-zero exit status for incompatible schemas and can emit Markdown or HTML reports by choosing the report file suffix.

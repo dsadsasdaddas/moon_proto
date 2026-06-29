@@ -129,6 +129,145 @@ fn has_duplicate_field_number(
 }
 
 ///|
+fn reserved_range_contains(range : ReservedNumberRange, number : Int) -> Bool {
+  number >= range.start && number <= range.end
+}
+
+///|
+fn reserved_ranges_contain(
+  ranges : Array[ReservedNumberRange],
+  number : Int,
+) -> Bool {
+  for range in ranges {
+    if reserved_range_contains(range, number) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn reserved_names_contain(names : Array[String], name : String) -> Bool {
+  for reserved_name in names {
+    if reserved_name == name {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn reservation_for_owner(
+  reservations : Array[ReservedDescriptor],
+  owner : String,
+) -> ReservedDescriptor {
+  let numbers : Array[ReservedNumberRange] = []
+  let names : Array[String] = []
+  for reservation in reservations {
+    if reservation.owner == owner {
+      for range in reservation.numbers {
+        numbers.push(range)
+      }
+      for name in reservation.names {
+        names.push(name)
+      }
+    }
+  }
+  ReservedDescriptor::{ owner, numbers, names }
+}
+
+///|
+fn has_duplicate_reserved_name(names : Array[String], index : Int) -> Bool {
+  for i = 0; i < index; i = i + 1 {
+    if names[i] == names[index] {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn reserved_range_overlaps(
+  ranges : Array[ReservedNumberRange],
+  index : Int,
+) -> Bool {
+  let current = ranges[index]
+  for i = 0; i < index; i = i + 1 {
+    let other = ranges[i]
+    if current.start <= other.end && other.start <= current.end {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn validate_reserved_descriptor(
+  issues : Array[SchemaIssue],
+  path : String,
+  reservation : ReservedDescriptor,
+  is_enum : Bool,
+) -> Unit {
+  for i = 0; i < reservation.numbers.length(); i = i + 1 {
+    let range = reservation.numbers[i]
+    let range_path = path + ".reserved." + range.start.to_string()
+    if range.start > range.end {
+      push_issue(issues, range_path, "reserved range start must be <= end")
+    }
+    let start_valid = if is_enum {
+      is_valid_enum_reserved_number(range.start)
+    } else {
+      is_valid_field_number(range.start)
+    }
+    let end_valid = if is_enum {
+      is_valid_enum_reserved_number(range.end)
+    } else {
+      is_valid_field_number(range.end)
+    }
+    if !start_valid || !end_valid {
+      push_issue(issues, range_path, "invalid reserved number range")
+    }
+    if reserved_range_overlaps(reservation.numbers, i) {
+      push_issue(issues, range_path, "overlapping reserved number range")
+    }
+  }
+  for i = 0; i < reservation.names.length(); i = i + 1 {
+    let name = reservation.names[i]
+    let name_path = path + ".reserved." + name
+    validate_nonempty_name(issues, name_path, name)
+    if has_duplicate_reserved_name(reservation.names, i) {
+      push_issue(issues, name_path, "duplicate reserved name")
+    }
+  }
+}
+
+///|
+fn validate_message_reservations(
+  issues : Array[SchemaIssue],
+  message : MessageDescriptor,
+  reservation : ReservedDescriptor,
+) -> Unit {
+  let path = "message." + message.name
+  validate_reserved_descriptor(issues, path, reservation, false)
+  for field in message.fields {
+    if reserved_ranges_contain(reservation.numbers, field.number) {
+      push_issue(
+        issues,
+        path + ".field." + field.name + ".number",
+        "field uses reserved number",
+      )
+    }
+    if reserved_names_contain(reservation.names, field.name) {
+      push_issue(
+        issues,
+        path + ".field." + field.name + ".name",
+        "field uses reserved name",
+      )
+    }
+  }
+}
+
+///|
 pub fn validate_message_descriptor(
   message : MessageDescriptor,
 ) -> SchemaValidationResult {
@@ -183,6 +322,42 @@ fn has_duplicate_enum_value_number(
     }
   }
   false
+}
+
+///|
+fn is_valid_enum_reserved_number(number : Int) -> Bool {
+  number >= 0
+}
+
+///|
+fn validate_enum_reservations(
+  issues : Array[SchemaIssue],
+  enum_desc : EnumDescriptor,
+  reservation : ReservedDescriptor,
+) -> Unit {
+  let path = "enum." + enum_desc.name
+  validate_reserved_descriptor(
+    issues,
+    path,
+    reservation,
+    true,
+  )
+  for value in enum_desc.values {
+    if reserved_ranges_contain(reservation.numbers, value.number) {
+      push_issue(
+        issues,
+        path + ".value." + value.name + ".number",
+        "enum value uses reserved number",
+      )
+    }
+    if reserved_names_contain(reservation.names, value.name) {
+      push_issue(
+        issues,
+        path + ".value." + value.name + ".name",
+        "enum value uses reserved name",
+      )
+    }
+  }
 }
 
 ///|
@@ -295,6 +470,11 @@ pub fn validate_proto_file(file : ProtoFile) -> SchemaValidationResult {
   for i = 0; i < file.messages.length(); i = i + 1 {
     let message = file.messages[i]
     append_validation_result(issues, validate_message_descriptor(message))
+    validate_message_reservations(
+      issues,
+      message,
+      reservation_for_owner(file.message_reservations, message.name),
+    )
     if has_duplicate_top_level_message(file.messages, i) {
       push_issue(
         issues,
@@ -306,6 +486,11 @@ pub fn validate_proto_file(file : ProtoFile) -> SchemaValidationResult {
   for i = 0; i < file.enums.length(); i = i + 1 {
     let enum_desc = file.enums[i]
     append_validation_result(issues, validate_enum_descriptor(enum_desc))
+    validate_enum_reservations(
+      issues,
+      enum_desc,
+      reservation_for_owner(file.enum_reservations, enum_desc.name),
+    )
     if has_duplicate_top_level_enum(file.enums, i) {
       push_issue(
         issues,

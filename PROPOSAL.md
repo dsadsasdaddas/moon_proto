@@ -36,8 +36,8 @@ Moon Proto Lab 面向 MoonBit protobuf 生态，提供动态 `.proto` schema 解
 - length-delimited bytes/string 编解码；
 - 常用字段编码 helper：uint64、bool、sint64、string、bytes；
 - proto3 schema AST：message、field、label、scalar type、enum、named message、map type、oneof group；
-- `.proto` lexer/parser 子集：syntax、点分 package、import、option、reserved/extensions、message、enum、optional/repeated、map、oneof、字段/枚举值 options、标量字段和点分 named type；
-- schema validator 与 Schema Doctor：字段号范围、重复字段名/号、proto3 enum 首值为 0、顶层命名冲突、map key/value 约束，并输出稳定诊断路径；
+- `.proto` lexer/parser 子集：syntax、点分 package、import、option、真实 reserved number/name descriptor、extensions、message、enum、optional/repeated、map、oneof、字段/枚举值 options、标量字段和点分 named type；
+- schema validator 与 Schema Doctor：字段号范围、重复字段名/号、proto3 enum 首值为 0、顶层命名冲突、map key/value 约束、reserved number/name 复用检查，并输出稳定诊断路径；
 - schema-driven 动态 message 编解码，覆盖标量、repeated、packed repeated、enum、nested message、map、oneof；
 - 解码时跳过 unknown fields，便于向前/向后兼容；
 - protobuf-style JSON writer/parser，支持标量、repeated、bytes base64、64-bit 整数字符串化、nested message、map object mapping、oneof 冲突拒绝；
@@ -52,12 +52,12 @@ Moon Proto Lab 面向 MoonBit protobuf 生态，提供动态 `.proto` schema 解
 ## 核心功能范围
 
 1. **动态 schema lab**：解析 proto3 schema 子集，构建 MoonBit descriptor，支持开发者快速检查 schema 结构。
-2. **Schema Doctor / schema validation**：检查字段号、重复定义、enum 规则、map 约束、oneof 冲突等常见错误，输出稳定诊断路径，适合验证 AI 生成 schema。
+2. **Schema Doctor / schema validation**：检查字段号、重复定义、enum 规则、map 约束、oneof 冲突、reserved number/name 复用等常见错误，输出稳定诊断路径，适合验证 AI 生成 schema。
 3. **动态 message runtime**：在不依赖生成 typed struct 的情况下，对 descriptor-driven message 进行二进制和 JSON roundtrip。
 4. **兼容性 oracle**：使用 Python/Go 官方 protobuf 生成和验证 fixtures，减少“实现能跑但不兼容”的风险。
-5. **schema 兼容性检查**：比较 old/new `.proto`，发现字段号复用、字段类型变化、字段迁移、enum 值变化、package 变化等破坏性修改。
+5. **schema 兼容性检查**：比较 old/new `.proto`，发现字段号复用、字段类型变化、字段迁移、enum 值变化、package 变化、reserved 契约弱化或复用等破坏性修改。
 6. **AI verify 报告**：一条命令完成 doctor、inspect、codegen、generated-code compile check，并输出 Markdown/HTML 报告。
-7. **真实 schema 容错解析**：支持常见 import、option、reserved、field option 与点分类型，使工具能处理更接近生产项目的 `.proto`。
+7. **真实 schema 容错解析**：支持常见 import、option、reserved、field option 与点分类型，并把 reserved 升级为可验证的 schema/compat 契约，使工具能处理更接近生产项目的 `.proto`。
 8. **代码生成实验**：生成 MoonBit struct、enum、descriptor 和 helper，并通过 compile check 保证生成结果可构建。
 9. **工程化交付**：README、测试说明、开发报告、提交清单、公开 GitHub/Gitlink 仓库和 CI。
 

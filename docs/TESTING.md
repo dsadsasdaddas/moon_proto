@@ -12,6 +12,7 @@ Current tests cover:
 - a hand-checked `User` message byte stream;
 - a small proto3 lexer/parser smoke test;
 - parser tolerance for dotted package/type names, import, option, reserved/extensions, and field/enum options;
+- reserved number/name descriptors, Schema Doctor reserved-reuse rejection, and compatibility behavior for removed-but-reserved fields;
 - schema-driven dynamic message encode golden bytes;
 - schema-driven dynamic message decode roundtrip;
 - unknown-field skipping;
@@ -71,7 +72,7 @@ The project is positioned as a protobuf ecosystem verification lab for MoonBit. 
 - generated-code compile checks ensure generated MoonBit source actually builds;
 - verify reports make the result reviewable as Markdown/HTML artifacts.
 
-Completed parser/schema-tool verification now includes old/new compatibility checks, larger conformance-lite oracle fixtures, and import/option/reserved parser tolerance. Planned next verification:
+Completed parser/schema-tool verification now includes old/new compatibility checks, larger conformance-lite oracle fixtures, import/option/reserved parser tolerance, and reserved contract validation. Planned next verification:
 
 - differential tests against existing MoonBit protobuf packages where APIs are compatible;
 - descriptor set / reflection fixtures;

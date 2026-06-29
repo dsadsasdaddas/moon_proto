@@ -99,6 +99,36 @@ fn scalar_type_name(typ : @proto.ScalarType) -> String {
 }
 
 ///|
+fn reserved_range_text(range : @proto.ReservedNumberRange) -> String {
+  if range.start == range.end {
+    range.start.to_string()
+  } else {
+    range.start.to_string() + " to " + range.end.to_string()
+  }
+}
+
+///|
+fn reserved_ranges_text(ranges : Array[@proto.ReservedNumberRange]) -> String {
+  let parts : Array[String] = []
+  for range in ranges {
+    parts.push(reserved_range_text(range))
+  }
+  join_lines_with(parts, ", ")
+}
+
+///|
+fn join_lines_with(parts : Array[String], sep : String) -> String {
+  let mut out = ""
+  for i = 0; i < parts.length(); i = i + 1 {
+    if i > 0 {
+      out = out + sep
+    }
+    out = out + parts[i]
+  }
+  out
+}
+
+///|
 fn field_label_name(label : @proto.FieldLabel) -> String {
   match label {
     @proto.Singular => "singular"
@@ -151,12 +181,26 @@ fn inspect_report(file : @proto.ProtoFile) -> String {
         scalar_type_name(field.typ),
       )
     }
+    let reservation = reservation_for_owner(file.message_reservations, msg.name)
+    if reservation.numbers.length() > 0 {
+      lines.push("  reserved numbers: " + reserved_ranges_text(reservation.numbers))
+    }
+    if reservation.names.length() > 0 {
+      lines.push("  reserved names: " + join_lines_with(reservation.names, ", "))
+    }
   }
   lines.push("enums: " + file.enums.length().to_string())
   for enum_desc in file.enums {
     lines.push("enum " + enum_desc.name + " values=" + enum_desc.values.length().to_string())
     for value in enum_desc.values {
       lines.push("  " + value.number.to_string() + " " + value.name)
+    }
+    let reservation = reservation_for_owner(file.enum_reservations, enum_desc.name)
+    if reservation.numbers.length() > 0 {
+      lines.push("  reserved numbers: " + reserved_ranges_text(reservation.numbers))
+    }
+    if reservation.names.length() > 0 {
+      lines.push("  reserved names: " + join_lines_with(reservation.names, ", "))
     }
   }
   join_lines(lines)
@@ -271,6 +315,70 @@ fn find_enum(
 }
 
 ///|
+fn reservation_for_owner(
+  reservations : Array[@proto.ReservedDescriptor],
+  owner : String,
+) -> @proto.ReservedDescriptor {
+  let numbers : Array[@proto.ReservedNumberRange] = []
+  let names : Array[String] = []
+  for reservation in reservations {
+    if reservation.owner == owner {
+      for range in reservation.numbers {
+        numbers.push(range)
+      }
+      for name in reservation.names {
+        names.push(name)
+      }
+    }
+  }
+  @proto.ReservedDescriptor::{ owner, numbers, names }
+}
+
+///|
+fn reserved_range_contains(
+  range : @proto.ReservedNumberRange,
+  number : Int,
+) -> Bool {
+  number >= range.start && number <= range.end
+}
+
+///|
+fn reserved_ranges_contain(
+  ranges : Array[@proto.ReservedNumberRange],
+  number : Int,
+) -> Bool {
+  for range in ranges {
+    if reserved_range_contains(range, number) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn reserved_names_contain(names : Array[String], name : String) -> Bool {
+  for reserved_name in names {
+    if reserved_name == name {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn reserved_range_covered(
+  ranges : Array[@proto.ReservedNumberRange],
+  wanted : @proto.ReservedNumberRange,
+) -> Bool {
+  for range in ranges {
+    if range.start <= wanted.start && range.end >= wanted.end {
+      return true
+    }
+  }
+  false
+}
+
+///|
 fn find_enum_value_by_number(
   values : Array[@proto.EnumValueDescriptor],
   number : Int,
@@ -330,6 +438,7 @@ fn compare_field_compat(
   message_name : String,
   old_field : @proto.FieldDescriptor,
   new_fields : Array[@proto.FieldDescriptor],
+  new_reservation : @proto.ReservedDescriptor,
 ) -> Unit {
   let path = "message." + message_name + ".field." + old_field.number.to_string()
   match find_field_by_number(new_fields, old_field.number) {
@@ -373,13 +482,52 @@ fn compare_field_compat(
             " to " +
             new_field.number.to_string(),
           )
-        None =>
-          push_compat_issue(
-            issues,
-            path,
-            "field removed: " + old_field.name,
+        None => {
+          let reserved_number = reserved_ranges_contain(
+            new_reservation.numbers,
+            old_field.number,
           )
+          let reserved_name = reserved_names_contain(
+            new_reservation.names,
+            old_field.name,
+          )
+          if !(reserved_number && reserved_name) {
+            push_compat_issue(
+              issues,
+              path,
+              "field removed without reserving number and name: " +
+              old_field.name,
+            )
+          }
+        }
       }
+  }
+}
+
+///|
+fn compare_message_reservation_compat(
+  issues : Array[String],
+  owner : String,
+  old_reservation : @proto.ReservedDescriptor,
+  new_reservation : @proto.ReservedDescriptor,
+) -> Unit {
+  for range in old_reservation.numbers {
+    if !reserved_range_covered(new_reservation.numbers, range) {
+      push_compat_issue(
+        issues,
+        "message." + owner + ".reserved." + range.start.to_string(),
+        "reserved number range not preserved: " + reserved_range_text(range),
+      )
+    }
+  }
+  for name in old_reservation.names {
+    if !reserved_names_contain(new_reservation.names, name) {
+      push_compat_issue(
+        issues,
+        "message." + owner + ".reserved." + name,
+        "reserved name not preserved",
+      )
+    }
   }
 }
 
@@ -388,9 +536,39 @@ fn compare_message_compat(
   issues : Array[String],
   old_msg : @proto.MessageDescriptor,
   new_msg : @proto.MessageDescriptor,
+  old_reservation : @proto.ReservedDescriptor,
+  new_reservation : @proto.ReservedDescriptor,
 ) -> Unit {
   for old_field in old_msg.fields {
-    compare_field_compat(issues, old_msg.name, old_field, new_msg.fields)
+    compare_field_compat(
+      issues,
+      old_msg.name,
+      old_field,
+      new_msg.fields,
+      new_reservation,
+    )
+  }
+  compare_message_reservation_compat(
+    issues,
+    old_msg.name,
+    old_reservation,
+    new_reservation,
+  )
+  for new_field in new_msg.fields {
+    if reserved_ranges_contain(old_reservation.numbers, new_field.number) {
+      push_compat_issue(
+        issues,
+        "message." + old_msg.name + ".field." + new_field.number.to_string(),
+        "field uses previously reserved number",
+      )
+    }
+    if reserved_names_contain(old_reservation.names, new_field.name) {
+      push_compat_issue(
+        issues,
+        "message." + old_msg.name + ".field." + new_field.name,
+        "field uses previously reserved name",
+      )
+    }
   }
 }
 
@@ -399,6 +577,8 @@ fn compare_enum_compat(
   issues : Array[String],
   old_enum : @proto.EnumDescriptor,
   new_enum : @proto.EnumDescriptor,
+  old_reservation : @proto.ReservedDescriptor,
+  new_reservation : @proto.ReservedDescriptor,
 ) -> Unit {
   for old_value in old_enum.values {
     let path =
@@ -426,13 +606,59 @@ fn compare_enum_compat(
               " to " +
               new_value.number.to_string(),
             )
-          None =>
-            push_compat_issue(
-              issues,
-              path,
-              "enum value removed: " + old_value.name,
+          None => {
+            let reserved_number = reserved_ranges_contain(
+              new_reservation.numbers,
+              old_value.number,
             )
+            let reserved_name = reserved_names_contain(
+              new_reservation.names,
+              old_value.name,
+            )
+            if !(reserved_number && reserved_name) {
+              push_compat_issue(
+                issues,
+                path,
+                "enum value removed without reserving number and name: " +
+                old_value.name,
+              )
+            }
+          }
         }
+    }
+  }
+  for range in old_reservation.numbers {
+    if !reserved_range_covered(new_reservation.numbers, range) {
+      push_compat_issue(
+        issues,
+        "enum." + old_enum.name + ".reserved." + range.start.to_string(),
+        "reserved number range not preserved: " + reserved_range_text(range),
+      )
+    }
+  }
+  for name in old_reservation.names {
+    if !reserved_names_contain(new_reservation.names, name) {
+      push_compat_issue(
+        issues,
+        "enum." + old_enum.name + ".reserved." + name,
+        "reserved name not preserved",
+      )
+    }
+  }
+  for new_value in new_enum.values {
+    if reserved_ranges_contain(old_reservation.numbers, new_value.number) {
+      push_compat_issue(
+        issues,
+        "enum." + old_enum.name + ".value." + new_value.number.to_string(),
+        "enum value uses previously reserved number",
+      )
+    }
+    if reserved_names_contain(old_reservation.names, new_value.name) {
+      push_compat_issue(
+        issues,
+        "enum." + old_enum.name + ".value." + new_value.name,
+        "enum value uses previously reserved name",
+      )
     }
   }
 }
@@ -478,7 +704,14 @@ fn compatibility_issues(
           "message." + old_msg.name,
           "message removed",
         )
-      Some(new_msg) => compare_message_compat(issues, old_msg, new_msg)
+      Some(new_msg) =>
+        compare_message_compat(
+          issues,
+          old_msg,
+          new_msg,
+          reservation_for_owner(old_file.message_reservations, old_msg.name),
+          reservation_for_owner(new_file.message_reservations, old_msg.name),
+        )
     }
   }
   for old_enum in old_file.enums {
@@ -489,7 +722,14 @@ fn compatibility_issues(
           "enum." + old_enum.name,
           "enum removed",
         )
-      Some(new_enum) => compare_enum_compat(issues, old_enum, new_enum)
+      Some(new_enum) =>
+        compare_enum_compat(
+          issues,
+          old_enum,
+          new_enum,
+          reservation_for_owner(old_file.enum_reservations, old_enum.name),
+          reservation_for_owner(new_file.enum_reservations, old_enum.name),
+        )
     }
   }
   issues

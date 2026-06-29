@@ -91,6 +91,20 @@ priv struct ProtoParser {
 }
 
 ///|
+priv struct ParsedMessage {
+  desc : MessageDescriptor
+  reserved_numbers : Array[ReservedNumberRange]
+  reserved_names : Array[String]
+}
+
+///|
+priv struct ParsedEnum {
+  desc : EnumDescriptor
+  reserved_numbers : Array[ReservedNumberRange]
+  reserved_names : Array[String]
+}
+
+///|
 fn ProtoParser::peek(self : ProtoParser) -> ProtoToken? {
   if self.i < self.tokens.length() {
     Some(self.tokens[self.i])
@@ -226,6 +240,67 @@ fn ProtoParser::skip_until_semicolon(self : ProtoParser) -> Bool {
 }
 
 ///|
+fn ProtoParser::parse_reserved_clause(
+  self : ProtoParser,
+  owner : String,
+  max_value : Int,
+) -> ReservedDescriptor? {
+  let numbers : Array[ReservedNumberRange] = []
+  let names : Array[String] = []
+  match self.peek() {
+    Some(StrLit(_)) => {
+      let mut done = false
+      while !done {
+        match self.consume_string() {
+          Some(name) => names.push(name)
+          None => return None
+        }
+        if !self.match_sym(",") {
+          done = true
+        }
+      }
+    }
+    Some(IntLit(_)) => {
+      let mut done = false
+      while !done {
+        let start = match self.consume_int() {
+          Some(n) => n
+          None => return None
+        }
+        let mut end = start
+        match self.peek() {
+          Some(Ident("to")) => {
+            let _ = self.advance()
+            match self.peek() {
+              Some(IntLit(_)) =>
+                match self.consume_int() {
+                  Some(n) => end = n
+                  None => return None
+                }
+              Some(Ident("max")) => {
+                let _ = self.advance()
+                end = max_value
+              }
+              _ => return None
+            }
+          }
+          _ => ()
+        }
+        numbers.push(ReservedNumberRange::{ start, end })
+        if !self.match_sym(",") {
+          done = true
+        }
+      }
+    }
+    _ => return None
+  }
+  if !self.match_sym(";") {
+    return None
+  }
+  Some(ReservedDescriptor::{ owner, numbers, names })
+}
+
+///|
 fn ProtoParser::parse_field(self : ProtoParser) -> FieldDescriptor? {
   let mut label = Singular
   let typ_name = match self.peek() {
@@ -344,7 +419,7 @@ fn ProtoParser::parse_oneof_fields(
 }
 
 ///|
-fn ProtoParser::parse_message(self : ProtoParser) -> MessageDescriptor? {
+fn ProtoParser::parse_message(self : ProtoParser) -> ParsedMessage? {
   let name = match self.consume_ident() {
     Some(n) => n
     None => return None
@@ -353,6 +428,8 @@ fn ProtoParser::parse_message(self : ProtoParser) -> MessageDescriptor? {
     return None
   }
   let fields : Array[FieldDescriptor] = []
+  let reserved_numbers : Array[ReservedNumberRange] = []
+  let reserved_names : Array[String] = []
   let mut done = false
   while !done {
     match self.peek() {
@@ -378,7 +455,20 @@ fn ProtoParser::parse_message(self : ProtoParser) -> MessageDescriptor? {
                 fields.push(f)
               }
           }
-        } else if word == "option" || word == "reserved" || word == "extensions" {
+        } else if word == "reserved" {
+          let _ = self.advance()
+          match self.parse_reserved_clause(name, 536870911) {
+            Some(reserved) => {
+              for range in reserved.numbers {
+                reserved_numbers.push(range)
+              }
+              for reserved_name in reserved.names {
+                reserved_names.push(reserved_name)
+              }
+            }
+            None => return None
+          }
+        } else if word == "option" || word == "extensions" {
           let _ = self.advance()
           if !self.skip_until_semicolon() {
             return None
@@ -393,7 +483,11 @@ fn ProtoParser::parse_message(self : ProtoParser) -> MessageDescriptor? {
       None => return None
     }
   }
-  Some(MessageDescriptor::{ name, fields })
+  Some(ParsedMessage::{
+    desc: MessageDescriptor::{ name, fields },
+    reserved_numbers,
+    reserved_names,
+  })
 }
 
 ///|
@@ -417,7 +511,7 @@ fn ProtoParser::parse_enum_value(self : ProtoParser) -> EnumValueDescriptor? {
 }
 
 ///|
-fn ProtoParser::parse_enum(self : ProtoParser) -> EnumDescriptor? {
+fn ProtoParser::parse_enum(self : ProtoParser) -> ParsedEnum? {
   let name = match self.consume_ident() {
     Some(n) => n
     None => return None
@@ -426,6 +520,8 @@ fn ProtoParser::parse_enum(self : ProtoParser) -> EnumDescriptor? {
     return None
   }
   let values : Array[EnumValueDescriptor] = []
+  let reserved_numbers : Array[ReservedNumberRange] = []
+  let reserved_names : Array[String] = []
   let mut done = false
   while !done {
     match self.peek() {
@@ -437,7 +533,20 @@ fn ProtoParser::parse_enum(self : ProtoParser) -> EnumDescriptor? {
           return None
         }
       Some(Ident(word)) =>
-        if word == "option" || word == "reserved" {
+        if word == "reserved" {
+          let _ = self.advance()
+          match self.parse_reserved_clause(name, 2147483647) {
+            Some(reserved) => {
+              for range in reserved.numbers {
+                reserved_numbers.push(range)
+              }
+              for reserved_name in reserved.names {
+                reserved_names.push(reserved_name)
+              }
+            }
+            None => return None
+          }
+        } else if word == "option" {
           let _ = self.advance()
           if !self.skip_until_semicolon() {
             return None
@@ -456,7 +565,11 @@ fn ProtoParser::parse_enum(self : ProtoParser) -> EnumDescriptor? {
       None => return None
     }
   }
-  Some(EnumDescriptor::{ name, values })
+  Some(ParsedEnum::{
+    desc: EnumDescriptor::{ name, values },
+    reserved_numbers,
+    reserved_names,
+  })
 }
 
 ///|
@@ -512,6 +625,8 @@ pub fn parse_proto(src : String) -> ParseProtoResult {
   let mut package_name = ""
   let messages : Array[MessageDescriptor] = []
   let enums : Array[EnumDescriptor] = []
+  let message_reservations : Array[ReservedDescriptor] = []
+  let enum_reservations : Array[ReservedDescriptor] = []
   while p.i < p.tokens.length() {
     match p.consume_ident() {
       Some("syntax") => {
@@ -543,12 +658,34 @@ pub fn parse_proto(src : String) -> ParseProtoResult {
       }
       Some("message") =>
         match p.parse_message() {
-          Some(m) => messages.push(m)
+          Some(parsed) => {
+            let owner = parsed.desc.name
+            messages.push(parsed.desc)
+            if parsed.reserved_numbers.length() > 0 ||
+              parsed.reserved_names.length() > 0 {
+              message_reservations.push(ReservedDescriptor::{
+                owner,
+                numbers: parsed.reserved_numbers,
+                names: parsed.reserved_names,
+              })
+            }
+          }
           None => return ProtoErr(Expected("message"))
         }
       Some("enum") =>
         match p.parse_enum() {
-          Some(e) => enums.push(e)
+          Some(parsed) => {
+            let owner = parsed.desc.name
+            enums.push(parsed.desc)
+            if parsed.reserved_numbers.length() > 0 ||
+              parsed.reserved_names.length() > 0 {
+              enum_reservations.push(ReservedDescriptor::{
+                owner,
+                numbers: parsed.reserved_numbers,
+                names: parsed.reserved_names,
+              })
+            }
+          }
           None => return ProtoErr(Expected("enum"))
         }
       Some(other) => return ProtoErr(Expected("top-level item, got " + other))
@@ -560,5 +697,7 @@ pub fn parse_proto(src : String) -> ParseProtoResult {
     package_name,
     messages: resolve_message_types(messages, enums),
     enums,
+    message_reservations,
+    enum_reservations,
   })
 }

@@ -61,12 +61,29 @@ pub(all) struct EnumDescriptor {
 } derive(Debug, Eq)
 
 ///|
+/// A reserved numeric interval written by a proto `reserved` declaration.
+pub(all) struct ReservedNumberRange {
+  start : Int
+  end : Int
+} derive(Debug, Eq)
+
+///|
+/// Reserved numbers/names attached to a top-level message or enum.
+pub(all) struct ReservedDescriptor {
+  owner : String
+  numbers : Array[ReservedNumberRange]
+  names : Array[String]
+} derive(Debug, Eq)
+
+///|
 /// Top-level proto file model used by parser and codegen.
 pub(all) struct ProtoFile {
   syntax : String
   package_name : String
   messages : Array[MessageDescriptor]
   enums : Array[EnumDescriptor]
+  message_reservations : Array[ReservedDescriptor]
+  enum_reservations : Array[ReservedDescriptor]
 } derive(Debug, Eq)
 
 ///|
@@ -114,5 +131,12 @@ pub fn ScalarType::wire_type(self : ScalarType) -> WireType {
 ///|
 /// Empty proto file constructor used by tests and future codegen.
 pub fn ProtoFile::empty() -> ProtoFile {
-  ProtoFile::{ syntax: "proto3", package_name: "", messages: [], enums: [] }
+  ProtoFile::{
+    syntax: "proto3",
+    package_name: "",
+    messages: [],
+    enums: [],
+    message_reservations: [],
+    enum_reservations: [],
+  }
 }

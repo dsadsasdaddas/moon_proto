@@ -57,6 +57,12 @@ python3 scripts/moon_proto_lab.py doctor examples/simple/user.proto \
 python3 scripts/moon_proto_lab.py inspect examples/simple/user.proto \
   | grep -q 'message User fields='
 
+python3 scripts/moon_proto_lab.py doctor examples/decorated/telemetry.proto \
+  | grep -q 'schema valid'
+
+python3 scripts/moon_proto_lab.py inspect examples/decorated/telemetry.proto \
+  | grep -q 'reserved numbers: 7, 9 to 12'
+
 python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto \
   --report generated/compat_report.md
 grep -q 'schema compatible' generated/compat_report.md
@@ -79,6 +85,54 @@ grep -q 'schema incompatible' compat_breaking.txt
 grep -q 'field type changed' compat_breaking.txt
 grep -q 'field number changed' compat_breaking.txt
 
+cat > item_v1.proto <<'EOF'
+syntax = "proto3";
+package demo;
+message Item {
+  uint64 keep = 1;
+  string old_name = 2;
+}
+EOF
+
+cat > item_v2_reserved.proto <<'EOF'
+syntax = "proto3";
+package demo;
+message Item {
+  uint64 keep = 1;
+  reserved 2;
+  reserved "old_name";
+}
+EOF
+
+python3 scripts/moon_proto_lab.py compat item_v1.proto item_v2_reserved.proto \
+  | grep -q 'schema compatible'
+
+cat > item_v1_reserved.proto <<'EOF'
+syntax = "proto3";
+package demo;
+message Item {
+  reserved 9;
+  reserved "legacy";
+  uint64 keep = 1;
+}
+EOF
+
+cat > item_v2_reuse_reserved.proto <<'EOF'
+syntax = "proto3";
+package demo;
+message Item {
+  uint64 keep = 1;
+  string legacy = 9;
+}
+EOF
+
+if python3 scripts/moon_proto_lab.py compat item_v1_reserved.proto item_v2_reuse_reserved.proto > compat_reserved_breaking.txt 2>&1; then
+  echo "compat unexpectedly accepted reserved reuse" >&2
+  exit 1
+fi
+grep -q 'field uses previously reserved number' compat_reserved_breaking.txt
+grep -q 'reserved name not preserved' compat_reserved_breaking.txt
+
 cat > invalid_duplicate.proto <<'EOF'
 syntax = "proto3";
 message Bad {
@@ -93,6 +147,24 @@ if python3 scripts/moon_proto_lab.py doctor invalid_duplicate.proto > invalid_do
 fi
 grep -q 'schema invalid' invalid_doctor.txt
 grep -q 'duplicate field number' invalid_doctor.txt
+
+cat > invalid_reserved.proto <<'EOF'
+syntax = "proto3";
+message Bad {
+  reserved 1, 5 to 6;
+  reserved "old_name";
+  uint64 id = 1;
+  string old_name = 2;
+  bool another = 5;
+}
+EOF
+
+if python3 scripts/moon_proto_lab.py doctor invalid_reserved.proto > invalid_reserved_doctor.txt 2>&1; then
+  echo "doctor unexpectedly accepted invalid_reserved.proto" >&2
+  exit 1
+fi
+grep -q 'field uses reserved number' invalid_reserved_doctor.txt
+grep -q 'field uses reserved name' invalid_reserved_doctor.txt
 
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto \
   --report generated/verify_report.md
