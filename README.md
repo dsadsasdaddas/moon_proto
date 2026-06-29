@@ -142,6 +142,12 @@ python3 scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/
 tests/codegen/compile_generated.sh
 ```
 
+## Documentation
+
+- [Testing strategy](docs/TESTING.md)
+- [Development report](docs/DEVELOPMENT_REPORT.md)
+- Proposal PDF: `output/pdf/MoonProto_王越的战队_项目申报书.pdf`
+
 ## Roadmap
 
 - M1: wire runtime + schema parser + tests. ✅
