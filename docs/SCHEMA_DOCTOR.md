@@ -28,7 +28,7 @@ issues: 1
 message.Bad.field.1: duplicate field number
 ```
 
-The current diagnostics are backed by the MoonBit `validate_proto_file` implementation and cover:
+The parser accepts common real-world proto decorations before diagnostics run: dotted package/type names, `import`, `option`, `reserved`, `extensions`, and field/enum value option brackets. The current diagnostics are backed by the MoonBit `validate_proto_file` implementation and cover:
 
 - proto3 syntax check;
 - field number range and protobuf-reserved 19000..19999 numbers;
@@ -45,7 +45,7 @@ The current diagnostics are backed by the MoonBit `validate_proto_file` implemen
 Print a compact schema summary for debugging and reports:
 
 ```bash
-python3 scripts/moon_proto_lab.py inspect examples/simple/user.proto
+python3 scripts/moon_proto_lab.py inspect examples/decorated/telemetry.proto
 ```
 
 The output includes package, message count, enum count, fields, labels, numbers and resolved scalar/named types.

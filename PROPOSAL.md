@@ -36,7 +36,7 @@ Moon Proto Lab 面向 MoonBit protobuf 生态，提供动态 `.proto` schema 解
 - length-delimited bytes/string 编解码；
 - 常用字段编码 helper：uint64、bool、sint64、string、bytes；
 - proto3 schema AST：message、field、label、scalar type、enum、named message、map type、oneof group；
-- `.proto` lexer/parser 子集：syntax、package、message、enum、optional/repeated、map、oneof、标量字段；
+- `.proto` lexer/parser 子集：syntax、点分 package、import、option、reserved/extensions、message、enum、optional/repeated、map、oneof、字段/枚举值 options、标量字段和点分 named type；
 - schema validator 与 Schema Doctor：字段号范围、重复字段名/号、proto3 enum 首值为 0、顶层命名冲突、map key/value 约束，并输出稳定诊断路径；
 - schema-driven 动态 message 编解码，覆盖标量、repeated、packed repeated、enum、nested message、map、oneof；
 - 解码时跳过 unknown fields，便于向前/向后兼容；
@@ -57,8 +57,9 @@ Moon Proto Lab 面向 MoonBit protobuf 生态，提供动态 `.proto` schema 解
 4. **兼容性 oracle**：使用 Python/Go 官方 protobuf 生成和验证 fixtures，减少“实现能跑但不兼容”的风险。
 5. **schema 兼容性检查**：比较 old/new `.proto`，发现字段号复用、字段类型变化、字段迁移、enum 值变化、package 变化等破坏性修改。
 6. **AI verify 报告**：一条命令完成 doctor、inspect、codegen、generated-code compile check，并输出 Markdown/HTML 报告。
-7. **代码生成实验**：生成 MoonBit struct、enum、descriptor 和 helper，并通过 compile check 保证生成结果可构建。
-8. **工程化交付**：README、测试说明、开发报告、提交清单、公开 GitHub/Gitlink 仓库和 CI。
+7. **真实 schema 容错解析**：支持常见 import、option、reserved、field option 与点分类型，使工具能处理更接近生产项目的 `.proto`。
+8. **代码生成实验**：生成 MoonBit struct、enum、descriptor 和 helper，并通过 compile check 保证生成结果可构建。
+9. **工程化交付**：README、测试说明、开发报告、提交清单、公开 GitHub/Gitlink 仓库和 CI。
 
 ## 为什么值得做
 
@@ -78,6 +79,7 @@ moon test --target all
 moon run cmd/main -- gen --example
 python3 scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/
 python3 scripts/moon_proto_lab.py doctor examples/simple/user.proto
+python3 scripts/moon_proto_lab.py doctor examples/decorated/telemetry.proto
 python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md
 tests/codegen/compile_generated.sh

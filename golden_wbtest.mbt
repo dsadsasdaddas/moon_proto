@@ -84,6 +84,47 @@ test "parse simple proto" {
 }
 
 ///|
+test "parser tolerates imports options reserved and field options" {
+  let src =
+    #|syntax = "proto3";
+    #|package demo.v1;
+    #|import "google/protobuf/timestamp.proto";
+    #|import public "shared.proto";
+    #|option java_package = "demo";
+    #|enum Status {
+    #|  option allow_alias = true;
+    #|  reserved 9 to 12;
+    #|  STATUS_UNSPECIFIED = 0 [(deprecated) = true];
+    #|  STATUS_OK = 1;
+    #|}
+    #|message Event {
+    #|  option deprecated = false;
+    #|  reserved 4, 6 to 9;
+    #|  reserved "old_name";
+    #|  uint64 id = 1 [json_name = "eventId"];
+    #|  .demo.v1.External ref = 2;
+    #|  map<string, .demo.v1.External> refs = 3;
+    #|}
+  match parse_proto(src) {
+    ProtoOk(file) => {
+      assert_eq(file.package_name, "demo.v1")
+      assert_eq(file.enums.length(), 1)
+      assert_eq(file.enums[0].values.length(), 2)
+      assert_eq(file.messages.length(), 1)
+      let fields = file.messages[0].fields
+      assert_eq(fields.length(), 3)
+      assert_true(fields[0].typ == UInt64Type)
+      assert_true(fields[1].typ == NamedType(".demo.v1.External"))
+      assert_true(
+        fields[2].typ ==
+        MapType(StringType, NamedType(".demo.v1.External")),
+      )
+    }
+    ProtoErr(_) => fail("expected parser to accept decorated proto schema")
+  }
+}
+
+///|
 test "schema driven message encode golden bytes" {
   let desc = MessageDescriptor::{
     name: "User",

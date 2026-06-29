@@ -139,68 +139,160 @@ fn ProtoParser::consume_sym(self : ProtoParser, wanted : String) -> Bool {
 }
 
 ///|
-fn ProtoParser::parse_field(self : ProtoParser) -> FieldDescriptor? {
-  let mut label = Singular
-  let first = self.consume_ident()
-  match first {
-    None => None
-    Some(word) => {
-      let typ_name = if word == "repeated" {
-        label = Repeated
-        match self.consume_ident() {
-          Some(t) => t
-          None => return None
-        }
-      } else if word == "optional" {
-        label = Optional
-        match self.consume_ident() {
-          Some(t) => t
-          None => return None
-        }
+fn ProtoParser::match_sym(self : ProtoParser, wanted : String) -> Bool {
+  match self.peek() {
+    Some(Sym(s)) =>
+      if s == wanted {
+        let _ = self.advance()
+        true
       } else {
-        word
+        false
       }
-      let typ = if typ_name == "map" {
-        if label != Singular {
-          return None
-        }
-        if !self.consume_sym("<") {
-          return None
-        }
-        let key_typ = match self.consume_ident() {
-          Some(t) => scalar_type_from_string(t)
+    _ => false
+  }
+}
+
+///|
+fn ProtoParser::parse_qualified_name(self : ProtoParser) -> String? {
+  let mut out = ""
+  if self.match_sym(".") {
+    out = "."
+  }
+  match self.consume_ident() {
+    Some(first) => out = out + first
+    None => return None
+  }
+  let mut done = false
+  while !done {
+    match self.peek() {
+      Some(Sym(".")) => {
+        let _ = self.advance()
+        match self.consume_ident() {
+          Some(part) => out = out + "." + part
           None => return None
         }
-        if !self.consume_sym(",") {
-          return None
-        }
-        let value_typ = match self.consume_ident() {
-          Some(t) => scalar_type_from_string(t)
-          None => return None
-        }
-        if !self.consume_sym(">") {
-          return None
-        }
-        label = Repeated
-        MapType(key_typ, value_typ)
-      } else {
-        scalar_type_from_string(typ_name)
       }
-      let name = match self.consume_ident() {
-        Some(n) => n
-        None => return None
-      }
-      if !self.consume_sym("=") {
-        return None
-      }
-      let number = match self.consume_int() {
-        Some(n) => n
-        None => return None
-      }
-      let _ = self.consume_sym(";")
-      Some(FieldDescriptor::{ name, typ, number, label })
+      _ => done = true
     }
   }
+  Some(out)
+}
+
+///|
+fn ProtoParser::skip_bracketed_options(self : ProtoParser) -> Bool {
+  if !self.match_sym("[") {
+    return true
+  }
+  let mut depth = 1
+  while depth > 0 {
+    match self.advance() {
+      Some(Sym("[")) => depth = depth + 1
+      Some(Sym("]")) => depth = depth - 1
+      Some(_) => ()
+      None => return false
+    }
+  }
+  true
+}
+
+///|
+fn ProtoParser::skip_until_semicolon(self : ProtoParser) -> Bool {
+  let mut bracket_depth = 0
+  let mut brace_depth = 0
+  while self.i < self.tokens.length() {
+    match self.advance() {
+      Some(Sym("[")) => bracket_depth = bracket_depth + 1
+      Some(Sym("]")) =>
+        if bracket_depth > 0 {
+          bracket_depth = bracket_depth - 1
+        }
+      Some(Sym("{")) => brace_depth = brace_depth + 1
+      Some(Sym("}")) =>
+        if brace_depth == 0 && bracket_depth == 0 {
+          self.i = self.i - 1
+          return true
+        } else if brace_depth > 0 {
+          brace_depth = brace_depth - 1
+        }
+      Some(Sym(";")) =>
+        if bracket_depth == 0 && brace_depth == 0 {
+          return true
+        }
+      Some(_) => ()
+      None => return false
+    }
+  }
+  true
+}
+
+///|
+fn ProtoParser::parse_field(self : ProtoParser) -> FieldDescriptor? {
+  let mut label = Singular
+  let typ_name = match self.peek() {
+    Some(Ident("repeated")) => {
+      let _ = self.advance()
+      label = Repeated
+      match self.parse_qualified_name() {
+        Some(t) => t
+        None => return None
+      }
+    }
+    Some(Ident("optional")) => {
+      let _ = self.advance()
+      label = Optional
+      match self.parse_qualified_name() {
+        Some(t) => t
+        None => return None
+      }
+    }
+    _ =>
+      match self.parse_qualified_name() {
+        Some(t) => t
+        None => return None
+      }
+  }
+  let typ = if typ_name == "map" {
+    if label != Singular {
+      return None
+    }
+    if !self.consume_sym("<") {
+      return None
+    }
+    let key_typ = match self.consume_ident() {
+      Some(t) => scalar_type_from_string(t)
+      None => return None
+    }
+    if !self.consume_sym(",") {
+      return None
+    }
+    let value_typ = match self.parse_qualified_name() {
+      Some(t) => scalar_type_from_string(t)
+      None => return None
+    }
+    if !self.consume_sym(">") {
+      return None
+    }
+    label = Repeated
+    MapType(key_typ, value_typ)
+  } else {
+    scalar_type_from_string(typ_name)
+  }
+  let name = match self.consume_ident() {
+    Some(n) => n
+    None => return None
+  }
+  if !self.consume_sym("=") {
+    return None
+  }
+  let number = match self.consume_int() {
+    Some(n) => n
+    None => return None
+  }
+  if !self.skip_bracketed_options() {
+    return None
+  }
+  let _ = self.match_sym(";")
+  Some(FieldDescriptor::{ name, typ, number, label })
 }
 
 ///|
@@ -222,6 +314,16 @@ fn ProtoParser::parse_oneof_fields(
         if s == "}" {
           let _ = self.advance()
           done = true
+        } else if s == "." {
+          match self.parse_field() {
+            Some(f) =>
+              if f.label == Singular {
+                fields.push(FieldDescriptor::{ ..f, label: Oneof(group) })
+              } else {
+                return None
+              }
+            None => return None
+          }
         } else {
           return None
         }
@@ -258,6 +360,11 @@ fn ProtoParser::parse_message(self : ProtoParser) -> MessageDescriptor? {
         if s == "}" {
           let _ = self.advance()
           done = true
+        } else if s == "." {
+          match self.parse_field() {
+            Some(f) => fields.push(f)
+            None => return None
+          }
         } else {
           return None
         }
@@ -270,6 +377,11 @@ fn ProtoParser::parse_message(self : ProtoParser) -> MessageDescriptor? {
               for f in oneof_fields {
                 fields.push(f)
               }
+          }
+        } else if word == "option" || word == "reserved" || word == "extensions" {
+          let _ = self.advance()
+          if !self.skip_until_semicolon() {
+            return None
           }
         } else {
           match self.parse_field() {
@@ -297,7 +409,10 @@ fn ProtoParser::parse_enum_value(self : ProtoParser) -> EnumValueDescriptor? {
     Some(n) => n
     None => return None
   }
-  let _ = self.consume_sym(";")
+  if !self.skip_bracketed_options() {
+    return None
+  }
+  let _ = self.match_sym(";")
   Some(EnumValueDescriptor::{ name, number })
 }
 
@@ -320,6 +435,18 @@ fn ProtoParser::parse_enum(self : ProtoParser) -> EnumDescriptor? {
           done = true
         } else {
           return None
+        }
+      Some(Ident(word)) =>
+        if word == "option" || word == "reserved" {
+          let _ = self.advance()
+          if !self.skip_until_semicolon() {
+            return None
+          }
+        } else {
+          match self.parse_enum_value() {
+            Some(v) => values.push(v)
+            None => return None
+          }
         }
       Some(_) =>
         match self.parse_enum_value() {
@@ -398,11 +525,21 @@ pub fn parse_proto(src : String) -> ParseProtoResult {
         let _ = p.consume_sym(";")
       }
       Some("package") => {
-        match p.consume_ident() {
+        match p.parse_qualified_name() {
           Some(s) => package_name = s
           None => return ProtoErr(Expected("package name"))
         }
         let _ = p.consume_sym(";")
+      }
+      Some("import") => {
+        if !p.skip_until_semicolon() {
+          return ProtoErr(Expected("import statement"))
+        }
+      }
+      Some("option") => {
+        if !p.skip_until_semicolon() {
+          return ProtoErr(Expected("option statement"))
+        }
       }
       Some("message") =>
         match p.parse_message() {

@@ -11,6 +11,7 @@ Current tests cover:
 - length-delimited string encoding;
 - a hand-checked `User` message byte stream;
 - a small proto3 lexer/parser smoke test;
+- parser tolerance for dotted package/type names, import, option, reserved/extensions, and field/enum options;
 - schema-driven dynamic message encode golden bytes;
 - schema-driven dynamic message decode roundtrip;
 - unknown-field skipping;
@@ -47,6 +48,7 @@ moon test --target all
 moon run cmd/main -- gen --example
 python3 scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/
 python3 scripts/moon_proto_lab.py doctor examples/simple/user.proto
+python3 scripts/moon_proto_lab.py doctor examples/decorated/telemetry.proto
 python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md
 tests/codegen/compile_generated.sh
@@ -69,9 +71,8 @@ The project is positioned as a protobuf ecosystem verification lab for MoonBit. 
 - generated-code compile checks ensure generated MoonBit source actually builds;
 - verify reports make the result reviewable as Markdown/HTML artifacts.
 
-Planned next verification:
+Completed parser/schema-tool verification now includes old/new compatibility checks, larger conformance-lite oracle fixtures, and import/option/reserved parser tolerance. Planned next verification:
 
-- schema compatibility checks across old/new `.proto` versions;
 - differential tests against existing MoonBit protobuf packages where APIs are compatible;
-- larger conformance-lite corpus;
-- import/option/reserved schema validation tests.
+- descriptor set / reflection fixtures;
+- selected upstream protobuf conformance-suite cases.

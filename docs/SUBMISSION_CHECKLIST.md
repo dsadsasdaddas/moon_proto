@@ -20,9 +20,9 @@
 | 要求 | 证据 |
 | --- | --- |
 | MoonBit 为主要实现语言 | `*.mbt` runtime/parser/codegen/tests 共 15 个源文件 |
-| 项目规模 4k+ MoonBit LOC | 当前 MoonBit 源码约 `4945` 行 |
+| 项目规模 4k+ MoonBit LOC | 当前 MoonBit 源码约 `6012` 行 |
 | 清晰工程结构 | wire/schema/runtime/json/codegen/cli/tests/docs 分层 |
-| 示例 schema | `examples/simple/user.proto` |
+| 示例 schema | `examples/simple/user.proto`、`examples/decorated/telemetry.proto` |
 | 文件版生成入口 | `scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/` |
 | Schema Doctor / compat / verify | `scripts/moon_proto_lab.py doctor examples/simple/user.proto` / `compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md` / `verify --report generated/verify_report.md` |
 | 生态定位说明 | `docs/ECOSYSTEM_POSITIONING.md` |
@@ -31,7 +31,7 @@
 
 - protobuf wire type、key packing/parsing；
 - varint、zig-zag、fixed32/fixed64、length-delimited bytes/string；
-- proto3 schema parser 和 descriptor model；
+- proto3 schema parser 和 descriptor model，支持点分 package/type、import、option、reserved/extensions 与字段/枚举值 option 容错解析；
 - schema validation diagnostics；
 - descriptor-driven dynamic message binary encode/decode；
 - repeated 与 proto3 packed repeated；
@@ -57,7 +57,7 @@
 | Go oracle | `(cd tests/oracle && go run .)` |
 | MoonBit check | `moon check` |
 | MoonBit build | `moon build` |
-| MoonBit tests | `moon test`，当前 `40/40 passed` |
+| MoonBit tests | `moon test`，当前 `41/41 passed` |
 | All targets | `moon test --target all` 覆盖 wasm/wasm-gc/js/native |
 | CLI smoke | `moon run cmd/main -- gen --example` |
 | File-based generator | `python3 scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/` |
@@ -93,6 +93,7 @@ moon test --target all
 moon run cmd/main -- gen --example
 python3 scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/
 python3 scripts/moon_proto_lab.py doctor examples/simple/user.proto
+python3 scripts/moon_proto_lab.py doctor examples/decorated/telemetry.proto
 python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md
 tests/codegen/compile_generated.sh
