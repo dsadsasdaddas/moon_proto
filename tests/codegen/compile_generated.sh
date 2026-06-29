@@ -182,4 +182,22 @@ grep -Fq 'Overall status: **PASS**' generated/official_diff_report.md
 grep -q 'official protoc-gen-mbt' generated/official_diff_report.md
 grep -q 'SKIP' generated/official_diff_report.md
 
+python3 scripts/moon_proto_descriptor.py fixture \
+  --hex-out generated/user_descriptor_set.hex \
+  --json-out generated/user_descriptor_set.json
+cmp generated/user_descriptor_set.hex tests/fixtures/user_descriptor_set.hex
+
+python3 scripts/moon_proto_descriptor.py inspect tests/fixtures/user_descriptor_set.hex \
+  --report generated/descriptor_report.md
+grep -q 'descriptor set valid' generated/descriptor_report.md
+
+python3 scripts/moon_proto_descriptor.py to-proto tests/fixtures/user_descriptor_set.hex \
+  -o generated/user_from_descriptor.proto
+grep -q 'map<string, uint64> counters = 4;' generated/user_from_descriptor.proto
+grep -q 'oneof contact' generated/user_from_descriptor.proto
+
+python3 scripts/moon_proto_descriptor.py verify tests/fixtures/user_descriptor_set.hex \
+  --report generated/descriptor_verify_report.md
+grep -Fq 'Overall status: **PASS**' generated/descriptor_verify_report.md
+
 echo "Generated MoonBit source compiles"

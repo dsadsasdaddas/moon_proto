@@ -47,6 +47,7 @@ The project has a small but end-to-end verifiable protobuf laboratory pipeline:
 - AI verification CLI that runs doctor, schema inspection, codegen, generated-code compile checks, and Markdown/HTML report generation;
 - old/new schema compatibility checker for detecting field, enum, package, type and reserved-contract breaking changes;
 - official MoonBit protobuf differential harness manifest/report for schemas overlapping with `moonbitlang/protoc-gen-mbt`;
+- FileDescriptorSet descriptor/reflection bridge for `.pb`/`.hex`/`.json` descriptor imports, proto reconstruction and verification reports;
 - Python and Go official protobuf oracle fixtures for cross-language compatibility checks, including 32-bit numeric boundary values, float/double values, and special NaN/Infinity JSON values;
 - deterministic property-style roundtrip corpora for binary and JSON paths;
 - generated-code compile checks and GitHub Actions CI.
@@ -131,6 +132,7 @@ python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report gen
 python3 scripts/moon_proto_official_diff.py --report generated/official_diff_report.md
 git clone --depth 1 https://github.com/moonbitlang/protoc-gen-mbt /tmp/protoc-gen-mbt
 python3 scripts/moon_proto_official_diff.py --official-repo /tmp/protoc-gen-mbt --require-official --report generated/official_source_diff_report.md
+python3 scripts/moon_proto_descriptor.py verify tests/fixtures/user_descriptor_set.hex --report generated/descriptor_verify_report.md
 ```
 
 Convert a dynamic message to protobuf-style JSON:
@@ -169,6 +171,7 @@ python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report gen
 python3 scripts/moon_proto_official_diff.py --report generated/official_diff_report.md
 git clone --depth 1 https://github.com/moonbitlang/protoc-gen-mbt /tmp/protoc-gen-mbt
 python3 scripts/moon_proto_official_diff.py --official-repo /tmp/protoc-gen-mbt --require-official --report generated/official_source_diff_report.md
+python3 scripts/moon_proto_descriptor.py verify tests/fixtures/user_descriptor_set.hex --report generated/descriptor_verify_report.md
 tests/codegen/compile_generated.sh
 ```
 
@@ -177,6 +180,7 @@ tests/codegen/compile_generated.sh
 - [Ecosystem positioning](docs/ECOSYSTEM_POSITIONING.md)
 - [Schema Doctor and verify reports](docs/SCHEMA_DOCTOR.md)
 - [Official differential harness](docs/OFFICIAL_DIFFERENTIAL.md)
+- [Descriptor set bridge](docs/DESCRIPTOR_SET.md)
 - [Testing strategy](docs/TESTING.md)
 - [Development report](docs/DEVELOPMENT_REPORT.md)
 - [Submission checklist](docs/SUBMISSION_CHECKLIST.md)
@@ -208,7 +212,8 @@ tests/codegen/compile_generated.sh
 - M22: official MoonBit protobuf differential harness manifest and report. Done.
 - M23: CI-enforced official source contract check against `moonbitlang/protoc-gen-mbt`. Done.
 - M24: deeper generated-code differential tests against an installed official generator. Planned.
-- M25: descriptor set / reflection import path. Planned.
+- M25: descriptor set / reflection import path with descriptor reports. Done.
+- M26: descriptor-set compatibility checks and schema registry imports. Planned.
 
 ## License
 

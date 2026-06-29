@@ -41,6 +41,7 @@ Moon Proto Lab focuses on the tooling and verification layer around protobuf dev
 
 5. **Future integration path**
    - maintain `scripts/moon_proto_official_diff.py` and `tests/differential/official_cases.json` as a first differential testing harness;
+   - use `scripts/moon_proto_descriptor.py` to import FileDescriptorSet/reflection data from existing protobuf pipelines;
    - add deeper adapters that read schemas or generated descriptors from official MoonBit protobuf packages;
    - keep experimental dynamic tooling here while stable runtime/codegen can live in or interoperate with existing ecosystem packages.
 
