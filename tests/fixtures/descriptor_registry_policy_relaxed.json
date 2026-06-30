@@ -1,0 +1,25 @@
+{
+  "require_registry_pass": false,
+  "allow_breaking": true,
+  "min_versions": 2,
+  "max_breaking_edges": 1,
+  "checks": [
+    {
+      "type": "require_unique_digests",
+      "name": "unique digests via DSL"
+    },
+    {
+      "type": "require_values",
+      "name": "required User message via DSL",
+      "key": "messages",
+      "values": ["User"]
+    },
+    {
+      "type": "forbid_values",
+      "name": "warning when demo package is still present",
+      "key": "packages",
+      "values": ["demo"],
+      "severity": "warning"
+    }
+  ]
+}

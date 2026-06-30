@@ -30,7 +30,47 @@ python3 scripts/moon_proto_descriptor.py policy \
   --junit-out generated/descriptor_policy_report.xml
 ```
 
-The checked-in sample policy requires at least two versions, at least one compatibility edge, unique descriptor digests, package `demo`, message `User`, and no breaking adjacent changes. The same policy can be passed directly to `registry --policy ...` so CI fails immediately when a proposed descriptor sequence violates the release gate.
+The checked-in strict sample policy requires at least two versions, at least one compatibility edge, unique descriptor digests, package `demo`, message `User`, and no breaking adjacent changes. The same policy can be passed directly to `registry --policy ...` so CI fails immediately when a proposed descriptor sequence violates the release gate.
+
+## Release policy DSL
+
+Policies support both simple top-level keys and a richer `checks` array. Each rule can set:
+
+- `type`: `require_registry_pass`, `min_versions`, `min_compatibility_edges`, `max_breaking_edges`, `require_unique_digests`, `require_values`, or `forbid_values`;
+- `name`: optional human-readable report label;
+- `severity`: `error` by default, or `warning` for non-blocking advisory checks;
+- `enabled`: optional boolean for temporarily disabling a rule.
+
+Value rules use `key` (`files`, `packages`, `messages`, or `enums`) plus a `values` string list.
+
+Example relaxed policy:
+
+```json
+{
+  "require_registry_pass": false,
+  "allow_breaking": true,
+  "min_versions": 2,
+  "max_breaking_edges": 1,
+  "checks": [
+    { "type": "require_unique_digests", "name": "unique digests via DSL" },
+    {
+      "type": "require_values",
+      "name": "required User message via DSL",
+      "key": "messages",
+      "values": ["User"]
+    },
+    {
+      "type": "forbid_values",
+      "name": "warning when demo package is still present",
+      "key": "packages",
+      "values": ["demo"],
+      "severity": "warning"
+    }
+  ]
+}
+```
+
+With this policy, a registry can report base compatibility `FAIL` while the release gate returns `PASS` if the declared rule budget allows it. Warning checks are rendered as `WARN` in Markdown/JSON reports and do not create JUnit failures.
 
 ## What the registry command checks
 

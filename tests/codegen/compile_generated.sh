@@ -300,4 +300,35 @@ grep -q 'no breaking adjacent changes' generated/descriptor_policy_breaking_repo
 grep -q '"status": "FAIL"' generated/descriptor_policy_breaking.json
 grep -q '<failure' generated/descriptor_policy_breaking_report.xml
 
+python3 scripts/moon_proto_descriptor.py registry \
+  tests/fixtures/user_descriptor_set.hex \
+  tests/fixtures/user_descriptor_set_breaking.hex \
+  --name demo-user-relaxed \
+  --report generated/descriptor_registry_relaxed_report.md \
+  --json-out generated/descriptor_registry_relaxed.json \
+  --policy tests/fixtures/descriptor_registry_policy_relaxed.json \
+  --junit-out generated/descriptor_registry_relaxed_report.xml
+grep -Fq 'Overall status: **PASS**' generated/descriptor_registry_relaxed_report.md
+grep -Fq 'Base compatibility status: `FAIL`' generated/descriptor_registry_relaxed_report.md
+grep -q 'maximum breaking adjacent changes' generated/descriptor_registry_relaxed_report.md
+grep -q 'WARN' generated/descriptor_registry_relaxed_report.md
+grep -q '"overall_status": "PASS"' generated/descriptor_registry_relaxed.json
+grep -q '"base_status": "FAIL"' generated/descriptor_registry_relaxed.json
+grep -q '"status": "WARN"' generated/descriptor_registry_relaxed.json
+grep -q '<testsuite' generated/descriptor_registry_relaxed_report.xml
+grep -q 'failures="0"' generated/descriptor_registry_relaxed_report.xml
+
+python3 scripts/moon_proto_descriptor.py policy \
+  generated/descriptor_registry_relaxed.json \
+  tests/fixtures/descriptor_registry_policy_relaxed.json \
+  --report generated/descriptor_policy_relaxed_report.md \
+  --json-out generated/descriptor_policy_relaxed.json \
+  --junit-out generated/descriptor_policy_relaxed_report.xml
+grep -Fq 'Overall status: **PASS**' generated/descriptor_policy_relaxed_report.md
+grep -q 'WARN' generated/descriptor_policy_relaxed_report.md
+grep -q '"status": "PASS"' generated/descriptor_policy_relaxed.json
+grep -q '"status": "WARN"' generated/descriptor_policy_relaxed.json
+grep -q '<testsuite' generated/descriptor_policy_relaxed_report.xml
+grep -q 'failures="0"' generated/descriptor_policy_relaxed_report.xml
+
 echo "Generated MoonBit source compiles"

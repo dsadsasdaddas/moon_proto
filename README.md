@@ -47,7 +47,7 @@ The project has a small but end-to-end verifiable protobuf laboratory pipeline:
 - AI verification CLI that runs doctor, schema inspection, codegen, generated-code compile checks, and Markdown/HTML/JUnit XML report generation;
 - old/new schema compatibility checker for detecting field, enum, package, type and reserved-contract breaking changes;
 - official MoonBit protobuf differential harness manifest/report for schemas overlapping with `moonbitlang/protoc-gen-mbt`;
-- FileDescriptorSet descriptor/reflection bridge for `.pb`/`.hex`/`.json` descriptor imports, proto reconstruction, verification reports, old/new descriptor-set compatibility reports, descriptor-registry release gates, and JSON release-policy checks;
+- FileDescriptorSet descriptor/reflection bridge for `.pb`/`.hex`/`.json` descriptor imports, proto reconstruction, verification reports, old/new descriptor-set compatibility reports, descriptor-registry release gates, and JSON release-policy checks with rule-based severity/warning support;
 - Python and Go official protobuf oracle fixtures for cross-language compatibility checks, including 32-bit numeric boundary values, float/double values, and special NaN/Infinity JSON values;
 - deterministic property-style roundtrip corpora for binary and JSON paths;
 - generated-code compile checks and GitHub Actions CI.
@@ -224,7 +224,8 @@ tests/codegen/compile_generated.sh
 - M27: descriptor registry imports, version indexes and adjacent compatibility release gates. Done.
 - M28: JSON release-policy gate for descriptor registry manifests. Done.
 - M29: JUnit XML outputs for CI/test dashboards. Done.
-- M30: real remote schema registry adapters and richer release-policy DSL. Planned.
+- M30a: richer descriptor registry release-policy DSL with warning severity and breaking-change budgets. Done.
+- M30b: real remote schema registry adapters. Planned.
 
 ## License
 

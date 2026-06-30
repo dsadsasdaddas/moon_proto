@@ -67,6 +67,11 @@ class PolicyCheck:
     name: str
     ok: bool
     details: str
+    severity: str = 'error'
+
+    @property
+    def blocking(self) -> bool:
+        return not self.ok and self.severity == 'error'
 
 
 PROTO_TYPE_NAMES = {
@@ -184,8 +189,25 @@ def descriptor_step_cases(steps: list[DescriptorStep]) -> list[tuple[str, bool, 
     return [(step.name, step.ok, step.details) for step in steps]
 
 
+def policy_check_status(check: PolicyCheck) -> str:
+    if check.ok:
+        return 'PASS'
+    return 'WARN' if check.severity == 'warning' else 'FAIL'
+
+
+def policy_passes(checks: list[PolicyCheck]) -> bool:
+    return not any(check.blocking for check in checks)
+
+
 def policy_check_cases(checks: list[PolicyCheck]) -> list[tuple[str, bool, str]]:
-    return [(check.name, check.ok, check.details) for check in checks]
+    return [
+        (
+            check.name,
+            not check.blocking,
+            f'severity={check.severity}; status={policy_check_status(check)}; {check.details}',
+        )
+        for check in checks
+    ]
 
 
 def registry_cases(
@@ -197,14 +219,19 @@ def registry_cases(
     for version in versions:
         cases.append((f'version {version.index}: {version.path.name}', version.ok, version.details))
     for edge in edges:
+        edge_ok = edge.compatible if policy_checks is None else True
         cases.append((
             f'compat {edge.old_index}->{edge.new_index}: {edge.old_path.name} to {edge.new_path.name}',
-            edge.compatible,
+            edge_ok,
             edge.output,
         ))
     if policy_checks is not None:
         for check in policy_checks:
-            cases.append((f'policy: {check.name}', check.ok, check.details))
+            cases.append((
+                f'policy: {check.name}',
+                not check.blocking,
+                f'severity={check.severity}; status={policy_check_status(check)}; {check.details}',
+            ))
     return cases
 
 
@@ -238,6 +265,35 @@ def int_policy(policy: dict, key: str, default=None):
     if not isinstance(value, int):
         raise ValueError(f'policy key {key} must be an integer')
     return value
+
+
+def string_policy(policy: dict, key: str, default: str | None = None) -> str | None:
+    if key not in policy:
+        return default
+    value = policy[key]
+    if not isinstance(value, str):
+        raise ValueError(f'policy key {key} must be a string')
+    return value
+
+
+def object_list_policy(policy: dict, key: str) -> list[dict]:
+    value = policy.get(key, [])
+    if value is None:
+        return []
+    if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
+        raise ValueError(f'policy key {key} must be a list of objects')
+    return value
+
+
+def policy_severity(rule: dict) -> str:
+    severity = string_policy(rule, 'severity', 'error')
+    if severity not in {'error', 'warning'}:
+        raise ValueError('policy severity must be "error" or "warning"')
+    return severity
+
+
+def policy_rule_name(rule: dict, fallback: str) -> str:
+    return string_policy(rule, 'name', fallback) or fallback
 
 
 def type_name_tail(type_name: str, package: str) -> str:
@@ -532,13 +588,15 @@ def registry_manifest(
     edges: list[RegistryEdge],
     policy_result: dict | None = None,
 ) -> dict:
-    base_ok = all(v.ok for v in versions) and all(e.compatible for e in edges)
+    versions_ok = all(v.ok for v in versions)
+    base_ok = versions_ok and all(e.compatible for e in edges)
     policy_ok = True if policy_result is None else policy_result.get('status') == 'PASS'
-    overall_ok = base_ok and policy_ok
+    overall_ok = base_ok if policy_result is None else versions_ok and policy_ok
     return {
         'name': name,
         'generated_at': datetime.now(timezone.utc).isoformat(),
         'overall_status': 'PASS' if overall_ok else 'FAIL',
+        'base_status': 'PASS' if base_ok else 'FAIL',
         'versions': [
             {
                 'index': version.index,
@@ -571,11 +629,12 @@ def registry_manifest(
 def policy_result_dict(policy_path: Path, checks: list[PolicyCheck]) -> dict:
     return {
         'path': str(policy_path),
-        'status': 'PASS' if all(check.ok for check in checks) else 'FAIL',
+        'status': 'PASS' if policy_passes(checks) else 'FAIL',
         'checks': [
             {
                 'name': check.name,
-                'status': 'PASS' if check.ok else 'FAIL',
+                'status': policy_check_status(check),
+                'severity': check.severity,
                 'details': check.details,
             }
             for check in checks
@@ -592,6 +651,89 @@ def manifest_values(manifest: dict, key: str) -> set[str]:
                 if isinstance(value, str):
                     out.add(value)
     return out
+
+
+def breaking_edge_ids(edges: list) -> list[str]:
+    return [
+        f"{edge.get('old_index')}->{edge.get('new_index')}"
+        for edge in edges
+        if isinstance(edge, dict) and edge.get('status') != 'PASS'
+    ]
+
+
+def policy_values_key(rule: dict) -> str:
+    key = string_policy(rule, 'key')
+    if key not in {'files', 'packages', 'messages', 'enums'}:
+        raise ValueError('policy value rule key must be one of files, packages, messages, enums')
+    return key
+
+
+def evaluate_policy_rule(manifest: dict, edges: list, rule: dict, index: int) -> list[PolicyCheck]:
+    if not bool_policy(rule, 'enabled', True):
+        return []
+    rule_type = string_policy(rule, 'type')
+    if not rule_type:
+        raise ValueError(f'policy rule {index} is missing type')
+    severity = policy_severity(rule)
+    fallback_name = f'rule {index}: {rule_type}'
+    name = policy_rule_name(rule, fallback_name)
+
+    if rule_type in {'registry_status', 'require_registry_pass'}:
+        expected = string_policy(rule, 'status', 'PASS') or 'PASS'
+        actual = manifest.get('overall_status')
+        return [PolicyCheck(name, actual == expected, f'overall_status={actual}; expected={expected}', severity)]
+
+    if rule_type == 'min_versions':
+        versions = manifest.get('versions', [])
+        if not isinstance(versions, list):
+            versions = []
+        count = int_policy(rule, 'count')
+        if count is None:
+            raise ValueError(f'policy rule {index} min_versions requires count')
+        return [PolicyCheck(name, len(versions) >= count, f'{len(versions)} >= {count}', severity)]
+
+    if rule_type == 'min_compatibility_edges':
+        count = int_policy(rule, 'count')
+        if count is None:
+            raise ValueError(f'policy rule {index} min_compatibility_edges requires count')
+        return [PolicyCheck(name, len(edges) >= count, f'{len(edges)} >= {count}', severity)]
+
+    if rule_type == 'max_breaking_edges':
+        count = int_policy(rule, 'count')
+        if count is None:
+            raise ValueError(f'policy rule {index} max_breaking_edges requires count')
+        bad_edges = breaking_edge_ids(edges)
+        details = f'{len(bad_edges)} <= {count}' if not bad_edges else f'{len(bad_edges)} <= {count}; breaking edges: ' + ', '.join(bad_edges)
+        return [PolicyCheck(name, len(bad_edges) <= count, details, severity)]
+
+    if rule_type == 'require_unique_digests':
+        versions = manifest.get('versions', [])
+        if not isinstance(versions, list):
+            versions = []
+        digests = [
+            version.get('sha256')
+            for version in versions
+            if isinstance(version, dict) and version.get('sha256')
+        ]
+        return [PolicyCheck(name, len(digests) == len(set(digests)), f'{len(set(digests))} unique / {len(digests)} total', severity)]
+
+    if rule_type in {'require_values', 'required_values'}:
+        key = policy_values_key(rule)
+        required = set(string_list_policy(rule, 'values'))
+        present = manifest_values(manifest, key)
+        missing = sorted(required - present)
+        details = 'present: ' + ', '.join(sorted(required)) if not missing else 'missing: ' + ', '.join(missing)
+        return [PolicyCheck(name, not missing, details, severity)]
+
+    if rule_type in {'forbid_values', 'forbidden_values'}:
+        key = policy_values_key(rule)
+        forbidden = set(string_list_policy(rule, 'values'))
+        present = manifest_values(manifest, key)
+        found = sorted(forbidden & present)
+        details = 'none present' if not found else 'found: ' + ', '.join(found)
+        return [PolicyCheck(name, not found, details, severity)]
+
+    return [PolicyCheck(name, False, f'unknown policy rule type: {rule_type}', severity)]
 
 
 def evaluate_registry_policy(manifest: dict, policy: dict) -> list[PolicyCheck]:
@@ -630,15 +772,20 @@ def evaluate_registry_policy(manifest: dict, policy: dict) -> list[PolicyCheck]:
 
     allow_breaking = bool_policy(policy, 'allow_breaking', False)
     if not allow_breaking:
-        bad_edges = [
-            f"{edge.get('old_index')}->{edge.get('new_index')}"
-            for edge in edges
-            if isinstance(edge, dict) and edge.get('status') != 'PASS'
-        ]
+        bad_edges = breaking_edge_ids(edges)
         checks.append(PolicyCheck(
             'no breaking adjacent changes',
             len(bad_edges) == 0,
             'all adjacent edges pass' if not bad_edges else 'breaking edges: ' + ', '.join(bad_edges),
+        ))
+
+    max_breaking = int_policy(policy, 'max_breaking_edges', None)
+    if max_breaking is not None:
+        bad_edges = breaking_edge_ids(edges)
+        checks.append(PolicyCheck(
+            'maximum breaking adjacent changes',
+            len(bad_edges) <= max_breaking,
+            f'{len(bad_edges)} <= {max_breaking}' if not bad_edges else f'{len(bad_edges)} <= {max_breaking}; breaking edges: ' + ', '.join(bad_edges),
         ))
 
     if bool_policy(policy, 'require_unique_digests', False):
@@ -686,6 +833,9 @@ def evaluate_registry_policy(manifest: dict, policy: dict) -> list[PolicyCheck]:
                 'none present' if not found else 'found: ' + ', '.join(found),
             ))
 
+    for index, rule in enumerate(object_list_policy(policy, 'checks'), 1):
+        checks.extend(evaluate_policy_rule(manifest, edges, rule, index))
+
     if not checks:
         checks.append(PolicyCheck('policy loaded', True, 'no explicit checks configured'))
     return checks
@@ -698,14 +848,17 @@ def descriptor_registry_report(
     policy_path: Path | None = None,
     policy_checks: list[PolicyCheck] | None = None,
 ) -> str:
-    policy_ok = True if policy_checks is None else all(check.ok for check in policy_checks)
-    ok = all(version.ok for version in versions) and all(edge.compatible for edge in edges) and policy_ok
+    versions_ok = all(version.ok for version in versions)
+    base_ok = versions_ok and all(edge.compatible for edge in edges)
+    policy_ok = True if policy_checks is None else policy_passes(policy_checks)
+    ok = base_ok if policy_checks is None else versions_ok and policy_ok
     lines = [
         '# Moon Proto Lab descriptor registry report',
         '',
         f'- Registry: `{name}`',
         f'- Generated at: `{datetime.now(timezone.utc).isoformat()}`',
         f'- Overall status: **{"PASS" if ok else "FAIL"}**',
+        f'- Base compatibility status: `{"PASS" if base_ok else "FAIL"}`',
         f'- Versions: `{len(versions)}`',
         f'- Compatibility edges: `{len(edges)}`',
         '',
@@ -757,7 +910,7 @@ def descriptor_registry_report(
         ])
         for check in policy_checks:
             lines.append(
-                f'| {check.name} | {"PASS" if check.ok else "FAIL"} | {markdown_table_cell(check.details)} |'
+                f'| {check.name} | {policy_check_status(check)} | {markdown_table_cell(check.details)} |'
             )
     lines.extend([
         '',
@@ -782,7 +935,7 @@ def registry_policy_report(
     manifest: dict,
     checks: list[PolicyCheck],
 ) -> str:
-    ok = all(check.ok for check in checks)
+    ok = policy_passes(checks)
     lines = [
         '# Moon Proto Lab registry policy report',
         '',
@@ -797,7 +950,7 @@ def registry_policy_report(
     ]
     for check in checks:
         lines.append(
-            f'| {check.name} | {"PASS" if check.ok else "FAIL"} | {markdown_table_cell(check.details)} |'
+            f'| {check.name} | {policy_check_status(check)} | {markdown_table_cell(check.details)} |'
         )
     lines.extend([
         '',
@@ -1008,11 +1161,9 @@ def command_registry(args: argparse.Namespace) -> int:
             policy_checks = [PolicyCheck('policy parse', False, str(exc))]
             policy_result = policy_result_dict(policy_path, policy_checks)
 
-    ok = (
-        all(version.ok for version in versions)
-        and all(edge.compatible for edge in edges)
-        and (policy_checks is None or all(check.ok for check in policy_checks))
-    )
+    versions_ok = all(version.ok for version in versions)
+    base_ok = versions_ok and all(edge.compatible for edge in edges)
+    ok = base_ok if policy_checks is None else versions_ok and policy_passes(policy_checks)
     if args.report:
         write_text_report(
             Path(args.report),
@@ -1048,9 +1199,9 @@ def command_registry(args: argparse.Namespace) -> int:
         first = edge.output.splitlines()[0] if edge.output else 'no output'
         print(f'- edge {edge.old_index}->{edge.new_index}: {"PASS" if edge.compatible else "FAIL"} {first}')
     if policy_checks is not None:
-        print('policy: ' + ('PASS' if all(check.ok for check in policy_checks) else 'FAIL'))
+        print('policy: ' + ('PASS' if policy_passes(policy_checks) else 'FAIL'))
         for check in policy_checks:
-            print(f'- policy {check.name}: {"PASS" if check.ok else "FAIL"} {check.details}')
+            print(f'- policy {check.name}: {policy_check_status(check)} {check.details}')
     return 0 if ok else 1
 
 
@@ -1065,7 +1216,7 @@ def command_policy(args: argparse.Namespace) -> int:
         checks = [PolicyCheck('policy parse', False, str(exc))]
         manifest = {'name': '', 'overall_status': 'FAIL', 'versions': [], 'compatibility_edges': []}
 
-    ok = all(check.ok for check in checks)
+    ok = policy_passes(checks)
     if args.report:
         write_text_report(Path(args.report), registry_policy_report(manifest_path, policy_path, manifest, checks))
         print(f'report: {args.report}')
@@ -1083,7 +1234,7 @@ def command_policy(args: argparse.Namespace) -> int:
         print(f'junit: {args.junit_out}')
     print('Moon Proto Lab registry policy: ' + ('PASS' if ok else 'FAIL'))
     for check in checks:
-        print(f'- {check.name}: {"PASS" if check.ok else "FAIL"} - {check.details}')
+        print(f'- {check.name}: {policy_check_status(check)} - {check.details}')
     return 0 if ok else 1
 
 
