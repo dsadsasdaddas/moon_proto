@@ -840,6 +840,16 @@ pub fn parse_proto(src : String) -> ParseProtoResult {
         }
         let _ = p.consume_sym(";")
       }
+      Some("edition") => {
+        if !p.consume_sym("=") {
+          return ProtoErr(Expected("="))
+        }
+        match p.consume_string() {
+          Some(_) => ()
+          None => return ProtoErr(Expected("edition string"))
+        }
+        let _ = p.consume_sym(";")
+      }
       Some("package") => {
         match p.parse_qualified_name() {
           Some(s) => package_name = s

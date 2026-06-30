@@ -92,6 +92,32 @@ test "parse simple proto" {
 }
 
 ///|
+test "parser tolerates protobuf edition declarations" {
+  let src =
+    #|edition = "2023";
+    #|package demo.edition;
+    #|message EditionEvent {
+    #|  string name = 1;
+    #|  repeated string tags = 2;
+    #|}
+  match parse_proto(src) {
+    ProtoErr(_) => fail("edition schema should parse")
+    ProtoOk(file) => {
+      assert_eq(file.syntax, "proto3")
+      assert_eq(file.package_name, "demo.edition")
+      assert_eq(file.messages.length(), 1)
+      assert_eq(file.messages[0].name, "EditionEvent")
+      assert_eq(file.messages[0].fields.length(), 2)
+      assert_true(file.messages[0].fields[1].label == Repeated)
+      assert_true(schema_is_valid(file))
+      let generated = generate_moonbit_source(file)
+      assert_true(generated.contains("pub(all) struct EditionEvent"))
+      assert_true(generated.contains("tags : Array[String]"))
+    }
+  }
+}
+
+///|
 test "parser tolerates imports options reserved and field options" {
   let src =
     #|syntax = "proto3";

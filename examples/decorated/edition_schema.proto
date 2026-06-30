@@ -1,0 +1,7 @@
+edition = "2023";
+package moon.proto.lab.demo.v1;
+
+message EditionEvent {
+  string name = 1;
+  repeated string tags = 2;
+}

@@ -179,6 +179,20 @@ grep -q 'AnnotatedEvent' generated/verify_custom_options_report.md
 grep -q 'name : String' generated/verify_custom_options_report.md
 grep -q 'failures="0"' generated/verify_custom_options_report.xml
 
+python3 scripts/moon_proto_lab.py doctor examples/decorated/edition_schema.proto \
+  | grep -q 'schema valid'
+
+python3 scripts/moon_proto_lab.py inspect examples/decorated/edition_schema.proto \
+  | grep -q 'message EditionEvent fields=2'
+
+python3 scripts/moon_proto_lab.py verify examples/decorated/edition_schema.proto \
+  --report generated/verify_edition_schema_report.md \
+  --junit-out generated/verify_edition_schema_report.xml
+grep -Fq 'Overall status: **PASS**' generated/verify_edition_schema_report.md
+grep -q 'EditionEvent' generated/verify_edition_schema_report.md
+grep -q 'tags : Array\[String\]' generated/verify_edition_schema_report.md
+grep -q 'failures="0"' generated/verify_edition_schema_report.xml
+
 python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto \
   --report generated/compat_report.md \
   --junit-out generated/compat_report.xml
