@@ -103,6 +103,8 @@ priv struct ParsedMessage {
   desc : MessageDescriptor
   reserved_numbers : Array[ReservedNumberRange]
   reserved_names : Array[String]
+  nested_messages : Array[ParsedMessage]
+  nested_enums : Array[ParsedEnum]
 }
 
 ///|
@@ -444,6 +446,48 @@ fn ProtoParser::parse_oneof_fields(
 }
 
 ///|
+fn append_parsed_message(
+  messages : Array[MessageDescriptor],
+  reservations : Array[ReservedDescriptor],
+  enums : Array[EnumDescriptor],
+  enum_reservations : Array[ReservedDescriptor],
+  parsed : ParsedMessage,
+) -> Unit {
+  for nested_enum in parsed.nested_enums {
+    append_parsed_enum(enums, enum_reservations, nested_enum)
+  }
+  for nested in parsed.nested_messages {
+    append_parsed_message(
+      messages, reservations, enums, enum_reservations, nested,
+    )
+  }
+  messages.push(parsed.desc)
+  if parsed.reserved_numbers.length() > 0 || parsed.reserved_names.length() > 0 {
+    reservations.push(ReservedDescriptor::{
+      owner: parsed.desc.name,
+      numbers: parsed.reserved_numbers,
+      names: parsed.reserved_names,
+    })
+  }
+}
+
+///|
+fn append_parsed_enum(
+  enums : Array[EnumDescriptor],
+  reservations : Array[ReservedDescriptor],
+  parsed : ParsedEnum,
+) -> Unit {
+  enums.push(parsed.desc)
+  if parsed.reserved_numbers.length() > 0 || parsed.reserved_names.length() > 0 {
+    reservations.push(ReservedDescriptor::{
+      owner: parsed.desc.name,
+      numbers: parsed.reserved_numbers,
+      names: parsed.reserved_names,
+    })
+  }
+}
+
+///|
 fn ProtoParser::parse_message(self : ProtoParser) -> ParsedMessage? {
   let name = match self.consume_ident() {
     Some(n) => n
@@ -455,6 +499,8 @@ fn ProtoParser::parse_message(self : ProtoParser) -> ParsedMessage? {
   let fields : Array[FieldDescriptor] = []
   let reserved_numbers : Array[ReservedNumberRange] = []
   let reserved_names : Array[String] = []
+  let nested_messages : Array[ParsedMessage] = []
+  let nested_enums : Array[ParsedEnum] = []
   let mut done = false
   while !done {
     match self.peek() {
@@ -471,7 +517,19 @@ fn ProtoParser::parse_message(self : ProtoParser) -> ParsedMessage? {
           return None
         }
       Some(Ident(word)) =>
-        if word == "oneof" {
+        if word == "message" {
+          let _ = self.advance()
+          match self.parse_message() {
+            Some(nested) => nested_messages.push(nested)
+            None => return None
+          }
+        } else if word == "enum" {
+          let _ = self.advance()
+          match self.parse_enum() {
+            Some(nested_enum) => nested_enums.push(nested_enum)
+            None => return None
+          }
+        } else if word == "oneof" {
           let _ = self.advance()
           match self.parse_oneof_fields() {
             None => return None
@@ -512,6 +570,8 @@ fn ProtoParser::parse_message(self : ProtoParser) -> ParsedMessage? {
     desc: MessageDescriptor::{ name, fields },
     reserved_numbers,
     reserved_names,
+    nested_messages,
+    nested_enums,
   })
 }
 
@@ -692,34 +752,15 @@ pub fn parse_proto(src : String) -> ParseProtoResult {
       }
       Some("message") =>
         match p.parse_message() {
-          Some(parsed) => {
-            let owner = parsed.desc.name
-            messages.push(parsed.desc)
-            if parsed.reserved_numbers.length() > 0 ||
-              parsed.reserved_names.length() > 0 {
-              message_reservations.push(ReservedDescriptor::{
-                owner,
-                numbers: parsed.reserved_numbers,
-                names: parsed.reserved_names,
-              })
-            }
-          }
+          Some(parsed) =>
+            append_parsed_message(
+              messages, message_reservations, enums, enum_reservations, parsed,
+            )
           None => return ProtoErr(Expected("message"))
         }
       Some("enum") =>
         match p.parse_enum() {
-          Some(parsed) => {
-            let owner = parsed.desc.name
-            enums.push(parsed.desc)
-            if parsed.reserved_numbers.length() > 0 ||
-              parsed.reserved_names.length() > 0 {
-              enum_reservations.push(ReservedDescriptor::{
-                owner,
-                numbers: parsed.reserved_numbers,
-                names: parsed.reserved_names,
-              })
-            }
-          }
+          Some(parsed) => append_parsed_enum(enums, enum_reservations, parsed)
           None => return ProtoErr(Expected("enum"))
         }
       Some(other) => return ProtoErr(Expected("top-level item, got " + other))

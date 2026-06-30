@@ -134,6 +134,49 @@ test "parser tolerates imports options reserved and field options" {
 }
 
 ///|
+test "parser lifts nested message and enum descriptors" {
+  let src =
+    #|syntax = "proto3";
+    #|package demo.nested;
+    #|message Envelope {
+    #|  enum Kind {
+    #|    KIND_UNSPECIFIED = 0;
+    #|    KIND_CREATED = 1;
+    #|  }
+    #|  message Payload {
+    #|    string body = 1;
+    #|    bytes raw = 2;
+    #|  }
+    #|  Kind kind = 1;
+    #|  Payload payload = 2;
+    #|  repeated Payload history = 3;
+    #|}
+  match parse_proto(src) {
+    ProtoErr(_) => fail("nested type schema should parse")
+    ProtoOk(file) => {
+      assert_eq(file.package_name, "demo.nested")
+      assert_eq(file.enums.length(), 1)
+      assert_eq(file.enums[0].name, "Kind")
+      assert_eq(file.enums[0].values.length(), 2)
+      assert_eq(file.messages.length(), 2)
+      assert_eq(file.messages[0].name, "Payload")
+      assert_eq(file.messages[1].name, "Envelope")
+      assert_eq(file.messages[0].fields.length(), 2)
+      assert_eq(file.messages[1].fields.length(), 3)
+      assert_true(file.messages[1].fields[0].typ == EnumType("Kind"))
+      assert_true(file.messages[1].fields[1].typ == NamedType("Payload"))
+      assert_true(file.messages[1].fields[2].typ == NamedType("Payload"))
+      assert_true(schema_is_valid(file))
+      let generated = generate_moonbit_source(file)
+      assert_true(generated.contains("pub(all) enum Kind"))
+      assert_true(generated.contains("pub(all) struct Payload"))
+      assert_true(generated.contains("pub(all) struct Envelope"))
+      assert_true(generated.contains("history : Array[Payload]"))
+    }
+  }
+}
+
+///|
 test "parser tolerates service rpc blocks and block comments" {
   let src =
     #|syntax = "proto3";

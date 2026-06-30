@@ -1,0 +1,19 @@
+syntax = "proto3";
+package moon.proto.lab.demo.v1;
+
+message Envelope {
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    KIND_CREATED = 1;
+    KIND_DELETED = 2;
+  }
+
+  message Payload {
+    string body = 1;
+    bytes raw = 2;
+  }
+
+  Kind kind = 1;
+  Payload payload = 2;
+  repeated Payload history = 3;
+}

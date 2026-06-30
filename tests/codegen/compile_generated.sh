@@ -81,6 +81,23 @@ grep -Fq 'Overall status: **PASS**' generated/verify_service_report.md
 grep -q 'TelemetryAck' generated/verify_service_report.md
 grep -q 'failures="0"' generated/verify_service_report.xml
 
+python3 scripts/moon_proto_lab.py doctor examples/decorated/nested_types.proto \
+  | grep -q 'schema valid'
+
+python3 scripts/moon_proto_lab.py inspect examples/decorated/nested_types.proto \
+  | grep -q 'message Envelope fields=3'
+
+python3 scripts/moon_proto_lab.py inspect examples/decorated/nested_types.proto \
+  | grep -q 'enum Kind values=3'
+
+python3 scripts/moon_proto_lab.py verify examples/decorated/nested_types.proto \
+  --report generated/verify_nested_types_report.md \
+  --junit-out generated/verify_nested_types_report.xml
+grep -Fq 'Overall status: **PASS**' generated/verify_nested_types_report.md
+grep -q 'pub(all) struct Payload' generated/verify_nested_types_report.md
+grep -q 'history : Array\[Payload\]' generated/verify_nested_types_report.md
+grep -q 'failures="0"' generated/verify_nested_types_report.xml
+
 python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto \
   --report generated/compat_report.md \
   --junit-out generated/compat_report.xml
