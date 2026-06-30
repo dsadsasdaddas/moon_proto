@@ -19,7 +19,7 @@ Current tests cover:
 - invalid dynamic value rejection;
 - MoonBit struct/descriptor codegen snapshot;
 - proto3 packed repeated numeric encode/decode;
-- uint32/int32/sint32/fixed32/sfixed32 boundary encoding, JSON parsing and overflow rejection;
+- uint32/int32/sint32/fixed32/sfixed32 boundary encoding, JSON parsing, exponent-notation integer JSON input and overflow rejection;
 - float/double binary encoding, decoding and protobuf-style JSON roundtrip;
 - float/double protobuf JSON special strings: `"NaN"`, `"Infinity"`, `"-Infinity"`;
 - unpacked repeated numeric decode compatibility;
@@ -27,7 +27,7 @@ Current tests cover:
 - JSON string escaping and bytes base64 vectors, including standard `\b`/`\f` escapes, Unicode `\uXXXX`, UTF-16 surrogate pairs, URL-safe alphabet and omitted final padding;
 - protobuf-style JSON output for descriptor-driven dynamic messages;
 - JSON mapping rejection of unknown or mismatched fields;
-- JSON parser roundtrip, `null`-as-absent parsing, lowerCamelCase field-name aliases/output helpers, canonical duplicate-key rejection and repeated-element null rejection;
+- JSON parser roundtrip, exact exponent/decimal integer input, `null`-as-absent parsing, lowerCamelCase field-name aliases/output helpers, canonical duplicate-key rejection and repeated-element null rejection;
 - top-level enum parser and MoonBit codegen snapshots;
 - enum field binary and JSON roundtrip, including schema-aware protobuf JSON enum-name output/parsing for fields and map values;
 - schema validator positive and negative cases;
@@ -100,6 +100,6 @@ The project is positioned as a protobuf ecosystem verification lab for MoonBit. 
 - generated-code compile checks ensure generated MoonBit source actually builds;
 - verify reports make the result reviewable as Markdown/HTML artifacts.
 
-Completed parser/schema-tool verification now includes old/new compatibility checks, descriptor-set compatibility checks, descriptor-registry release gates, JSON release-policy checks, richer release-policy DSL checks with warning severity, official generated-output contract checks, official scalar-matrix adapter coverage, installed-plugin official generator smoke checks, conformance-lite Markdown/JSON/JUnit evidence reports with expected-fail mutation self-checks and coverage gates, registry adapter publish/push/pull checks over local paths, HTTP, authenticated HTTP, hosted registry profiles, and managed GitHub Contents backend profiles, larger conformance-lite oracle fixtures, upstream-style wire-decode edge vectors, an imported upstream-lite conformance subset, edition/import/option/reserved/service/nested-type/qualified-nested-reference parser tolerance, signed enum value/reserved-range tolerance, enum allow_alias duplicate-number validation, schema-aware protobuf JSON enum-name mapping for fields and map values, string-literal escape/single-quote tolerance, empty-statement tolerance, top-level extend/custom-option block tolerance, oneof option tolerance, protobuf JSON URL-safe/unpadded bytes base64, standard JSON string escapes with Unicode/surrogate-pair decoding and malformed escape/control-character rejection, null-as-absent and lowerCamelCase field-name alias/output helpers, block-comment tolerance, and reserved contract validation. Planned next verification:
+Completed parser/schema-tool verification now includes old/new compatibility checks, descriptor-set compatibility checks, descriptor-registry release gates, JSON release-policy checks, richer release-policy DSL checks with warning severity, official generated-output contract checks, official scalar-matrix adapter coverage, installed-plugin official generator smoke checks, conformance-lite Markdown/JSON/JUnit evidence reports with expected-fail mutation self-checks and coverage gates, registry adapter publish/push/pull checks over local paths, HTTP, authenticated HTTP, hosted registry profiles, and managed GitHub Contents backend profiles, larger conformance-lite oracle fixtures, upstream-style wire-decode edge vectors, an imported upstream-lite conformance subset, edition/import/option/reserved/service/nested-type/qualified-nested-reference parser tolerance, signed enum value/reserved-range tolerance, enum allow_alias duplicate-number validation, schema-aware protobuf JSON enum-name mapping for fields and map values, string-literal escape/single-quote tolerance, empty-statement tolerance, top-level extend/custom-option block tolerance, oneof option tolerance, protobuf JSON URL-safe/unpadded bytes base64, standard JSON string escapes with Unicode/surrogate-pair decoding and malformed escape/control-character rejection, exact exponent-notation integer parsing with uint64/int64 overflow guards, null-as-absent and lowerCamelCase field-name alias/output helpers, block-comment tolerance, and reserved contract validation. Planned next verification:
 
 - differential adapter tests against more official MoonBit protobuf runtime/codegen outputs when stable sample projects are available.

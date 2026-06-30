@@ -32,6 +32,12 @@ priv struct JsonParser {
 }
 
 ///|
+priv struct JsonIntegerText {
+  negative : Bool
+  digits : String
+}
+
+///|
 fn json_join(parts : Array[String], sep : String) -> String {
   let mut out = ""
   for i = 0; i < parts.length(); i = i + 1 {
@@ -956,16 +962,164 @@ fn JsonParser::parse_number_or_string_token(
 }
 
 ///|
-fn parse_u64_digits(text : String) -> UInt64? {
+fn json_digits_all_zero(digits : String) -> Bool {
+  for c in digits.to_array() {
+    if c != '0' {
+      return false
+    }
+  }
+  true
+}
+
+///|
+fn json_strip_leading_zeroes(digits : String) -> String {
+  let chars = digits.to_array()
+  if chars.length() == 0 {
+    return "0"
+  }
+  let mut i = 0
+  while i + 1 < chars.length() && chars[i] == '0' {
+    i = i + 1
+  }
+  digits[i:chars.length()].to_owned()
+}
+
+///|
+fn json_digits_in_range(digits : String, max : String) -> Bool {
+  let normalized = json_strip_leading_zeroes(digits)
+  let ds = normalized.to_array()
+  let ms = max.to_array()
+  if ds.length() < ms.length() {
+    return true
+  }
+  if ds.length() > ms.length() {
+    return false
+  }
+  for i = 0; i < ds.length(); i = i + 1 {
+    if ds[i] < ms[i] {
+      return true
+    }
+    if ds[i] > ms[i] {
+      return false
+    }
+  }
+  true
+}
+
+///|
+fn json_append_zeroes(digits : String, count : Int) -> String {
+  let mut out = digits
+  let mut remaining = count
+  if remaining > 80 {
+    remaining = 80
+  }
+  while remaining > 0 {
+    out = out + "0"
+    remaining = remaining - 1
+  }
+  out
+}
+
+///|
+fn parse_json_integer_text(text : String) -> JsonIntegerText? {
   let chars = text.to_array()
   if chars.length() == 0 {
     return None
   }
-  let mut value = 0UL
-  for c in chars {
-    if !is_json_digit(c) {
+  let mut i = 0
+  let mut negative = false
+  if chars[i] == '-' {
+    negative = true
+    i = i + 1
+  }
+  if i >= chars.length() || !is_json_digit(chars[i]) {
+    return None
+  }
+  let mut digits = ""
+  while i < chars.length() && is_json_digit(chars[i]) {
+    digits = digits + chars[i].to_string()
+    i = i + 1
+  }
+  let mut fractional_digits = 0
+  if i < chars.length() && chars[i] == '.' {
+    i = i + 1
+    if i >= chars.length() || !is_json_digit(chars[i]) {
       return None
     }
+    while i < chars.length() && is_json_digit(chars[i]) {
+      digits = digits + chars[i].to_string()
+      fractional_digits = fractional_digits + 1
+      i = i + 1
+    }
+  }
+  let mut exponent = 0
+  if i < chars.length() && (chars[i] == 'e' || chars[i] == 'E') {
+    i = i + 1
+    let mut exponent_negative = false
+    if i < chars.length() && chars[i] == '-' {
+      exponent_negative = true
+      i = i + 1
+    } else if i < chars.length() && chars[i] == '+' {
+      i = i + 1
+    }
+    if i >= chars.length() || !is_json_digit(chars[i]) {
+      return None
+    }
+    let mut value = 0
+    while i < chars.length() && is_json_digit(chars[i]) {
+      if value <= 1000 {
+        value = value * 10 + (chars[i].to_int() - '0'.to_int())
+      }
+      i = i + 1
+    }
+    exponent = if exponent_negative { -value } else { value }
+  }
+  if i != chars.length() {
+    return None
+  }
+  let shift = exponent - fractional_digits
+  if shift >= 0 {
+    digits = json_append_zeroes(digits, shift)
+  } else {
+    let remove = -shift
+    let ds = digits.to_array()
+    if remove > ds.length() {
+      if json_digits_all_zero(digits) {
+        digits = "0"
+      } else {
+        return None
+      }
+    } else {
+      let keep = ds.length() - remove
+      for j = keep; j < ds.length(); j = j + 1 {
+        if ds[j] != '0' {
+          return None
+        }
+      }
+      if keep == 0 {
+        digits = "0"
+      } else {
+        digits = digits[0:keep].to_owned()
+      }
+    }
+  }
+  Some(JsonIntegerText::{ negative, digits: json_strip_leading_zeroes(digits) })
+}
+
+///|
+fn parse_u64_digits(text : String) -> UInt64? {
+  let integer = match parse_json_integer_text(text) {
+    Some(v) => v
+    None => return None
+  }
+  if integer.negative {
+    return None
+  }
+  if !json_digits_in_range(integer.digits, "18446744073709551615") {
+    return None
+  }
+  let mut value = 0UL
+  for c in integer.digits.to_array() {
     value = value * 10UL + (c.to_int() - '0'.to_int()).to_uint64()
   }
   Some(value)
@@ -973,29 +1127,26 @@ fn parse_u64_digits(text : String) -> UInt64? {
 
 ///|
 fn parse_i64_digits(text : String) -> Int64? {
-  let chars = text.to_array()
-  if chars.length() == 0 {
+  let integer = match parse_json_integer_text(text) {
+    Some(v) => v
+    None => return None
+  }
+  let max = if integer.negative {
+    "9223372036854775808"
+  } else {
+    "9223372036854775807"
+  }
+  if !json_digits_in_range(integer.digits, max) {
     return None
   }
-  let mut i = 0
-  let mut negative = false
-  if chars[0] == '-' {
-    negative = true
-    i = 1
-  }
-  if i >= chars.length() {
-    return None
+  if integer.negative && integer.digits == "9223372036854775808" {
+    return Some(-9223372036854775807L - 1L)
   }
   let mut value = 0L
-  while i < chars.length() {
-    let c = chars[i]
-    if !is_json_digit(c) {
-      return None
-    }
+  for c in integer.digits.to_array() {
     value = value * 10L + (c.to_int() - '0'.to_int()).to_int64()
-    i = i + 1
   }
-  if negative {
+  if integer.negative {
     Some(-value)
   } else {
     Some(value)

@@ -1266,6 +1266,73 @@ test "protobuf style json parser roundtrip" {
 }
 
 ///|
+test "protobuf style json parser accepts integer exponent notation" {
+  let desc = MessageDescriptor::{
+    name: "NumericJson",
+    fields: [
+      FieldDescriptor::{
+        name: "u",
+        typ: UInt64Type,
+        number: 1,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "i",
+        typ: Int64Type,
+        number: 2,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "i32",
+        typ: Int32Type,
+        number: 3,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "u32",
+        typ: UInt32Type,
+        number: 4,
+        label: Singular,
+      },
+    ],
+  }
+  let json = "{\"u\":\"1.8446744073709551615e19\",\"i\":\"-9.223372036854775808e18\",\"i32\":\"2.147483647e9\",\"u32\":4.294967295e9}"
+  match json_to_message(desc, json) {
+    JsonDecodeErr(_) => fail("integer exponent JSON should parse")
+    JsonDecodeOk(msg) =>
+      assert_true(
+        msg ==
+        message_value([
+          message_field("u", UInt64Value(0xffffffffffffffffUL)),
+          message_field("i", Int64Value(-9223372036854775807L - 1L)),
+          message_field("i32", Int64Value(2147483647L)),
+          message_field("u32", UInt64Value(0xffffffffUL)),
+        ]),
+      )
+  }
+  match json_to_message(desc, "{\"i\":\"1.5\"}") {
+    JsonDecodeOk(_) => fail("fractional integer JSON should be rejected")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected fractional integer JSON error")
+  }
+  match json_to_message(desc, "{\"i\":\"1e-1\"}") {
+    JsonDecodeOk(_) => fail("negative exponent integer JSON should be rejected")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected negative-exponent integer JSON error")
+  }
+  match json_to_message(desc, "{\"u\":\"18446744073709551616\"}") {
+    JsonDecodeOk(_) => fail("uint64 overflow JSON should be rejected")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected uint64 overflow JSON error")
+  }
+  match json_to_message(desc, "{\"i\":\"9.223372036854775808e18\"}") {
+    JsonDecodeOk(_) => fail("int64 overflow exponent JSON should be rejected")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected int64 overflow JSON error")
+  }
+}
+
+///|
 test "protobuf style json parser treats null as absent" {
   let desc = MessageDescriptor::{
     name: "Contact",
