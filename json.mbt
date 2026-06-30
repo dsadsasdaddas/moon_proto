@@ -152,19 +152,25 @@ fn base64_value(c : Char) -> Int {
     62
   } else if c == '/' {
     63
+  } else if c == '-' {
+    62
+  } else if c == '_' {
+    63
   } else {
     -1
   }
 }
 
 ///|
-/// Decode standard base64 used by protobuf JSON bytes fields.
+/// Decode base64 used by protobuf JSON bytes fields.  In addition to the
+/// standard alphabet, protobuf JSON parsers accept URL-safe `-`/`_` variants
+/// and missing final padding.
 pub fn base64_decode(input : String) -> DecodeBytesResult {
   let chars = input.to_array()
   if chars.length() == 0 {
     return BytesOk(b"", 0)
   }
-  if chars.length() % 4 != 0 {
+  if chars.length() % 4 == 1 {
     return BytesErr(Unsupported("invalid base64 length"))
   }
   let out : Array[Byte] = []
@@ -172,8 +178,8 @@ pub fn base64_decode(input : String) -> DecodeBytesResult {
   while i < chars.length() {
     let c0 = chars[i]
     let c1 = chars[i + 1]
-    let c2 = chars[i + 2]
-    let c3 = chars[i + 3]
+    let c2 = if i + 2 < chars.length() { chars[i + 2] } else { '=' }
+    let c3 = if i + 3 < chars.length() { chars[i + 3] } else { '=' }
     let v0 = base64_value(c0)
     let v1 = base64_value(c1)
     let pad2 = c2 == '='

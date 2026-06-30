@@ -986,7 +986,34 @@ test "json string escaping and base64" {
   assert_eq(base64_encode(b"\xff\x00"), "/wA=")
   assert_eq(base64_encode(b"abc"), "YWJj")
   assert_true(base64_decode("/wA=") == BytesOk(b"\xff\x00", 4))
+  assert_true(base64_decode("/wA") == BytesOk(b"\xff\x00", 3))
+  assert_true(base64_decode("_wA") == BytesOk(b"\xff\x00", 3))
+  assert_true(base64_decode("-_8") == BytesOk(b"\xfb\xff", 3))
+  assert_true(base64_decode("YQ") == BytesOk(b"a", 2))
   assert_true(base64_decode("YWJj") == BytesOk(b"abc", 4))
+  match base64_decode("A") {
+    BytesOk(_, _) => fail("invalid base64 length should be rejected")
+    BytesErr(Unsupported(_)) => ()
+    BytesErr(_) => fail("unexpected base64 length error")
+  }
+  let desc = MessageDescriptor::{
+    name: "Blob",
+    fields: [
+      FieldDescriptor::{
+        name: "payload",
+        typ: BytesType,
+        number: 1,
+        label: Singular,
+      },
+    ],
+  }
+  match json_to_message(desc, "{\"payload\":\"_wA\"}") {
+    JsonDecodeErr(_) => fail("URL-safe unpadded base64 JSON should parse")
+    JsonDecodeOk(msg) =>
+      assert_true(
+        msg == message_value([message_field("payload", BytesValue(b"\xff\x00"))]),
+      )
+  }
 }
 
 ///|
