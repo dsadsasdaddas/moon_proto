@@ -776,18 +776,107 @@ fn JsonParser::consume_literal(self : JsonParser, wanted : String) -> Bool {
 }
 
 ///|
+fn json_hex_value(c : Char) -> Int {
+  if c >= '0' && c <= '9' {
+    c.to_int() - '0'.to_int()
+  } else if c >= 'a' && c <= 'f' {
+    c.to_int() - 'a'.to_int() + 10
+  } else if c >= 'A' && c <= 'F' {
+    c.to_int() - 'A'.to_int() + 10
+  } else {
+    -1
+  }
+}
+
+///|
+fn json_byte_from_int(value : Int) -> Byte {
+  (value & 255).reinterpret_as_uint().to_byte()
+}
+
+///|
+fn json_utf8_from_codepoint(code : Int) -> String {
+  let out : Array[Byte] = []
+  if code <= 0x7F {
+    out.push(json_byte_from_int(code))
+  } else if code <= 0x7FF {
+    out.push(json_byte_from_int(0xC0 | (code >> 6)))
+    out.push(json_byte_from_int(0x80 | (code & 0x3F)))
+  } else if code <= 0xFFFF {
+    out.push(json_byte_from_int(0xE0 | (code >> 12)))
+    out.push(json_byte_from_int(0x80 | ((code >> 6) & 0x3F)))
+    out.push(json_byte_from_int(0x80 | (code & 0x3F)))
+  } else {
+    out.push(json_byte_from_int(0xF0 | (code >> 18)))
+    out.push(json_byte_from_int(0x80 | ((code >> 12) & 0x3F)))
+    out.push(json_byte_from_int(0x80 | ((code >> 6) & 0x3F)))
+    out.push(json_byte_from_int(0x80 | (code & 0x3F)))
+  }
+  @utf8.decode_lossy(Bytes::from_array(out)[:])
+}
+
+///|
+fn JsonParser::read_json_hex_quad(self : JsonParser) -> Int? {
+  if self.i + 4 > self.chars.length() {
+    return None
+  }
+  let mut code = 0
+  for j = 0; j < 4; j = j + 1 {
+    let d = json_hex_value(self.chars[self.i + j])
+    if d < 0 {
+      return None
+    }
+    code = code * 16 + d
+  }
+  self.i = self.i + 4
+  Some(code)
+}
+
+///|
+fn JsonParser::parse_unicode_escape(self : JsonParser) -> JsonStringResult {
+  if self.i + 4 > self.chars.length() {
+    return JsonStringErr(UnexpectedEof)
+  }
+  let high = match self.read_json_hex_quad() {
+    Some(code) => code
+    None => return JsonStringErr(Unsupported("invalid JSON unicode escape"))
+  }
+  if high >= 0xD800 && high <= 0xDBFF {
+    if self.i + 2 > self.chars.length() {
+      return JsonStringErr(Unsupported("missing JSON low surrogate"))
+    }
+    if self.chars[self.i] != '\\' || self.chars[self.i + 1] != 'u' {
+      return JsonStringErr(Unsupported("missing JSON low surrogate"))
+    }
+    self.i = self.i + 2
+    let low = match self.read_json_hex_quad() {
+      Some(code) => code
+      None => return JsonStringErr(Unsupported("invalid JSON unicode escape"))
+    }
+    if low < 0xDC00 || low > 0xDFFF {
+      return JsonStringErr(Unsupported("invalid JSON low surrogate"))
+    }
+    let codepoint = 0x10000 + ((high - 0xD800) << 10) + (low - 0xDC00)
+    JsonStringOk(json_utf8_from_codepoint(codepoint))
+  } else if high >= 0xDC00 && high <= 0xDFFF {
+    JsonStringErr(Unsupported("unexpected JSON low surrogate"))
+  } else {
+    JsonStringOk(json_utf8_from_codepoint(high))
+  }
+}
+
+///|
 fn JsonParser::parse_string(self : JsonParser) -> JsonStringResult {
   self.skip_ws()
   if self.i >= self.chars.length() || self.chars[self.i] != '"' {
     return JsonStringErr(Unsupported("expected JSON string"))
   }
   self.i = self.i + 1
-  let out : Array[Char] = []
+  let mut out = ""
   while self.i < self.chars.length() {
     let c = self.chars[self.i]
     self.i = self.i + 1
     if c == '"' {
-      return JsonStringOk(String::from_iter(out.iter()))
+      return JsonStringOk(out)
     } else if c == '\\' {
       if self.i >= self.chars.length() {
         return JsonStringErr(UnexpectedEof)
@@ -795,22 +884,33 @@ fn JsonParser::parse_string(self : JsonParser) -> JsonStringResult {
       let e = self.chars[self.i]
       self.i = self.i + 1
       if e == '"' {
-        out.push('"')
+        out = out + "\""
       } else if e == '\\' {
-        out.push('\\')
+        out = out + "\\"
       } else if e == '/' {
-        out.push('/')
+        out = out + "/"
+      } else if e == 'b' {
+        out = out + "\b"
+      } else if e == 'f' {
+        out = out + "\f"
       } else if e == 'n' {
-        out.push('\n')
+        out = out + "\n"
       } else if e == 'r' {
-        out.push('\r')
+        out = out + "\r"
       } else if e == 't' {
-        out.push('\t')
+        out = out + "\t"
+      } else if e == 'u' {
+        match self.parse_unicode_escape() {
+          JsonStringErr(err) => return JsonStringErr(err)
+          JsonStringOk(text) => out = out + text
+        }
       } else {
         return JsonStringErr(Unsupported("unsupported JSON escape"))
       }
+    } else if c.to_int() < 32 {
+      return JsonStringErr(Unsupported("unescaped JSON control character"))
     } else {
-      out.push(c)
+      out = out + c.to_string()
     }
   }
   JsonStringErr(UnexpectedEof)

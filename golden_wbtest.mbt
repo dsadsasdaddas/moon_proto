@@ -1061,6 +1061,45 @@ test "json string escaping and base64" {
         msg == message_value([message_field("payload", BytesValue(b"\xff\x00"))]),
       )
   }
+  let text_desc = MessageDescriptor::{
+    name: "Text",
+    fields: [
+      FieldDescriptor::{
+        name: "text",
+        typ: StringType,
+        number: 1,
+        label: Singular,
+      },
+    ],
+  }
+  let escaped_json = "{\"text\":\"A\\u002fB\\u0041\\b\\f\\u4e2d\\ud83d\\ude00\"}"
+  match json_to_message(text_desc, escaped_json) {
+    JsonDecodeErr(_) => fail("standard JSON string escapes should parse")
+    JsonDecodeOk(msg) => {
+      assert_true(
+        msg == message_value([message_field("text", StringValue("A/BA\b\f中😀"))]),
+      )
+      match message_to_json(text_desc, msg) {
+        JsonErr(_) => fail("escaped string should render")
+        JsonOk(json) => assert_eq(json, "{\"text\":\"A/BA\\u0008\\u000c中😀\"}")
+      }
+    }
+  }
+  match json_to_message(text_desc, "{\"text\":\"\\u12xz\"}") {
+    JsonDecodeOk(_) => fail("bad JSON unicode hex should be rejected")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected bad unicode escape error")
+  }
+  match json_to_message(text_desc, "{\"text\":\"\\ud800x\"}") {
+    JsonDecodeOk(_) => fail("unpaired JSON surrogate should be rejected")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected surrogate escape error")
+  }
+  match json_to_message(text_desc, "{\"text\":\"line\nbreak\"}") {
+    JsonDecodeOk(_) => fail("unescaped JSON control characters should be rejected")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected control-character JSON error")
+  }
 }
 
 ///|
