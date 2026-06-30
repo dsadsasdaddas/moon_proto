@@ -1,0 +1,39 @@
+name: Bug report
+about: Report incorrect schema parsing, encoding, JSON mapping or verification behavior.
+title: "bug: "
+labels: [bug, regression]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: Minimal .proto, JSON, bytes or command that reproduces the bug.
+      render: bash
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification commands
+      value: |
+        moon test
+        tests/codegen/compile_generated.sh

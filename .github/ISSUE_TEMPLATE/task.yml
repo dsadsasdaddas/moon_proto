@@ -1,0 +1,29 @@
+name: Engineering task
+about: Track a contest, documentation, tooling or implementation task.
+title: "task: "
+labels: [task]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What should be delivered?
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Explicitly list included and excluded work.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      value: |
+        - [ ] Public commit or PR exists.
+        - [ ] Tests or verification evidence are attached.
+        - [ ] Documentation is updated if needed.
+    validations:
+      required: true

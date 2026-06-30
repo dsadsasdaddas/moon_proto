@@ -54,6 +54,16 @@ The project has a small but end-to-end verifiable protobuf laboratory pipeline:
 - deterministic property-style roundtrip corpora for binary and JSON paths;
 - generated-code compile checks and GitHub Actions CI.
 
+
+## Engineering records
+
+For contest traceability, the repository keeps public engineering records in:
+
+- [`CHANGELOG.md`](CHANGELOG.md) for release-level changes;
+- [`docs/ENGINEERING_RECORD.md`](docs/ENGINEERING_RECORD.md) for work-package traceability and verification policy;
+- GitHub Issues and Pull Requests for future task/bug tracking;
+- GitHub Actions for reproducible CI evidence.
+
 ## Reviewer quick demo
 
 For a short contest-review walkthrough, see [`docs/DEMO.md`](docs/DEMO.md). It provides copy/paste commands for schema doctor, JSON roundtrip normalization, generated-code compile checks, compatibility checks, conformance-lite evidence and official differential reports.

@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Reviewer demo
+    url: https://github.com/dsadsasdaddas/moon_proto/blob/main/docs/DEMO.md
+    about: Quick commands for contest reviewers.
