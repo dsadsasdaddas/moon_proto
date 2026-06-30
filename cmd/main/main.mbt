@@ -9,6 +9,7 @@ fn usage() -> String {
     #|  moon run cmd/main -- doctor --schema '<proto3 source>'
     #|  moon run cmd/main -- inspect --schema '<proto3 source>'
     #|  moon run cmd/main -- compat --old-schema '<old proto3>' --new-schema '<new proto3>'
+    #|  moon run cmd/main -- json-roundtrip --schema '<proto3 source>' --message User --json '<protobuf JSON>'
     #|
     #|Commands:
     #|  gen --example          Generate MoonBit source for a built-in demo schema.
@@ -17,6 +18,8 @@ fn usage() -> String {
     #|  inspect --schema <text> Print a compact schema summary for reports and debugging.
     #|  compat --old-schema <old> --new-schema <new>
     #|                         Check whether a new schema preserves old field and enum contracts.
+    #|  json-roundtrip --schema <text> --message <name> --json <json> [--lower-camel]
+    #|                         Parse protobuf JSON with a schema and print canonical JSON.
   text
 }
 
@@ -774,6 +777,68 @@ fn compat(old_schema : String, new_schema : String) -> Unit {
 }
 
 ///|
+fn decode_error_text(err : @proto.DecodeError) -> String {
+  match err {
+    @proto.UnexpectedEof => "unexpected EOF"
+    @proto.VarintOverflow => "varint overflow"
+    @proto.InvalidWireType(value) => "invalid wire type: " + value.to_string()
+    @proto.InvalidFieldNumber(value) =>
+      "invalid field number: " + value.to_string()
+    @proto.NegativeLength => "negative length"
+    @proto.Unsupported(message) => message
+  }
+}
+
+///|
+fn json_roundtrip(
+  schema : String,
+  message_name : String,
+  json_input : String,
+  lower_camel : Bool,
+) -> Unit {
+  match parse_or_print_error(schema) {
+    None => ()
+    Some(file) =>
+      match @proto.validate_proto_file(file) {
+        @proto.SchemaInvalid(_) =>
+          println(
+            "error: " + first_issue_message(@proto.validate_proto_file(file)),
+          )
+        @proto.SchemaValid =>
+          match find_message(file.messages, message_name) {
+            None => println("error: message not found: " + message_name)
+            Some(desc) =>
+              match
+                @proto.json_to_message_with_schema(
+                  desc, file.messages, file.enums, json_input,
+                ) {
+                @proto.JsonDecodeErr(err) =>
+                  println("error: json decode failed: " + decode_error_text(err))
+                @proto.JsonDecodeOk(message) => {
+                  let encoded = if lower_camel {
+                    @proto.message_to_json_lower_camel_with_schema(
+                      desc, file.messages, file.enums, message,
+                    )
+                  } else {
+                    @proto.message_to_json_with_schema(
+                      desc, file.messages, file.enums, message,
+                    )
+                  }
+                  match encoded {
+                    @proto.JsonErr(err) =>
+                      println(
+                        "error: json encode failed: " + decode_error_text(err),
+                      )
+                    @proto.JsonOk(text) => println(text)
+                  }
+                }
+              }
+          }
+      }
+  }
+}
+
+///|
 fn arg_at(args : Array[String], index : Int) -> String? {
   if index < args.length() {
     Some(args[index])
@@ -806,6 +871,38 @@ fn main {
       match (arg_at(args, 2), arg_at(args, 3), arg_at(args, 4), arg_at(args, 5)) {
         (Some("--old-schema"), Some(old_schema), Some("--new-schema"), Some(new_schema)) =>
           compat(old_schema, new_schema)
+        _ => println(usage())
+      }
+    Some("json-roundtrip") =>
+      match (
+        arg_at(args, 2),
+        arg_at(args, 3),
+        arg_at(args, 4),
+        arg_at(args, 5),
+        arg_at(args, 6),
+        arg_at(args, 7),
+        arg_at(args, 8),
+      ) {
+        (
+          Some("--schema"),
+          Some(schema),
+          Some("--message"),
+          Some(message_name),
+          Some("--json"),
+          Some(json_input),
+          None,
+        ) =>
+          json_roundtrip(schema, message_name, json_input, false)
+        (
+          Some("--schema"),
+          Some(schema),
+          Some("--message"),
+          Some(message_name),
+          Some("--json"),
+          Some(json_input),
+          Some("--lower-camel"),
+        ) =>
+          json_roundtrip(schema, message_name, json_input, true)
         _ => println(usage())
       }
     Some("--help") | Some("help") | None => println(usage())

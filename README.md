@@ -43,6 +43,7 @@ The project has a small but end-to-end verifiable protobuf laboratory pipeline:
 - protobuf-style JSON writer/parser for scalar/repeated/map/nested/oneof dynamic messages, including enum-name schema mapping for fields and map values, numeric map-key normalization with canonical duplicate detection, URL-safe/unpadded bytes base64 input, standard JSON string escapes with Unicode/surrogate-pair decoding, strict JSON number grammar, exponent-notation integer input with overflow-safe range checks, `null`-as-absent parsing semantics and lowerCamelCase input/output helpers;
 - MoonBit source generator for message structs, enums, descriptor registries and helper functions;
 - file-based generator wrapper for `.proto` input and generated `.mbt` output;
+- schema-aware MoonBit CLI JSON roundtrip/normalization smoke command for protobuf JSON fixtures;
 - file-based Schema Doctor CLI for stable diagnostics on valid and invalid schemas;
 - AI verification CLI that runs doctor, schema inspection, codegen, generated-code compile checks, and Markdown/HTML/JUnit XML report generation;
 - old/new schema compatibility checker for detecting field, enum, package, type and reserved-contract breaking changes;
@@ -112,6 +113,7 @@ moon run cmd/main -- gen --example
 moon run cmd/main -- gen --schema 'syntax = "proto3"; message User { uint64 id = 1; }'
 moon run cmd/main -- doctor --schema 'syntax = "proto3"; message User { uint64 id = 1; }'
 moon run cmd/main -- inspect --schema 'syntax = "proto3"; message User { uint64 id = 1; }'
+moon run cmd/main -- json-roundtrip --schema 'syntax = "proto3"; message Bag { map<uint64, string> u64 = 1; uint64 user_id = 2; }' --message Bag --json '{"u64":{"1.0":"one"},"userId":"150"}'
 ```
 
 Generate from a `.proto` file into a project directory:
@@ -299,6 +301,7 @@ tests/codegen/compile_generated.sh
 - M58: protobuf JSON integer parser accepts exact exponent/decimal notation for signed and unsigned integer fields, including overflow-safe uint64/int64 boundary checks. Done.
 - M59: protobuf JSON number tokenizer enforces JSON grammar and rejects leading plus, leading-zero, missing fraction and missing exponent digit forms. Done.
 - M60: protobuf JSON numeric map keys use exact integer exponent/decimal normalization, overflow guards and canonical duplicate-key rejection. Done.
+- M61: schema-aware CLI `json-roundtrip` command normalizes protobuf JSON and smoke-tests lowerCamel/numeric map-key duplicate behavior. Done.
 
 ## License
 

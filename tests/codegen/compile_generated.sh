@@ -43,6 +43,33 @@ grep -q 'pub fn encode_Smoke' generated_inline_check.mbt
 moon check
 
 rm generated_inline_check.mbt
+
+JSON_ROUNDTRIP_SCHEMA='syntax = "proto3"; message NumericKeyBag { map<uint64, string> u64 = 1; uint64 user_id = 2; }'
+JSON_ROUNDTRIP_OUT="$(
+  moon run cmd/main -- json-roundtrip \
+    --schema "$JSON_ROUNDTRIP_SCHEMA" \
+    --message NumericKeyBag \
+    --json '{"u64":{"1.0":"one"},"userId":"150"}'
+)"
+test "$JSON_ROUNDTRIP_OUT" = '{"u64":{"1":"one"},"user_id":"150"}'
+
+JSON_ROUNDTRIP_CAMEL_OUT="$(
+  moon run cmd/main -- json-roundtrip \
+    --schema "$JSON_ROUNDTRIP_SCHEMA" \
+    --message NumericKeyBag \
+    --json '{"u64":{"1.0":"one"},"userId":"150"}' \
+    --lower-camel
+)"
+test "$JSON_ROUNDTRIP_CAMEL_OUT" = '{"u64":{"1":"one"},"userId":"150"}'
+
+JSON_ROUNDTRIP_DUP_OUT="$(
+  moon run cmd/main -- json-roundtrip \
+    --schema "$JSON_ROUNDTRIP_SCHEMA" \
+    --message NumericKeyBag \
+    --json '{"u64":{"1":"one","1.0":"uno"}}'
+)"
+echo "$JSON_ROUNDTRIP_DUP_OUT" | grep -q 'duplicate map JSON key: 1'
+
 python3 scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/
 
 grep -q 'pub(all) struct User' generated/user.mbt
