@@ -1418,12 +1418,6 @@ fn parse_json_map_field(
           JsonStringErr(e) => return JsonDecodeErr(e)
           JsonStringOk(k) => k
         }
-        if json_string_array_contains(seen, key_text) {
-          return JsonDecodeErr(
-            Unsupported("duplicate map JSON key: " + key_text),
-          )
-        }
-        seen.push(key_text)
         if !parser.consume(':') {
           return JsonDecodeErr(Unsupported("expected map JSON colon"))
         }
@@ -1431,6 +1425,16 @@ fn parse_json_map_field(
           JsonScalarErr(e) => return JsonDecodeErr(e)
           JsonScalarOk(v) => v
         }
+        let canonical_key = match map_key_to_json_property(key_typ, key) {
+          JsonErr(e) => return JsonDecodeErr(e)
+          JsonOk(v) => v
+        }
+        if json_string_array_contains(seen, canonical_key) {
+          return JsonDecodeErr(
+            Unsupported("duplicate map JSON key: " + canonical_key),
+          )
+        }
+        seen.push(canonical_key)
         let value = match
           parse_scalar_from_json(
             parser, value_typ, descriptors, enum_descriptors,

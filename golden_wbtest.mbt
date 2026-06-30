@@ -2328,6 +2328,70 @@ test "map fields binary and json roundtrip" {
 }
 
 ///|
+test "map numeric JSON keys use exact integer normalization" {
+  let desc = MessageDescriptor::{
+    name: "NumericKeyBag",
+    fields: [
+      FieldDescriptor::{
+        name: "u64",
+        typ: MapType(UInt64Type, StringType),
+        number: 1,
+        label: Repeated,
+      },
+      FieldDescriptor::{
+        name: "i64",
+        typ: MapType(Int64Type, StringType),
+        number: 2,
+        label: Repeated,
+      },
+      FieldDescriptor::{
+        name: "u32",
+        typ: MapType(UInt32Type, StringType),
+        number: 3,
+        label: Repeated,
+      },
+    ],
+  }
+  let json = "{\"u64\":{\"1.8446744073709551615e19\":\"max\"},\"i64\":{\"-9.223372036854775808e18\":\"min\"},\"u32\":{\"4.294967295e9\":\"max32\"}}"
+  match json_to_message(desc, json) {
+    JsonDecodeErr(_) => fail("numeric map key exponent JSON should parse")
+    JsonDecodeOk(msg) =>
+      assert_true(
+        msg ==
+        message_value([
+          repeated_message_field("u64", [
+            map_entry_value(UInt64Value(0xffffffffffffffffUL), StringValue("max")),
+          ]),
+          repeated_message_field("i64", [
+            map_entry_value(
+              Int64Value(-9223372036854775807L - 1L),
+              StringValue("min"),
+            ),
+          ]),
+          repeated_message_field("u32", [
+            map_entry_value(UInt64Value(0xffffffffUL), StringValue("max32")),
+          ]),
+        ]),
+      )
+  }
+  match json_to_message(desc, "{\"u64\":{\"1\":\"one\",\"1.0\":\"uno\"}}") {
+    JsonDecodeOk(_) => fail("canonical duplicate map keys should be rejected")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected duplicate map key error")
+  }
+  match json_to_message(desc, "{\"u64\":{\"18446744073709551616\":\"bad\"}}") {
+    JsonDecodeOk(_) => fail("uint64 map key overflow should be rejected")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected uint64 map key overflow error")
+  }
+  match json_to_message(desc, "{\"i64\":{\"1.5\":\"bad\"}}") {
+    JsonDecodeOk(_) => fail("fractional integer map key should be rejected")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected fractional map key error")
+  }
+}
+
+///|
 test "map enum values use schema-aware json names" {
   let enum_desc = EnumDescriptor::{
     name: "Color",

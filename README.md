@@ -40,7 +40,7 @@ The project has a small but end-to-end verifiable protobuf laboratory pipeline:
 - schema validator for field numbers, duplicate names/numbers, proto3 enum invariants, top-level conflicts, map constraints, and field/enum reserved-number/name reuse;
 - schema-driven dynamic message encode/decode for scalar, repeated, packed repeated, enum, nested message, map and oneof fields;
 - unknown-field skipping during decode;
-- protobuf-style JSON writer/parser for scalar/repeated/map/nested/oneof dynamic messages, including enum-name schema mapping for fields and map values, URL-safe/unpadded bytes base64 input, standard JSON string escapes with Unicode/surrogate-pair decoding, strict JSON number grammar, exponent-notation integer input with overflow-safe range checks, `null`-as-absent parsing semantics and lowerCamelCase input/output helpers;
+- protobuf-style JSON writer/parser for scalar/repeated/map/nested/oneof dynamic messages, including enum-name schema mapping for fields and map values, numeric map-key normalization with canonical duplicate detection, URL-safe/unpadded bytes base64 input, standard JSON string escapes with Unicode/surrogate-pair decoding, strict JSON number grammar, exponent-notation integer input with overflow-safe range checks, `null`-as-absent parsing semantics and lowerCamelCase input/output helpers;
 - MoonBit source generator for message structs, enums, descriptor registries and helper functions;
 - file-based generator wrapper for `.proto` input and generated `.mbt` output;
 - file-based Schema Doctor CLI for stable diagnostics on valid and invalid schemas;
@@ -298,6 +298,7 @@ tests/codegen/compile_generated.sh
 - M57: protobuf JSON string parser accepts standard escapes, Unicode `\uXXXX` sequences and UTF-16 surrogate pairs while rejecting malformed escapes/control characters. Done.
 - M58: protobuf JSON integer parser accepts exact exponent/decimal notation for signed and unsigned integer fields, including overflow-safe uint64/int64 boundary checks. Done.
 - M59: protobuf JSON number tokenizer enforces JSON grammar and rejects leading plus, leading-zero, missing fraction and missing exponent digit forms. Done.
+- M60: protobuf JSON numeric map keys use exact integer exponent/decimal normalization, overflow guards and canonical duplicate-key rejection. Done.
 
 ## License
 
