@@ -37,10 +37,11 @@ Current cases:
 
 ```bash
 python3 scripts/moon_proto_official_diff.py \
-  --report generated/official_diff_report.md
+  --report generated/official_diff_report.md \
+  --junit-out generated/official_diff_report.xml
 ```
 
-Default mode does not require `protoc` or an official checkout. It still runs Moon Proto Lab doctor, inspect, codegen and generated-code compile checks. The official source and generator steps are marked `SKIP`, but the overall report can still pass because the dynamic lab contract is verified.
+Default mode does not require `protoc` or an official checkout. It still runs Moon Proto Lab doctor, inspect, codegen and generated-code compile checks. The official source and generator steps are marked `SKIP`, but the overall report can still pass because the dynamic lab contract is verified. `--junit-out` emits CI-readable skipped test cases for those optional official steps.
 
 ## Run the official source contract check
 
@@ -51,7 +52,8 @@ git clone --depth 1 https://github.com/moonbitlang/protoc-gen-mbt /tmp/protoc-ge
 python3 scripts/moon_proto_official_diff.py \
   --official-repo /tmp/protoc-gen-mbt \
   --require-official \
-  --report generated/official_source_diff_report.md
+  --report generated/official_source_diff_report.md \
+  --junit-out generated/official_source_diff_report.xml
 ```
 
 `--require-official` makes the source-contract step blocking. Moon Proto Lab CI runs this mode.
@@ -65,7 +67,8 @@ python3 scripts/moon_proto_official_diff.py \
   --official-repo /tmp/protoc-gen-mbt \
   --run-official-generator \
   --require-official \
-  --report generated/official_generator_diff_report.md
+  --report generated/official_generator_diff_report.md \
+  --junit-out generated/official_generator_diff_report.xml
 ```
 
 The generator step is only blocking when both `--require-official` and `--run-official-generator` are used. This keeps the main CI stable while still documenting a deeper path for environments where the official generator dependency graph resolves.
@@ -76,5 +79,5 @@ This turns the project into ecosystem infrastructure rather than another protobu
 
 - Moon Proto Lab can verify schemas before official code generation;
 - the manifest makes overlap with official capabilities explicit;
-- generated reports are suitable for CI artifacts and contest demos;
+- generated Markdown/HTML/JUnit reports are suitable for CI artifacts and contest demos;
 - intentional differences are documented instead of hidden: Moon Proto Lab focuses on descriptor-driven dynamic `MessageValue` verification, while the official generator emits production typed MoonBit structs, maps and oneof enums.

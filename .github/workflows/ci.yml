@@ -42,4 +42,7 @@ jobs:
           python3 scripts/moon_proto_official_diff.py \
             --official-repo /tmp/protoc-gen-mbt \
             --require-official \
-            --report generated/official_source_diff_report.md
+            --report generated/official_source_diff_report.md \
+            --junit-out generated/official_source_diff_report.xml
+          grep -q '<testsuite' generated/official_source_diff_report.xml
+          grep -q 'failures="0"' generated/official_source_diff_report.xml

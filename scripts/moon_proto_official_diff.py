@@ -319,6 +319,92 @@ def html_report(md: str) -> str:
 '''
 
 
+def xml_escape(text: str) -> str:
+    return html.escape(text, quote=True)
+
+
+def source_step_is_failure(source_step: StepResult, require_official: bool) -> bool:
+    return source_step.blocking or (require_official and source_step.status != 'PASS')
+
+
+def case_step_is_failure(step_result: StepResult, require_official: bool, run_generator: bool) -> bool:
+    if step_result.blocking:
+        return True
+    return (
+        require_official
+        and run_generator
+        and step_result.name == 'official protoc-gen-mbt'
+        and step_result.status != 'PASS'
+    )
+
+
+def junit_cases(
+    source_step: StepResult,
+    results: list[CaseResult],
+    require_official: bool,
+    run_generator: bool,
+) -> list[tuple[str, StepResult, bool]]:
+    cases: list[tuple[str, StepResult, bool]] = [
+        (
+            'official source checkout / ' + source_step.name,
+            source_step,
+            source_step_is_failure(source_step, require_official),
+        )
+    ]
+    for result in results:
+        for step_result in result.steps:
+            cases.append(
+                (
+                    f'{result.name} / {step_result.name}',
+                    step_result,
+                    case_step_is_failure(step_result, require_official, run_generator),
+                )
+            )
+    return cases
+
+
+def write_junit_report(
+    path: Path,
+    source_step: StepResult,
+    results: list[CaseResult],
+    require_official: bool,
+    run_generator: bool,
+) -> None:
+    cases = junit_cases(source_step, results, require_official, run_generator)
+    failures = sum(1 for _name, _step_result, is_failure in cases if is_failure)
+    skipped = sum(
+        1
+        for _name, step_result, is_failure in cases
+        if step_result.status == 'SKIP' and not is_failure
+    )
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        (
+            '<testsuite name="moon-proto-lab.official-differential" '
+            f'tests="{len(cases)}" failures="{failures}" skipped="{skipped}">'
+        ),
+    ]
+    for name, step_result, is_failure in cases:
+        lines.append(
+            f'  <testcase name="{xml_escape(name)}" classname="moon-proto-lab.official-differential">'
+        )
+        if is_failure:
+            first = step_result.details.splitlines()[0] if step_result.details else 'failed'
+            lines.append(
+                f'    <failure message="{xml_escape(first)}">'
+                + xml_escape(step_result.details)
+                + '</failure>'
+            )
+        elif step_result.status == 'SKIP':
+            lines.append(f'    <skipped message="{xml_escape(step_result.details)}" />')
+        else:
+            lines.append(f'    <system-out>{xml_escape(step_result.details)}</system-out>')
+        lines.append('  </testcase>')
+    lines.append('</testsuite>')
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+
+
 def write_report(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.suffix.lower() in {'.html', '.htm'}:
@@ -333,6 +419,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument('--manifest', default='tests/differential/official_cases.json')
     parser.add_argument('--report', help='write Markdown/HTML report')
+    parser.add_argument('--junit-out', help='write CI-readable JUnit XML report')
     parser.add_argument('--moon-bin', default='moon')
     parser.add_argument('--protoc-bin', default='protoc')
     parser.add_argument('--official-repo', help='optional path to a moonbitlang/protoc-gen-mbt checkout')
@@ -358,6 +445,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.report:
         write_report(Path(args.report), md)
         print(f'report: {args.report}')
+    if args.junit_out:
+        write_junit_report(
+            Path(args.junit_out),
+            source_step,
+            results,
+            args.require_official,
+            args.run_official_generator,
+        )
+        print(f'junit: {args.junit_out}')
     print(md, end='')
     has_failures = any(step.blocking for result in results for step in result.steps)
     has_failures = has_failures or source_step.blocking
