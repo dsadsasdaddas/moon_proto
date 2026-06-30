@@ -20,9 +20,9 @@
 | 要求 | 证据 |
 | --- | --- |
 | MoonBit 为主要实现语言 | `*.mbt` runtime/parser/codegen/tests 共 15 个源文件 |
-| 项目规模 4k+ MoonBit LOC | 当前 MoonBit 源码约 `6663` 行 |
+| 项目规模 4k+ MoonBit LOC | 当前 MoonBit 源码约 `6790` 行 |
 | 清晰工程结构 | wire/schema/runtime/json/codegen/cli/tests/docs 分层 |
-| 示例 schema | `examples/simple/user.proto`、`examples/decorated/telemetry.proto` |
+| 示例 schema | `examples/simple/user.proto`、`examples/decorated/telemetry.proto`、`examples/decorated/telemetry_service.proto` |
 | 文件版生成入口 | `scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/` |
 | Schema Doctor / compat / verify / official diff / conformance-lite / descriptor verify/compat/registry/policy | `scripts/moon_proto_lab.py doctor examples/simple/user.proto` / `compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md` / `verify --report generated/verify_report.md` / `scripts/moon_proto_official_diff.py --report generated/official_diff_report.md --junit-out generated/official_diff_report.xml` / `scripts/moon_proto_official_diff.py --run-official-generator --official-plugin-bin protoc-gen-mbt --protoc-bin protoc --report generated/official_installed_plugin_diff_report.md --junit-out generated/official_installed_plugin_diff_report.xml` / `scripts/moon_proto_conformance.py --report generated/conformance_lite_report.md --json-out generated/conformance_lite.json --junit-out generated/conformance_lite.xml` / `scripts/moon_proto_descriptor.py verify tests/fixtures/user_descriptor_set.hex --report generated/descriptor_verify_report.md` / `scripts/moon_proto_descriptor.py compat tests/fixtures/user_descriptor_set.hex tests/fixtures/user_descriptor_set_reserved_v2.hex --report generated/descriptor_compat_report.md` / `scripts/moon_proto_descriptor.py registry tests/fixtures/user_descriptor_set.hex tests/fixtures/user_descriptor_set_reserved_v2.hex --name demo-user --report generated/descriptor_registry_report.md --json-out generated/descriptor_registry.json` |
 | 生态定位说明 | `docs/ECOSYSTEM_POSITIONING.md` |
@@ -31,7 +31,7 @@
 
 - protobuf wire type、key packing/parsing；
 - varint、zig-zag、fixed32/fixed64、length-delimited bytes/string；
-- proto3 schema parser 和 descriptor model，支持点分 package/type、import、option、真实 reserved number/name descriptor、extensions 与字段/枚举值 option 容错解析；
+- proto3 schema parser 和 descriptor model，支持点分 package/type、import、option、真实 reserved number/name descriptor、extensions、block comments、service/rpc block 忽略式容错与字段/枚举值 option 容错解析；
 - schema validation diagnostics，包含 reserved number/name 复用检查；
 - descriptor-driven dynamic message binary encode/decode；
 - repeated 与 proto3 packed repeated；
@@ -60,7 +60,7 @@
 | Go oracle | `(cd tests/oracle && go run .)` |
 | MoonBit check | `moon check` |
 | MoonBit build | `moon build` |
-| MoonBit tests | `moon test`，当前 `43/43 passed` |
+| MoonBit tests | `moon test`，当前 `44/44 passed` |
 | All targets | `moon test --target all` 覆盖 wasm/wasm-gc/js/native |
 | CLI smoke | `moon run cmd/main -- gen --example` |
 | File-based generator | `python3 scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/` |

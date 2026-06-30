@@ -1,0 +1,24 @@
+syntax = "proto3";
+package moon.proto.lab.demo.v1;
+
+/* Block comments appear in many real-world protobuf schemas. */
+message TelemetryRequest {
+  uint64 id = 1;
+}
+
+message TelemetryAck {
+  bool ok = 1;
+}
+
+service TelemetryService {
+  option deprecated = false;
+
+  rpc Publish (TelemetryRequest) returns (TelemetryAck);
+
+  rpc Stream (TelemetryRequest) returns (stream TelemetryAck) {
+    option (google.api.http) = {
+      post: "/v1/telemetry:stream"
+      body: "*"
+    };
+  }
+}

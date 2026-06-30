@@ -134,6 +134,41 @@ test "parser tolerates imports options reserved and field options" {
 }
 
 ///|
+test "parser tolerates service rpc blocks and block comments" {
+  let src =
+    #|syntax = "proto3";
+    #|package demo.rpc;
+    #|/* block comment before messages */
+    #|message Request {
+    #|  uint64 id = 1;
+    #|}
+    #|message Reply {
+    #|  bool ok = 1;
+    #|}
+    #|service DemoService {
+    #|  option deprecated = false;
+    #|  rpc Publish (Request) returns (Reply);
+    #|  rpc Stream (Request) returns (stream Reply) {
+    #|    option (google.api.http) = {
+    #|      post: "/v1/demo:stream"
+    #|      body: "*"
+    #|    };
+    #|  }
+    #|}
+  match parse_proto(src) {
+    ProtoErr(_) => fail("service/rpc schema should parse")
+    ProtoOk(file) => {
+      assert_eq(file.package_name, "demo.rpc")
+      assert_eq(file.messages.length(), 2)
+      assert_eq(file.messages[0].name, "Request")
+      assert_eq(file.messages[1].name, "Reply")
+      assert_eq(file.enums.length(), 0)
+      assert_true(schema_is_valid(file))
+    }
+  }
+}
+
+///|
 test "schema validator rejects parsed reserved reuse" {
   let src =
     #|syntax = "proto3";

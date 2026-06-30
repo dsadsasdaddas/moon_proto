@@ -68,6 +68,19 @@ python3 scripts/moon_proto_lab.py doctor examples/decorated/telemetry.proto \
 python3 scripts/moon_proto_lab.py inspect examples/decorated/telemetry.proto \
   | grep -q 'reserved numbers: 7, 9 to 12'
 
+python3 scripts/moon_proto_lab.py doctor examples/decorated/telemetry_service.proto \
+  | grep -q 'schema valid'
+
+python3 scripts/moon_proto_lab.py inspect examples/decorated/telemetry_service.proto \
+  | grep -q 'message TelemetryRequest fields=1'
+
+python3 scripts/moon_proto_lab.py verify examples/decorated/telemetry_service.proto \
+  --report generated/verify_service_report.md \
+  --junit-out generated/verify_service_report.xml
+grep -Fq 'Overall status: **PASS**' generated/verify_service_report.md
+grep -q 'TelemetryAck' generated/verify_service_report.md
+grep -q 'failures="0"' generated/verify_service_report.xml
+
 python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto \
   --report generated/compat_report.md \
   --junit-out generated/compat_report.xml

@@ -51,6 +51,14 @@ pub fn lex_proto(src : String) -> Array[ProtoToken] {
       while i < chars.length() && chars[i] != '\n' {
         i = i + 1
       }
+    } else if c == '/' && i + 1 < chars.length() && chars[i + 1] == '*' {
+      i = i + 2
+      while i + 1 < chars.length() && !(chars[i] == '*' && chars[i + 1] == '/') {
+        i = i + 1
+      }
+      if i + 1 < chars.length() {
+        i = i + 2
+      }
     } else if is_alpha(c) || c == '_' {
       let start = i
       i = i + 1
@@ -202,6 +210,23 @@ fn ProtoParser::skip_bracketed_options(self : ProtoParser) -> Bool {
     match self.advance() {
       Some(Sym("[")) => depth = depth + 1
       Some(Sym("]")) => depth = depth - 1
+      Some(_) => ()
+      None => return false
+    }
+  }
+  true
+}
+
+///|
+fn ProtoParser::skip_braced_block(self : ProtoParser) -> Bool {
+  if !self.match_sym("{") {
+    return false
+  }
+  let mut depth = 1
+  while depth > 0 {
+    match self.advance() {
+      Some(Sym("{")) => depth = depth + 1
+      Some(Sym("}")) => depth = depth - 1
       Some(_) => ()
       None => return false
     }
@@ -654,6 +679,15 @@ pub fn parse_proto(src : String) -> ParseProtoResult {
       Some("option") => {
         if !p.skip_until_semicolon() {
           return ProtoErr(Expected("option statement"))
+        }
+      }
+      Some("service") => {
+        match p.consume_ident() {
+          Some(_) =>
+            if !p.skip_braced_block() {
+              return ProtoErr(Expected("service block"))
+            }
+          None => return ProtoErr(Expected("service name"))
         }
       }
       Some("message") =>
