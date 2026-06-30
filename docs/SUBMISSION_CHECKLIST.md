@@ -48,8 +48,8 @@
 - official MoonBit protobuf differential harness manifest/report、CI source-contract check、预生成官方输出 contract check 与 installed-plugin live-generator smoke path；
 - FileDescriptorSet descriptor/reflection bridge、descriptor verify report、old/new descriptor compatibility report、descriptor registry release gate、JSON release-policy DSL/warning check、file/HTTP/authenticated/profile/GitHub Contents managed-backend registry adapter publish/push/pull 与 JUnit XML CI report；
 - AI verify Markdown/HTML report generator；
-- Python/Go official protobuf oracle fixtures, including 32-bit numeric boundary, float/double and special float fixtures；
-- conformance-lite Markdown/JSON/JUnit evidence report，含 expected-fail mutation self-checks 与 semantic-axis coverage gates；
+- Python/Go official protobuf oracle fixtures, including 32-bit numeric boundary, float/double, special float and upstream-style wire-decode edge fixtures；
+- conformance-lite Markdown/JSON/JUnit evidence report，含 upstream-style wire-decode edge vectors、expected-fail mutation self-checks 与 semantic-axis coverage gates；
 - generated-code compile check，适合验证 AI 生成代码。
 
 ## 测试与 CI
@@ -60,7 +60,7 @@
 | Go oracle | `(cd tests/oracle && go run .)` |
 | MoonBit check | `moon check` |
 | MoonBit build | `moon build` |
-| MoonBit tests | `moon test`，当前 `42/42 passed` |
+| MoonBit tests | `moon test`，当前 `43/43 passed` |
 | All targets | `moon test --target all` 覆盖 wasm/wasm-gc/js/native |
 | CLI smoke | `moon run cmd/main -- gen --example` |
 | File-based generator | `python3 scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/` |

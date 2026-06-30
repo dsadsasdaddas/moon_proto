@@ -1009,6 +1009,64 @@ test "official python protobuf oracle full user bytes and json" {
 }
 
 ///|
+test "upstream-style wire decode edge vector" {
+  let desc = MessageDescriptor::{
+    name: "User",
+    fields: [
+      FieldDescriptor::{
+        name: "id",
+        typ: UInt64Type,
+        number: 1,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "name",
+        typ: StringType,
+        number: 2,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "samples",
+        typ: UInt64Type,
+        number: 7,
+        label: Repeated,
+      },
+    ],
+  }
+  // Duplicate singular field 1 keeps the final value, field 99 is unknown and
+  // skipped, and repeated field 7 arrives once unpacked and once packed.
+  let wire =
+    b"\x08\x01\x98\x06\xb9\x60\x38\x01\x38\x96\x01\x3a\x02\x02\x03\x12\x03Bob\x08\x96\x01"
+  match decode_message(desc, wire) {
+    DecodeMessageErr(_) => fail("wire edge vector decode failed")
+    DecodeMessageOk(decoded, next) => {
+      assert_eq(next, wire.length())
+      assert_true(
+        decoded ==
+        message_value([
+          message_field("id", UInt64Value(150UL)),
+          repeated_message_field("samples", [
+            UInt64Value(1UL),
+            UInt64Value(150UL),
+            UInt64Value(2UL),
+            UInt64Value(3UL),
+          ]),
+          message_field("name", StringValue("Bob")),
+        ]),
+      )
+      match message_to_json(desc, decoded) {
+        JsonErr(_) => fail("wire edge vector JSON render failed")
+        JsonOk(json) =>
+          assert_eq(
+            json,
+            "{\"id\":\"150\",\"name\":\"Bob\",\"samples\":[\"1\",\"150\",\"2\",\"3\"]}",
+          )
+      }
+    }
+  }
+}
+
+///|
 test "official python protobuf oracle 32-bit numeric bytes and json" {
   let desc = MessageDescriptor::{
     name: "Numbers32",

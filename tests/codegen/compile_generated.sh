@@ -250,6 +250,9 @@ python3 scripts/moon_proto_conformance.py \
   --junit-out generated/conformance_lite.xml
 grep -Fq 'Overall status: **PASS**' generated/conformance_lite_report.md
 grep -q 'proto3_map_string_and_int64_keys' generated/conformance_lite_report.md
+grep -q 'proto3_wire_decode_unknown_duplicate_packed_unpacked' generated/conformance_lite_report.md
+grep -q 'coverage:wire-decode' generated/conformance_lite_report.md
+grep -q 'coverage:unknown-field' generated/conformance_lite_report.md
 grep -q 'reject_hex_binary_mismatch' generated/conformance_lite_report.md
 grep -q 'Coverage gates' generated/conformance_lite_report.md
 grep -q 'coverage:fixture-integrity' generated/conformance_lite_report.md

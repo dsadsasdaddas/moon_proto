@@ -39,6 +39,9 @@ FLOATS_JSON = FIXTURES / "floats.json"
 FLOAT_SPECIALS_BIN = FIXTURES / "float_specials.bin"
 FLOAT_SPECIALS_HEX = FIXTURES / "float_specials.hex"
 FLOAT_SPECIALS_JSON = FIXTURES / "float_specials.json"
+USER_WIRE_EDGES_BIN = FIXTURES / "user_wire_edges.bin"
+USER_WIRE_EDGES_HEX = FIXTURES / "user_wire_edges.hex"
+USER_WIRE_EDGES_JSON = FIXTURES / "user_wire_edges.json"
 
 
 def _field(
@@ -305,6 +308,19 @@ def oracle_values():
     return binary, binary.hex() + "\n", canonical_json
 
 
+def user_wire_edges_oracle_values():
+    # Upstream conformance-style decode vector: duplicate singular values keep
+    # the last one, unknown field 99 is ignored by JSON mapping, and repeated
+    # numeric values can arrive in both unpacked and packed wire forms.
+    raw = b"\x08\x01\x98\x06\xb9\x60\x38\x01\x38\x96\x01\x3a\x02\x02\x03\x12\x03Bob\x08\x96\x01"
+    User = make_user_message_class()
+    user = User()
+    user.ParseFromString(raw)
+    data = json_format.MessageToDict(user, preserving_proto_field_name=True)
+    canonical_json = json.dumps(data, ensure_ascii=False, separators=(",", ":")) + "\n"
+    return raw, raw.hex() + "\n", canonical_json
+
+
 def bag_oracle_values():
     bag = make_bag()
     binary = bag.SerializeToString(deterministic=True)
@@ -381,6 +397,10 @@ def write_fixtures() -> None:
     FLOAT_SPECIALS_BIN.write_bytes(specials_binary)
     FLOAT_SPECIALS_HEX.write_text(specials_hex_text, encoding="utf-8")
     FLOAT_SPECIALS_JSON.write_text(specials_json_text, encoding="utf-8")
+    wire_edges_binary, wire_edges_hex_text, wire_edges_json_text = user_wire_edges_oracle_values()
+    USER_WIRE_EDGES_BIN.write_bytes(wire_edges_binary)
+    USER_WIRE_EDGES_HEX.write_text(wire_edges_hex_text, encoding="utf-8")
+    USER_WIRE_EDGES_JSON.write_text(wire_edges_json_text, encoding="utf-8")
 
 
 def verify_fixtures() -> None:
@@ -390,6 +410,7 @@ def verify_fixtures() -> None:
     numbers32_binary, numbers32_hex_text, numbers32_json_text = numbers32_oracle_values()
     floats_binary, floats_hex_text, floats_json_text = floats_oracle_values()
     specials_binary, specials_hex_text, specials_json_text = float_specials_oracle_values()
+    wire_edges_binary, wire_edges_hex_text, wire_edges_json_text = user_wire_edges_oracle_values()
     checks = [
         (BIN, binary, BIN.read_bytes() if BIN.exists() else None),
         (HEX, hex_text, HEX.read_text(encoding="utf-8") if HEX.exists() else None),
@@ -454,6 +475,21 @@ def verify_fixtures() -> None:
             specials_json_text,
             FLOAT_SPECIALS_JSON.read_text(encoding="utf-8") if FLOAT_SPECIALS_JSON.exists() else None,
         ),
+        (
+            USER_WIRE_EDGES_BIN,
+            wire_edges_binary,
+            USER_WIRE_EDGES_BIN.read_bytes() if USER_WIRE_EDGES_BIN.exists() else None,
+        ),
+        (
+            USER_WIRE_EDGES_HEX,
+            wire_edges_hex_text,
+            USER_WIRE_EDGES_HEX.read_text(encoding="utf-8") if USER_WIRE_EDGES_HEX.exists() else None,
+        ),
+        (
+            USER_WIRE_EDGES_JSON,
+            wire_edges_json_text,
+            USER_WIRE_EDGES_JSON.read_text(encoding="utf-8") if USER_WIRE_EDGES_JSON.exists() else None,
+        ),
     ]
     failures = []
     actual_bag_binary = BAG_BIN.read_bytes() if BAG_BIN.exists() else None
@@ -507,6 +543,8 @@ def verify_fixtures() -> None:
     print("floats.json", floats_json_text.strip())
     print("float_specials.hex", specials_hex_text.strip())
     print("float_specials.json", specials_json_text.strip())
+    print("user_wire_edges.hex", wire_edges_hex_text.strip())
+    print("user_wire_edges.json", wire_edges_json_text.strip())
 
 
 def main() -> None:

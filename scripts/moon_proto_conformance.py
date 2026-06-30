@@ -93,6 +93,28 @@ CASES = [
         axes=("oracle", "binary", "json", "scalar", "repeated", "packed", "bytes", "json-int64"),
     ),
     ConformanceCase(
+        name="proto3_wire_decode_unknown_duplicate_packed_unpacked",
+        fixture="user_wire_edges",
+        category="upstream-style wire decode",
+        feature="duplicate singular last-one-wins, unknown field skip, and mixed unpacked/packed repeated numeric input",
+        oracle_function="user_wire_edges_oracle_values",
+        required_json={
+            "id": "150",
+            "name": "Bob",
+            "samples": ["1", "150", "2", "3"],
+        },
+        axes=(
+            "oracle",
+            "binary",
+            "json",
+            "wire-decode",
+            "unknown-field",
+            "last-one-wins",
+            "unpacked-input",
+            "packed",
+        ),
+    ),
+    ConformanceCase(
         name="proto3_map_string_and_int64_keys",
         fixture="bag_maps",
         category="binary+json",
@@ -179,14 +201,18 @@ NEGATIVE_MUTATIONS = [
 
 
 COVERAGE_REQUIREMENTS = {
-    "oracle": 6,
-    "binary": 6,
-    "json": 6,
+    "oracle": 7,
+    "binary": 7,
+    "json": 7,
     "map": 1,
     "oneof": 1,
     "numeric32": 1,
     "float": 2,
     "float-special": 1,
+    "wire-decode": 1,
+    "unknown-field": 1,
+    "last-one-wins": 1,
+    "unpacked-input": 1,
     "negative": 4,
     "fixture-integrity": 4,
 }
@@ -375,10 +401,17 @@ def run_negative_case(
 
 def evaluate_coverage_gates(results: list[CaseResult], include_negative: bool = True) -> list[CoverageGate]:
     gates: list[CoverageGate] = []
+    negative_gate_axes = {"negative", "fixture-integrity"}
     for axis, minimum in COVERAGE_REQUIREMENTS.items():
-        if not include_negative and axis in {"negative", "fixture-integrity"}:
+        if not include_negative and axis in negative_gate_axes:
             continue
-        matching = [result for result in results if result.ok and axis in result.axes]
+        matching = [
+            result
+            for result in results
+            if result.ok
+            and axis in result.axes
+            and (axis in negative_gate_axes or result.category != "negative-self-check")
+        ]
         count = len(matching)
         gates.append(CoverageGate(
             name=f"coverage:{axis}",
@@ -433,7 +466,8 @@ def conformance_report(results: list[CaseResult], gates: list[CoverageGate]) -> 
         "- map fields with string and int64 keys;",
         "- oneof JSON selection;",
         "- 32-bit numeric boundary values;",
-        "- float/double finite and special JSON values.",
+        "- float/double finite and special JSON values;",
+        "- upstream-style wire decode edges: unknown fields, duplicate singular last-one-wins, and mixed packed/unpacked repeated input;",
         "- negative mutation self-checks for fixture corruption, missing artifacts and JSON evidence loss.",
         "",
     ])

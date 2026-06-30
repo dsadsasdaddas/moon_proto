@@ -438,6 +438,23 @@ func floatSpecialsOracleValues() ([]byte, string, string) {
 	return binary, hex.EncodeToString(binary) + "\n", string(jsonBytes) + "\n"
 }
 
+func userWireEdgesOracleValues() ([]byte, string, string) {
+	raw, err := hex.DecodeString("08019806b96038013896013a0202031203426f62089601")
+	if err != nil {
+		panic(err)
+	}
+	desc := makeUserDescriptor()
+	message := dynamicpb.NewMessageType(desc).New()
+	if err := proto.Unmarshal(raw, message.Interface()); err != nil {
+		panic(err)
+	}
+	jsonBytes, err := protojson.MarshalOptions{UseProtoNames: true}.Marshal(message.Interface())
+	if err != nil {
+		panic(err)
+	}
+	return raw, hex.EncodeToString(raw) + "\n", string(jsonBytes) + "\n"
+}
+
 func verifyFile(path string, expected []byte) error {
 	actual, err := os.ReadFile(path)
 	if err != nil {
@@ -476,19 +493,22 @@ func main() {
 	numbers32Binary, numbers32HexText, numbers32JSONText := numbers32OracleValues()
 	floatsBinary, floatsHexText, floatsJSONText := floatsOracleValues()
 	specialsBinary, specialsHexText, specialsJSONText := floatSpecialsOracleValues()
+	wireEdgesBinary, wireEdgesHexText, wireEdgesJSONText := userWireEdgesOracleValues()
 	checks := map[string][]byte{
-		filepath.Join(root, "tests", "fixtures", "user_full.bin"):      binary,
-		filepath.Join(root, "tests", "fixtures", "user_full.hex"):      []byte(hexText),
-		filepath.Join(root, "tests", "fixtures", "bag_maps.bin"):       bagBinary,
-		filepath.Join(root, "tests", "fixtures", "bag_maps.hex"):       []byte(bagHexText),
-		filepath.Join(root, "tests", "fixtures", "contact_oneof.bin"):  contactBinary,
-		filepath.Join(root, "tests", "fixtures", "contact_oneof.hex"):  []byte(contactHexText),
-		filepath.Join(root, "tests", "fixtures", "numbers32.bin"):      numbers32Binary,
-		filepath.Join(root, "tests", "fixtures", "numbers32.hex"):      []byte(numbers32HexText),
-		filepath.Join(root, "tests", "fixtures", "floats.bin"):         floatsBinary,
-		filepath.Join(root, "tests", "fixtures", "floats.hex"):         []byte(floatsHexText),
-		filepath.Join(root, "tests", "fixtures", "float_specials.bin"): specialsBinary,
-		filepath.Join(root, "tests", "fixtures", "float_specials.hex"): []byte(specialsHexText),
+		filepath.Join(root, "tests", "fixtures", "user_full.bin"):       binary,
+		filepath.Join(root, "tests", "fixtures", "user_full.hex"):       []byte(hexText),
+		filepath.Join(root, "tests", "fixtures", "bag_maps.bin"):        bagBinary,
+		filepath.Join(root, "tests", "fixtures", "bag_maps.hex"):        []byte(bagHexText),
+		filepath.Join(root, "tests", "fixtures", "contact_oneof.bin"):   contactBinary,
+		filepath.Join(root, "tests", "fixtures", "contact_oneof.hex"):   []byte(contactHexText),
+		filepath.Join(root, "tests", "fixtures", "numbers32.bin"):       numbers32Binary,
+		filepath.Join(root, "tests", "fixtures", "numbers32.hex"):       []byte(numbers32HexText),
+		filepath.Join(root, "tests", "fixtures", "floats.bin"):          floatsBinary,
+		filepath.Join(root, "tests", "fixtures", "floats.hex"):          []byte(floatsHexText),
+		filepath.Join(root, "tests", "fixtures", "float_specials.bin"):  specialsBinary,
+		filepath.Join(root, "tests", "fixtures", "float_specials.hex"):  []byte(specialsHexText),
+		filepath.Join(root, "tests", "fixtures", "user_wire_edges.bin"): wireEdgesBinary,
+		filepath.Join(root, "tests", "fixtures", "user_wire_edges.hex"): []byte(wireEdgesHexText),
 	}
 	for path, expected := range checks {
 		if err := verifyFile(path, expected); err != nil {
@@ -513,6 +533,9 @@ func main() {
 	if err := verifyJSONFile(filepath.Join(root, "tests", "fixtures", "float_specials.json"), []byte(specialsJSONText)); err != nil {
 		panic(err)
 	}
+	if err := verifyJSONFile(filepath.Join(root, "tests", "fixtures", "user_wire_edges.json"), []byte(wireEdgesJSONText)); err != nil {
+		panic(err)
+	}
 	fmt.Println("Go protobuf oracle fixtures verified")
 	fmt.Println("user_full.hex", hexText[:len(hexText)-1])
 	fmt.Println("user_full.json", jsonText[:len(jsonText)-1])
@@ -526,4 +549,6 @@ func main() {
 	fmt.Println("floats.json", floatsJSONText[:len(floatsJSONText)-1])
 	fmt.Println("float_specials.hex", specialsHexText[:len(specialsHexText)-1])
 	fmt.Println("float_specials.json", specialsJSONText[:len(specialsJSONText)-1])
+	fmt.Println("user_wire_edges.hex", wireEdgesHexText[:len(wireEdgesHexText)-1])
+	fmt.Println("user_wire_edges.json", wireEdgesJSONText[:len(wireEdgesJSONText)-1])
 }

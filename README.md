@@ -18,7 +18,7 @@ Moon Proto Lab therefore does **not** claim to replace the official/runtime-orie
 - parse and validate `.proto` schemas before code generation;
 - provide a dynamic descriptor/message runtime for debugging and schema experiments;
 - check protobuf binary and JSON mapping behavior against Python/Go official protobuf oracles;
-- provide conformance-lite fixtures for scalar, repeated, packed repeated, enum, nested, map and oneof cases;
+- provide conformance-lite fixtures for scalar, repeated, packed repeated, enum, nested, map, oneof and upstream-style wire-decode edge cases;
 - compile-check generated MoonBit source so AI-generated schema/code changes are not only syntactically plausible but actually buildable;
 - keep the door open for future adapters to official MoonBit protobuf packages.
 
@@ -48,8 +48,8 @@ The project has a small but end-to-end verifiable protobuf laboratory pipeline:
 - old/new schema compatibility checker for detecting field, enum, package, type and reserved-contract breaking changes;
 - official MoonBit protobuf differential harness manifest/report for schemas overlapping with `moonbitlang/protoc-gen-mbt`, including source-contract, pre-generated output and installed-plugin live-generator smoke paths;
 - FileDescriptorSet descriptor/reflection bridge for `.pb`/`.hex`/`.json` descriptor imports, proto reconstruction, verification reports, old/new descriptor-set compatibility reports, descriptor-registry release gates, JSON release-policy checks with rule-based severity/warning support, and file/HTTP/authenticated/profile/GitHub Contents managed-backend registry adapter publish/push/pull verification;
-- Python and Go official protobuf oracle fixtures for cross-language compatibility checks, including 32-bit numeric boundary values, float/double values, and special NaN/Infinity JSON values;
-- conformance-lite evidence report with Markdown/JSON/JUnit output for scalar/repeated/packed, map, oneof, numeric-boundary, float/double and special-float cases, expected-fail mutation self-checks, and coverage-gate taxonomy;
+- Python and Go official protobuf oracle fixtures for cross-language compatibility checks, including 32-bit numeric boundary values, float/double values, special NaN/Infinity JSON values, and upstream-style wire-decode edge vectors;
+- conformance-lite evidence report with Markdown/JSON/JUnit output for scalar/repeated/packed, map, oneof, numeric-boundary, float/double, special-float and wire-decode edge cases, expected-fail mutation self-checks, and coverage-gate taxonomy;
 - deterministic property-style roundtrip corpora for binary and JSON paths;
 - generated-code compile checks and GitHub Actions CI.
 
@@ -245,6 +245,7 @@ tests/codegen/compile_generated.sh
 - M36: conformance-lite expected-fail mutation self-checks for corrupted fixtures. Done.
 - M37: conformance-lite semantic-axis coverage gates in Markdown/JSON/JUnit reports. Done.
 - M38: installed official protoc-gen-mbt plugin live-generator smoke path. Done.
+- M39: upstream-style wire-decode conformance vectors for duplicate singular last-one-wins, unknown-field skipping, and mixed packed/unpacked repeated input. Done.
 
 ## License
 
