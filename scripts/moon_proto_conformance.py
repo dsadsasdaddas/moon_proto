@@ -26,6 +26,7 @@ from typing import Any, Callable
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures"
 PYTHON_ORACLE = ROOT / "tests" / "oracle" / "python_protobuf_oracle.py"
+UPSTREAM_LITE_CASES = ROOT / "tests" / "conformance" / "upstream_lite_cases.json"
 
 
 @dataclass(frozen=True)
@@ -62,6 +63,18 @@ class NegativeMutationCase:
     mutation: str
     feature: str
     axes: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class UpstreamLiteCase:
+    name: str
+    fixture: str
+    category: str
+    feature: str
+    required_json: dict[str, Any]
+    axes: tuple[str, ...]
+    upstream_reference: str = ""
+    forbidden_json_keys: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -213,6 +226,9 @@ COVERAGE_REQUIREMENTS = {
     "unknown-field": 1,
     "last-one-wins": 1,
     "unpacked-input": 1,
+    "upstream-lite": 11,
+    "protobuf-input": 10,
+    "json-output": 11,
     "negative": 4,
     "fixture-integrity": 4,
 }
@@ -348,6 +364,89 @@ def run_case(case: ConformanceCase, fixtures_dir: Path, oracle_module: Any) -> C
         )
 
 
+def load_upstream_lite_cases(path: Path) -> tuple[str, list[UpstreamLiteCase]]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    description = str(data.get("description", ""))
+    cases: list[UpstreamLiteCase] = []
+    for raw in data.get("cases", []):
+        axes = tuple(str(axis) for axis in raw.get("axes", []))
+        if "upstream-lite" not in axes:
+            axes = axes + ("upstream-lite",)
+        cases.append(
+            UpstreamLiteCase(
+                name=str(raw["name"]),
+                fixture=str(raw["fixture"]),
+                category=str(raw.get("category", "upstream-lite imported subset")),
+                feature=str(raw.get("feature", raw["name"])),
+                required_json=dict(raw.get("required_json", {})),
+                axes=axes,
+                upstream_reference=str(raw.get("upstream_reference", data.get("source_note", ""))),
+                forbidden_json_keys=tuple(str(key) for key in raw.get("forbidden_json_keys", [])),
+            )
+        )
+    return description, cases
+
+
+def run_upstream_lite_case(
+    case: UpstreamLiteCase,
+    fixtures_dir: Path,
+    positive_results_by_fixture: dict[str, CaseResult],
+) -> CaseResult:
+    bin_path = fixtures_dir / f"{case.fixture}.bin"
+    hex_path = fixtures_dir / f"{case.fixture}.hex"
+    json_path = fixtures_dir / f"{case.fixture}.json"
+    failures: list[str] = []
+    actual_bin = b""
+    try:
+        base = positive_results_by_fixture.get(case.fixture)
+        if base is None:
+            failures.append(f"no oracle-backed base fixture registered: {case.fixture}")
+        elif not base.ok:
+            failures.append(f"base oracle fixture failed: {base.details}")
+
+        actual_bin = bin_path.read_bytes()
+        actual_hex = read_fixture_text(hex_path)
+        actual_json = read_fixture_text(json_path)
+        try:
+            if bytes.fromhex(actual_hex.strip()) != actual_bin:
+                failures.append("hex fixture does not decode to the binary fixture")
+        except ValueError as exc:
+            failures.append(f"hex fixture is invalid: {exc}")
+
+        try:
+            parsed_json = json.loads(actual_json)
+        except json.JSONDecodeError as exc:
+            parsed_json = None
+            failures.append(f"JSON fixture is invalid JSON: {exc}")
+        if parsed_json is not None:
+            failures.extend(compare_json_subset(parsed_json, case.required_json))
+            if isinstance(parsed_json, dict):
+                for key in case.forbidden_json_keys:
+                    if key in parsed_json:
+                        failures.append(f"$.{key}: forbidden key present")
+    except Exception as exc:
+        failures.append(str(exc))
+
+    digest = hashlib.sha256(actual_bin).hexdigest() if actual_bin else ""
+    details = (
+        f"{case.feature}; upstream_ref={case.upstream_reference}; "
+        f"bytes={len(actual_bin)}; sha256={digest[:16]}; fixture={case.fixture}"
+    )
+    if failures:
+        details = "; ".join(failures)
+    return CaseResult(
+        name=case.name,
+        fixture=case.fixture,
+        category=case.category,
+        feature=case.feature,
+        ok=not failures,
+        details=details,
+        axes=case.axes,
+        sha256=digest,
+        size=len(actual_bin),
+    )
+
+
 def copy_fixture_triplet(source_dir: Path, target_dir: Path, fixture: str) -> None:
     target_dir.mkdir(parents=True, exist_ok=True)
     for suffix in (".bin", ".hex", ".json"):
@@ -399,11 +498,18 @@ def run_negative_case(
     )
 
 
-def evaluate_coverage_gates(results: list[CaseResult], include_negative: bool = True) -> list[CoverageGate]:
+def evaluate_coverage_gates(
+    results: list[CaseResult],
+    include_negative: bool = True,
+    include_upstream_lite: bool = True,
+) -> list[CoverageGate]:
     gates: list[CoverageGate] = []
     negative_gate_axes = {"negative", "fixture-integrity"}
+    upstream_gate_axes = {"upstream-lite", "protobuf-input", "json-output"}
     for axis, minimum in COVERAGE_REQUIREMENTS.items():
         if not include_negative and axis in negative_gate_axes:
+            continue
+        if not include_upstream_lite and axis in upstream_gate_axes:
             continue
         matching = [
             result
@@ -427,7 +533,11 @@ def markdown_cell(text: str) -> str:
     return str(text).replace("|", "\\|").replace("\n", "<br>")
 
 
-def conformance_report(results: list[CaseResult], gates: list[CoverageGate]) -> str:
+def conformance_report(
+    results: list[CaseResult],
+    gates: list[CoverageGate],
+    upstream_lite_description: str = "",
+) -> str:
     ok = all(result.ok for result in results) and all(gate.ok for gate in gates)
     lines = [
         "# Moon Proto Lab conformance-lite report",
@@ -436,6 +546,7 @@ def conformance_report(results: list[CaseResult], gates: list[CoverageGate]) -> 
         f"- Overall status: **{'PASS' if ok else 'FAIL'}**",
         f"- Cases: `{sum(1 for result in results if result.ok)}/{len(results)}` passing",
         "- Oracle: Python `google.protobuf` dynamic descriptors; Go oracle is run separately in CI against the same fixtures.",
+        f"- Upstream-lite imported subset: `{sum(1 for result in results if 'upstream-lite' in result.axes)}` case(s).",
         "",
         "| Case | Category | Fixture | Status | Evidence |",
         "| --- | --- | --- | --- | --- |",
@@ -445,6 +556,13 @@ def conformance_report(results: list[CaseResult], gates: list[CoverageGate]) -> 
             f"| {markdown_cell(result.name)} | {markdown_cell(result.category)} | "
             f"{markdown_cell(result.fixture)} | {'PASS' if result.ok else 'FAIL'} | {markdown_cell(result.details)} |"
         )
+    if upstream_lite_description:
+        lines.extend([
+            "",
+            "## Upstream-lite subset",
+            "",
+            upstream_lite_description,
+        ])
     lines.extend([
         "",
         "## Coverage gates",
@@ -468,19 +586,28 @@ def conformance_report(results: list[CaseResult], gates: list[CoverageGate]) -> 
         "- 32-bit numeric boundary values;",
         "- float/double finite and special JSON values;",
         "- upstream-style wire decode edges: unknown fields, duplicate singular last-one-wins, and mixed packed/unpacked repeated input;",
+        "- imported upstream-lite conformance subset over protobuf-input to JSON-output acceptance cases;",
         "- negative mutation self-checks for fixture corruption, missing artifacts and JSON evidence loss.",
         "",
     ])
     return "\n".join(lines)
 
 
-def result_json(results: list[CaseResult], gates: list[CoverageGate]) -> dict[str, Any]:
+def result_json(
+    results: list[CaseResult],
+    gates: list[CoverageGate],
+    upstream_lite_description: str = "",
+) -> dict[str, Any]:
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "overall_status": "PASS" if all(result.ok for result in results) and all(gate.ok for gate in gates) else "FAIL",
         "case_count": len(results),
         "passing_count": sum(1 for result in results if result.ok),
         "oracle": "python google.protobuf dynamic descriptors; go oracle checked separately",
+        "upstream_lite": {
+            "description": upstream_lite_description,
+            "case_count": sum(1 for result in results if "upstream-lite" in result.axes),
+        },
         "coverage_gates": [
             {
                 "name": gate.name,
@@ -549,29 +676,43 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json-out", help="write machine-readable JSON result")
     parser.add_argument("--junit-out", help="write JUnit XML result")
     parser.add_argument("--skip-negative-self-checks", action="store_true", help="only run positive oracle fixtures")
+    parser.add_argument("--upstream-lite-cases", default=str(UPSTREAM_LITE_CASES), help="JSON manifest for imported upstream-lite conformance cases")
+    parser.add_argument("--skip-upstream-lite", action="store_true", help="skip imported upstream-lite conformance manifest cases")
     args = parser.parse_args(argv)
 
     fixtures_dir = Path(args.fixtures_dir)
     oracle_module = load_python_oracle_module()
     results = [run_case(case, fixtures_dir, oracle_module) for case in CASES]
+    upstream_lite_description = ""
+    if not args.skip_upstream_lite:
+        upstream_lite_description, upstream_lite_cases = load_upstream_lite_cases(Path(args.upstream_lite_cases))
+        positive_results_by_fixture = {result.fixture: result for result in results}
+        results.extend(
+            run_upstream_lite_case(case, fixtures_dir, positive_results_by_fixture)
+            for case in upstream_lite_cases
+        )
     if not args.skip_negative_self_checks:
         cases_by_name = {case.name: case for case in CASES}
         results.extend(
             run_negative_case(negative, cases_by_name, fixtures_dir, oracle_module)
             for negative in NEGATIVE_MUTATIONS
         )
-    gates = evaluate_coverage_gates(results, include_negative=not args.skip_negative_self_checks)
+    gates = evaluate_coverage_gates(
+        results,
+        include_negative=not args.skip_negative_self_checks,
+        include_upstream_lite=not args.skip_upstream_lite,
+    )
     ok = all(result.ok for result in results) and all(gate.ok for gate in gates)
 
     if args.report:
         report = Path(args.report)
         report.parent.mkdir(parents=True, exist_ok=True)
-        report.write_text(conformance_report(results, gates), encoding="utf-8")
+        report.write_text(conformance_report(results, gates, upstream_lite_description), encoding="utf-8")
         print(f"report: {args.report}")
     if args.json_out:
         out = Path(args.json_out)
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(result_json(results, gates), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        out.write_text(json.dumps(result_json(results, gates, upstream_lite_description), indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(f"json: {args.json_out}")
     if args.junit_out:
         write_junit(Path(args.junit_out), results, gates)

@@ -1,0 +1,148 @@
+{
+  "suite": "moon-proto-upstream-lite",
+  "version": 1,
+  "description": "A checked-in upstream-style protobuf conformance subset imported into Moon Proto Lab's oracle-backed fixture matrix. The cases model protobuf conformance runner input/output semantics while staying small enough for contest CI.",
+  "source_note": "Modeled after protobuf conformance concepts: protobuf binary input, JSON output, unknown-field skipping, duplicate singular last-one-wins, packed/unpacked repeated numeric input, maps, oneof, boundary numerics and special float JSON strings.",
+  "cases": [
+    {
+      "name": "Required.Proto3.ScalarRepeatedPacked.BinaryInput",
+      "fixture": "user_full",
+      "category": "upstream-lite imported subset",
+      "feature": "proto3 scalar, bytes, repeated string and packed numeric fields accepted from protobuf input",
+      "upstream_reference": "ConformanceRequest.protobuf_payload -> ConformanceResponse.json_payload",
+      "required_json": {
+        "id": "150",
+        "name": "Alice \"A\"",
+        "active": true,
+        "tags": ["admin", "tester"],
+        "samples": ["1", "150"],
+        "deltas": ["-1", "2"]
+      },
+      "axes": ["upstream-lite", "protobuf-input", "json-output", "scalar", "repeated", "packed", "bytes", "json-int64"]
+    },
+    {
+      "name": "Required.Proto3.JsonInt64BytesEscaping.JsonOutput",
+      "fixture": "user_full",
+      "category": "upstream-lite imported subset",
+      "feature": "protobuf JSON 64-bit integers are strings and bytes are base64 while string escaping is preserved",
+      "upstream_reference": "JSON mapping for int64/uint64/bytes/string fields",
+      "required_json": {
+        "id": "150",
+        "score": "-2",
+        "blob": "/wA=",
+        "name": "Alice \"A\""
+      },
+      "axes": ["upstream-lite", "json-output", "json-int64", "bytes", "escaping"]
+    },
+    {
+      "name": "Required.Proto3.UnknownFieldsAreSkipped.BinaryInput",
+      "fixture": "user_wire_edges",
+      "category": "upstream-lite imported subset",
+      "feature": "unknown binary field 99 is skipped and does not appear in JSON output",
+      "upstream_reference": "Binary parser accepts unknown fields and drops them for JSON output",
+      "required_json": {
+        "id": "150",
+        "name": "Bob"
+      },
+      "forbidden_json_keys": ["99", "unknown", "field99"],
+      "axes": ["upstream-lite", "protobuf-input", "json-output", "wire-decode", "unknown-field"]
+    },
+    {
+      "name": "Required.Proto3.DuplicateSingularLastOneWins.BinaryInput",
+      "fixture": "user_wire_edges",
+      "category": "upstream-lite imported subset",
+      "feature": "duplicate singular uint64 field keeps the final decoded value",
+      "upstream_reference": "Last value wins for duplicate singular non-message fields",
+      "required_json": {
+        "id": "150"
+      },
+      "axes": ["upstream-lite", "protobuf-input", "json-output", "wire-decode", "last-one-wins"]
+    },
+    {
+      "name": "Required.Proto3.PackedAndUnpackedRepeatedAccepted.BinaryInput",
+      "fixture": "user_wire_edges",
+      "category": "upstream-lite imported subset",
+      "feature": "repeated numeric field accepts both unpacked occurrences and packed payload in one stream",
+      "upstream_reference": "Repeated primitive numeric fields accept packed and unpacked encodings",
+      "required_json": {
+        "samples": ["1", "150", "2", "3"]
+      },
+      "axes": ["upstream-lite", "protobuf-input", "json-output", "wire-decode", "repeated", "packed", "unpacked-input"]
+    },
+    {
+      "name": "Required.Proto3.MapStringUInt64.JsonOutput",
+      "fixture": "bag_maps",
+      "category": "upstream-lite imported subset",
+      "feature": "map<string,uint64> renders as a JSON object with uint64 string values",
+      "upstream_reference": "Proto3 JSON map field object mapping",
+      "required_json": {
+        "scores": {"alice": "150", "bob": "7"}
+      },
+      "axes": ["upstream-lite", "protobuf-input", "json-output", "map", "json-int64"]
+    },
+    {
+      "name": "Required.Proto3.MapInt64Keys.JsonOutput",
+      "fixture": "bag_maps",
+      "category": "upstream-lite imported subset",
+      "feature": "map<int64,string> renders integer keys as JSON object string properties",
+      "upstream_reference": "Proto3 JSON map keys are strings",
+      "required_json": {
+        "labels": {"2": "two", "7": "seven"}
+      },
+      "axes": ["upstream-lite", "protobuf-input", "json-output", "map"]
+    },
+    {
+      "name": "Required.Proto3.OneofSelectedField.JsonOutput",
+      "fixture": "contact_oneof",
+      "category": "upstream-lite imported subset",
+      "feature": "oneof emits only the selected field in JSON output",
+      "upstream_reference": "Oneof JSON mapping selected field semantics",
+      "required_json": {
+        "id": "1",
+        "phone": "123"
+      },
+      "forbidden_json_keys": ["email"],
+      "axes": ["upstream-lite", "protobuf-input", "json-output", "oneof"]
+    },
+    {
+      "name": "Required.Proto3.Numeric32Boundaries.JsonOutput",
+      "fixture": "numbers32",
+      "category": "upstream-lite imported subset",
+      "feature": "uint32/int32/sint32/fixed32/sfixed32 boundary values preserve protobuf JSON numeric forms",
+      "upstream_reference": "32-bit numeric scalar JSON mapping",
+      "required_json": {
+        "u": 4294967295,
+        "i": -1,
+        "s": -2,
+        "f": 4294967295,
+        "sf": -3
+      },
+      "axes": ["upstream-lite", "protobuf-input", "json-output", "numeric32", "boundary"]
+    },
+    {
+      "name": "Required.Proto3.FloatDouble.JsonOutput",
+      "fixture": "floats",
+      "category": "upstream-lite imported subset",
+      "feature": "finite float and double values preserve JSON numeric output",
+      "upstream_reference": "float/double JSON mapping",
+      "required_json": {
+        "f": 1.5,
+        "d": -2.25
+      },
+      "axes": ["upstream-lite", "protobuf-input", "json-output", "float", "double"]
+    },
+    {
+      "name": "Required.Proto3.SpecialFloatJsonStrings.JsonOutput",
+      "fixture": "float_specials",
+      "category": "upstream-lite imported subset",
+      "feature": "NaN, Infinity and -Infinity render as protobuf JSON strings",
+      "upstream_reference": "Special float JSON string mapping",
+      "required_json": {
+        "f_nan": "NaN",
+        "f_inf": "Infinity",
+        "d_neg_inf": "-Infinity"
+      },
+      "axes": ["upstream-lite", "protobuf-input", "json-output", "float", "double", "float-special"]
+    }
+  ]
+}

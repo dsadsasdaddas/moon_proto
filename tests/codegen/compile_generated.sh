@@ -253,6 +253,13 @@ grep -q 'proto3_map_string_and_int64_keys' generated/conformance_lite_report.md
 grep -q 'proto3_wire_decode_unknown_duplicate_packed_unpacked' generated/conformance_lite_report.md
 grep -q 'coverage:wire-decode' generated/conformance_lite_report.md
 grep -q 'coverage:unknown-field' generated/conformance_lite_report.md
+grep -q 'Required.Proto3.UnknownFieldsAreSkipped.BinaryInput' generated/conformance_lite_report.md
+grep -q 'Required.Proto3.SpecialFloatJsonStrings.JsonOutput' generated/conformance_lite_report.md
+grep -q 'Upstream-lite subset' generated/conformance_lite_report.md
+grep -q 'coverage:upstream-lite' generated/conformance_lite_report.md
+grep -q 'coverage:protobuf-input' generated/conformance_lite_report.md
+grep -q '"upstream_lite"' generated/conformance_lite.json
+grep -q 'coverage:upstream-lite' generated/conformance_lite.xml
 grep -q 'reject_hex_binary_mismatch' generated/conformance_lite_report.md
 grep -q 'Coverage gates' generated/conformance_lite_report.md
 grep -q 'coverage:fixture-integrity' generated/conformance_lite_report.md

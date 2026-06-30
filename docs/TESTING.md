@@ -37,7 +37,7 @@ Current tests cover:
 - codegen runtime helper snapshots, inline/file-based CLI smoke generation, Schema Doctor diagnostics, compatibility checks, verify report and JUnit XML generation, official differential/source/generated-output/installed-plugin live-generator report and JUnit XML generation, descriptor verify/compat/registry/policy report and JUnit XML generation, registry adapter publish/push/pull/authenticated HTTP/profile/managed GitHub Contents backend report and JUnit XML generation, CI official source-contract checks, and generated-code compile checks;
 - deterministic property-style roundtrip corpora for varint, zig-zag, dynamic message binary and JSON;
 - official Python `google.protobuf` and Go `google.golang.org/protobuf` oracle fixtures for full scalar/repeated, map, oneof, 32-bit numeric boundary, float/double, special float and wire-decode edge messages;
-- conformance-lite Markdown/JSON/JUnit evidence report over the same oracle-backed fixture matrix, including upstream-style wire-decode edge vectors, expected-fail mutation self-checks for corrupted fixtures and missing artifacts plus semantic-axis coverage gates.
+- conformance-lite Markdown/JSON/JUnit evidence report over the same oracle-backed fixture matrix, including upstream-style wire-decode edge vectors, an imported 11-case upstream-lite manifest, expected-fail mutation self-checks for corrupted fixtures and missing artifacts plus semantic-axis coverage gates.
 
 Run the full matrix:
 
@@ -84,6 +84,6 @@ The project is positioned as a protobuf ecosystem verification lab for MoonBit. 
 - generated-code compile checks ensure generated MoonBit source actually builds;
 - verify reports make the result reviewable as Markdown/HTML artifacts.
 
-Completed parser/schema-tool verification now includes old/new compatibility checks, descriptor-set compatibility checks, descriptor-registry release gates, JSON release-policy checks, richer release-policy DSL checks with warning severity, official generated-output contract checks, installed-plugin official generator smoke checks, conformance-lite Markdown/JSON/JUnit evidence reports with expected-fail mutation self-checks and coverage gates, registry adapter publish/push/pull checks over local paths, HTTP, authenticated HTTP, hosted registry profiles, and managed GitHub Contents backend profiles, larger conformance-lite oracle fixtures, upstream-style wire-decode edge vectors, import/option/reserved parser tolerance, and reserved contract validation. Planned next verification:
+Completed parser/schema-tool verification now includes old/new compatibility checks, descriptor-set compatibility checks, descriptor-registry release gates, JSON release-policy checks, richer release-policy DSL checks with warning severity, official generated-output contract checks, installed-plugin official generator smoke checks, conformance-lite Markdown/JSON/JUnit evidence reports with expected-fail mutation self-checks and coverage gates, registry adapter publish/push/pull checks over local paths, HTTP, authenticated HTTP, hosted registry profiles, and managed GitHub Contents backend profiles, larger conformance-lite oracle fixtures, upstream-style wire-decode edge vectors, an imported upstream-lite conformance subset, import/option/reserved parser tolerance, and reserved contract validation. Planned next verification:
 
-- a larger imported subset of the upstream protobuf conformance suite.
+- differential adapter tests against more official MoonBit protobuf runtime/codegen outputs when stable sample projects are available.
