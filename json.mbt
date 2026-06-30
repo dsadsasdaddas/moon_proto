@@ -214,12 +214,68 @@ fn is_i64_json_string_type(typ : ScalarType) -> Bool {
 }
 
 ///|
+fn json_upper_ascii(c : Char) -> Char {
+  match c {
+    'a' => 'A'
+    'b' => 'B'
+    'c' => 'C'
+    'd' => 'D'
+    'e' => 'E'
+    'f' => 'F'
+    'g' => 'G'
+    'h' => 'H'
+    'i' => 'I'
+    'j' => 'J'
+    'k' => 'K'
+    'l' => 'L'
+    'm' => 'M'
+    'n' => 'N'
+    'o' => 'O'
+    'p' => 'P'
+    'q' => 'Q'
+    'r' => 'R'
+    's' => 'S'
+    't' => 'T'
+    'u' => 'U'
+    'v' => 'V'
+    'w' => 'W'
+    'x' => 'X'
+    'y' => 'Y'
+    'z' => 'Z'
+    other => other
+  }
+}
+
+///|
+fn json_lower_camel_field_name(name : String) -> String {
+  let chars = name.to_array()
+  let out : Array[Char] = []
+  let mut capitalize_next = false
+  for c in chars {
+    if c == '_' {
+      capitalize_next = true
+    } else if capitalize_next {
+      out.push(json_upper_ascii(c))
+      capitalize_next = false
+    } else {
+      out.push(c)
+    }
+  }
+  String::from_iter(out.iter())
+}
+
+///|
 fn json_find_descriptor(
   desc : MessageDescriptor,
   name : String,
 ) -> FieldDescriptor? {
   for field in desc.fields {
     if field.name == name {
+      return Some(field)
+    }
+  }
+  for field in desc.fields {
+    if json_lower_camel_field_name(field.name) == name {
       return Some(field)
     }
   }
@@ -1044,7 +1100,7 @@ fn parse_json_message_object(
     return JsonDecodeErr(Unsupported("expected JSON object"))
   }
   let parsed : Array[MessageField] = []
-  let seen_keys : Array[String] = []
+  let seen_field_names : Array[String] = []
   let seen_oneofs : Array[String] = []
   parser.skip_ws()
   if parser.consume('}') {
@@ -1056,10 +1112,6 @@ fn parse_json_message_object(
       JsonStringErr(e) => return JsonDecodeErr(e)
       JsonStringOk(k) => k
     }
-    if json_string_array_contains(seen_keys, key) {
-      return JsonDecodeErr(Unsupported("duplicate JSON field: " + key))
-    }
-    seen_keys.push(key)
     if !parser.consume(':') {
       return JsonDecodeErr(Unsupported("expected JSON object colon"))
     }
@@ -1067,6 +1119,10 @@ fn parse_json_message_object(
       None => return JsonDecodeErr(Unsupported("unknown JSON field: " + key))
       Some(found) => found
     }
+    if json_string_array_contains(seen_field_names, fd.name) {
+      return JsonDecodeErr(Unsupported("duplicate JSON field: " + key))
+    }
+    seen_field_names.push(fd.name)
     match parse_json_field(parser, fd, descriptors) {
       JsonDecodeErr(e) => return JsonDecodeErr(e)
       JsonDecodeOk(one) =>

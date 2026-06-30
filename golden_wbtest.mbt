@@ -1211,6 +1211,68 @@ test "protobuf style json parser treats null as absent" {
 }
 
 ///|
+test "protobuf style json parser accepts lower camel field names" {
+  let desc = MessageDescriptor::{
+    name: "Profile",
+    fields: [
+      FieldDescriptor::{
+        name: "user_id",
+        typ: UInt64Type,
+        number: 1,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "display_name",
+        typ: StringType,
+        number: 2,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "phone_number",
+        typ: StringType,
+        number: 3,
+        label: Oneof("contact"),
+      },
+    ],
+  }
+  match
+    json_to_message(
+      desc,
+      "{\"displayName\":\"Alice\",\"phoneNumber\":\"123\",\"userId\":\"150\"}",
+    ) {
+    JsonDecodeErr(_) => fail("lowerCamel JSON field names should parse")
+    JsonDecodeOk(msg) => {
+      assert_true(
+        msg ==
+        message_value([
+          message_field("user_id", UInt64Value(150UL)),
+          message_field("display_name", StringValue("Alice")),
+          message_field("phone_number", StringValue("123")),
+        ]),
+      )
+      match message_to_json(desc, msg) {
+        JsonErr(_) => fail("JSON writer failed after lowerCamel parse")
+        JsonOk(canonical) =>
+          assert_eq(
+            canonical,
+            "{\"user_id\":\"150\",\"display_name\":\"Alice\",\"phone_number\":\"123\"}",
+          )
+      }
+    }
+  }
+  match json_to_message(desc, "{\"user_id\":\"1\",\"userId\":\"2\"}") {
+    JsonDecodeOk(_) => fail("snake_case and lowerCamel aliases should duplicate")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected lowerCamel duplicate error")
+  }
+  match json_to_message(desc, "{\"displayname\":\"Alice\"}") {
+    JsonDecodeOk(_) => fail("wrong JSON field case should be rejected")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected lowerCamel unknown-field error")
+  }
+}
+
+///|
 test "json parser rejects duplicate and invalid values" {
   let desc = MessageDescriptor::{
     name: "User",

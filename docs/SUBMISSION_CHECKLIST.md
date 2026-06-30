@@ -20,7 +20,7 @@
 | 要求 | 证据 |
 | --- | --- |
 | MoonBit 为主要实现语言 | `*.mbt` runtime/parser/codegen/tests 共 15 个源文件 |
-| 项目规模 4k+ MoonBit LOC | 当前 MoonBit 源码约 `7346` 行 |
+| 项目规模 4k+ MoonBit LOC | 当前 MoonBit 源码约 `7464` 行 |
 | 清晰工程结构 | wire/schema/runtime/json/codegen/cli/tests/docs 分层 |
 | 示例 schema | `examples/simple/user.proto`、`examples/decorated/telemetry.proto`、`examples/decorated/telemetry_service.proto`、`examples/decorated/nested_types.proto`、`examples/decorated/nested_qualified.proto`、`examples/decorated/custom_options.proto`、`examples/decorated/edition_schema.proto`、`examples/decorated/oneof_options.proto`、`examples/decorated/enum_numbers.proto`、`examples/decorated/enum_alias.proto`、`examples/decorated/string_literals.proto` |
 | 文件版生成入口 | `scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/` |
@@ -40,7 +40,7 @@
 - nested message descriptor registry；
 - proto3 map parser/runtime/JSON/validation；
 - proto3 oneof parser/codegen/runtime/JSON conflict handling，并容错 oneof option statement；
-- protobuf-style JSON writer/parser，包含 protobuf JSON `null`-as-absent 解析语义；
+- protobuf-style JSON writer/parser，包含 protobuf JSON `null`-as-absent 解析语义与 lowerCamelCase 字段名输入别名；
 - MoonBit source code generator；
 - file-based generator wrapper；
 - Schema Doctor CLI；
@@ -60,7 +60,7 @@
 | Go oracle | `(cd tests/oracle && go run .)` |
 | MoonBit check | `moon check` |
 | MoonBit build | `moon build` |
-| MoonBit tests | `moon test`，当前 `55/55 passed` |
+| MoonBit tests | `moon test`，当前 `56/56 passed` |
 | All targets | `moon test --target all` 覆盖 wasm/wasm-gc/js/native |
 | CLI smoke | `moon run cmd/main -- gen --example` |
 | File-based generator | `python3 scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/` |
