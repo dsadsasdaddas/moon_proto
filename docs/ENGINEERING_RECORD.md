@@ -16,6 +16,21 @@ GitHub/Gitlink mirrors, CI runs, issue tracker and changelog.
 - Development report: [`docs/DEVELOPMENT_REPORT.md`](DEVELOPMENT_REPORT.md)
 - Submission checklist: [`docs/SUBMISSION_CHECKLIST.md`](SUBMISSION_CHECKLIST.md)
 
+
+## Public issue tracker records
+
+The following public GitHub issues make the main work packages visible in the
+issue tracker.  Historical work-package issues are explicitly marked as
+traceability records instead of being backdated.
+
+| Issue | Purpose | Status |
+| --- | --- | --- |
+| [#2](https://github.com/dsadsasdaddas/moon_proto/issues/2) | Runtime primitives and golden vectors | Completed traceability record |
+| [#3](https://github.com/dsadsasdaddas/moon_proto/issues/3) | Schema parser, validation and Schema Doctor | Completed traceability record |
+| [#4](https://github.com/dsadsasdaddas/moon_proto/issues/4) | JSON mapping, dynamic runtime and MoonBit codegen | Completed traceability record |
+| [#5](https://github.com/dsadsasdaddas/moon_proto/issues/5) | Oracle, conformance, official differential and descriptor registry gates | Completed traceability record |
+| [#6](https://github.com/dsadsasdaddas/moon_proto/issues/6) | Contest submission engineering records and release hygiene | Tracked by PR [#1](https://github.com/dsadsasdaddas/moon_proto/pull/1) |
+
 ## Work-package traceability
 
 | Work package | Scope | Representative commits | Evidence |
