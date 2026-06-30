@@ -2166,6 +2166,70 @@ test "map fields binary and json roundtrip" {
 }
 
 ///|
+test "map enum values use schema-aware json names" {
+  let enum_desc = EnumDescriptor::{
+    name: "Color",
+    values: [
+      EnumValueDescriptor::{ name: "COLOR_UNSPECIFIED", number: 0 },
+      EnumValueDescriptor::{ name: "RED", number: 1 },
+      EnumValueDescriptor::{ name: "BLUE", number: 2 },
+    ],
+    allow_alias: false,
+  }
+  let desc = MessageDescriptor::{
+    name: "Palette",
+    fields: [
+      FieldDescriptor::{
+        name: "favorite_colors",
+        typ: MapType(StringType, EnumType("Color")),
+        number: 1,
+        label: Repeated,
+      },
+    ],
+  }
+  let msg = message_value([
+    repeated_message_field("favorite_colors", [
+      map_entry_value(StringValue("primary"), Int64Value(2L)),
+      map_entry_value(StringValue("backup"), Int64Value(1L)),
+    ]),
+  ])
+  match message_to_json_with_schema(desc, [], [enum_desc], msg) {
+    JsonErr(_) => fail("map enum JSON encode failed")
+    JsonOk(json) =>
+      assert_eq(
+        json,
+        "{\"favorite_colors\":{\"primary\":\"BLUE\",\"backup\":\"RED\"}}",
+      )
+  }
+  match message_to_json_lower_camel_with_schema(desc, [], [enum_desc], msg) {
+    JsonErr(_) => fail("map enum lowerCamel JSON encode failed")
+    JsonOk(json) =>
+      assert_eq(
+        json,
+        "{\"favoriteColors\":{\"primary\":\"BLUE\",\"backup\":\"RED\"}}",
+      )
+  }
+  match
+    json_to_message_with_schema(
+      desc,
+      [],
+      [enum_desc],
+      "{\"favoriteColors\":{\"primary\":\"BLUE\",\"backup\":1}}",
+    ) {
+    JsonDecodeErr(_) => fail("map enum JSON decode failed")
+    JsonDecodeOk(decoded) => assert_true(decoded == msg)
+  }
+  match
+    json_to_message_with_schema(
+      desc, [], [enum_desc], "{\"favoriteColors\":{\"primary\":\"GREEN\"}}",
+    ) {
+    JsonDecodeOk(_) => fail("unknown map enum JSON name should be rejected")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected map enum JSON error")
+  }
+}
+
+///|
 test "map fields support nested message values" {
   let address_desc = MessageDescriptor::{
     name: "Address",
