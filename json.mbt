@@ -928,24 +928,57 @@ fn is_json_digit(c : Char) -> Bool {
 }
 
 ///|
-fn is_json_number_char(c : Char) -> Bool {
-  is_json_digit(c) || c == '-' || c == '+' || c == '.' || c == 'e' || c == 'E'
+fn is_json_nonzero_digit(c : Char) -> Bool {
+  c >= '1' && c <= '9'
 }
 
 ///|
 fn JsonParser::parse_number_token(self : JsonParser) -> JsonStringResult {
   self.skip_ws()
   let start = self.i
-  let mut saw_digit = false
-  while self.i < self.chars.length() &&
-    is_json_number_char(self.chars[self.i]) {
-    if is_json_digit(self.chars[self.i]) {
-      saw_digit = true
-    }
+  if self.i >= self.chars.length() {
+    return JsonStringErr(UnexpectedEof)
+  }
+  if self.chars[self.i] == '-' {
     self.i = self.i + 1
   }
-  if !saw_digit || self.i == start {
+  if self.i >= self.chars.length() {
     return JsonStringErr(Unsupported("expected JSON number"))
+  }
+  if self.chars[self.i] == '0' {
+    self.i = self.i + 1
+    if self.i < self.chars.length() && is_json_digit(self.chars[self.i]) {
+      return JsonStringErr(Unsupported("invalid JSON number leading zero"))
+    }
+  } else if is_json_nonzero_digit(self.chars[self.i]) {
+    while self.i < self.chars.length() && is_json_digit(self.chars[self.i]) {
+      self.i = self.i + 1
+    }
+  } else {
+    return JsonStringErr(Unsupported("expected JSON number"))
+  }
+  if self.i < self.chars.length() && self.chars[self.i] == '.' {
+    self.i = self.i + 1
+    if self.i >= self.chars.length() || !is_json_digit(self.chars[self.i]) {
+      return JsonStringErr(Unsupported("invalid JSON number fraction"))
+    }
+    while self.i < self.chars.length() && is_json_digit(self.chars[self.i]) {
+      self.i = self.i + 1
+    }
+  }
+  if self.i < self.chars.length() &&
+    (self.chars[self.i] == 'e' || self.chars[self.i] == 'E') {
+    self.i = self.i + 1
+    if self.i < self.chars.length() &&
+      (self.chars[self.i] == '-' || self.chars[self.i] == '+') {
+      self.i = self.i + 1
+    }
+    if self.i >= self.chars.length() || !is_json_digit(self.chars[self.i]) {
+      return JsonStringErr(Unsupported("invalid JSON number exponent"))
+    }
+    while self.i < self.chars.length() && is_json_digit(self.chars[self.i]) {
+      self.i = self.i + 1
+    }
   }
   JsonStringOk(self.src[start:self.i].to_owned())
 }
@@ -1112,7 +1145,7 @@ fn parse_u64_digits(text : String) -> UInt64? {
     Some(v) => v
     None => return None
   }
-  if integer.negative {
+  if integer.negative && !json_digits_all_zero(integer.digits) {
     return None
   }
   if !json_digits_in_range(integer.digits, "18446744073709551615") {

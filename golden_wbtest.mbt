@@ -1333,6 +1333,62 @@ test "protobuf style json parser accepts integer exponent notation" {
 }
 
 ///|
+test "protobuf style json parser rejects invalid number grammar" {
+  let desc = MessageDescriptor::{
+    name: "NumberGrammar",
+    fields: [
+      FieldDescriptor::{
+        name: "id",
+        typ: UInt64Type,
+        number: 1,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "score",
+        typ: DoubleType,
+        number: 2,
+        label: Singular,
+      },
+    ],
+  }
+  match json_to_message(desc, "{\"id\":+1}") {
+    JsonDecodeOk(_) => fail("leading plus JSON number should be rejected")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected plus-number JSON error")
+  }
+  match json_to_message(desc, "{\"id\":01}") {
+    JsonDecodeOk(_) => fail("leading zero JSON number should be rejected")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected leading-zero JSON error")
+  }
+  match json_to_message(desc, "{\"id\":1.}") {
+    JsonDecodeOk(_) => fail("missing fraction digit should be rejected")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected fraction JSON error")
+  }
+  match json_to_message(desc, "{\"id\":1e}") {
+    JsonDecodeOk(_) => fail("missing exponent digit should be rejected")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected exponent JSON error")
+  }
+  match json_to_message(desc, "{\"score\":.5}") {
+    JsonDecodeOk(_) => fail("missing integer part should be rejected")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected missing-integer JSON error")
+  }
+  match json_to_message(desc, "{\"score\":-}") {
+    JsonDecodeOk(_) => fail("bare minus JSON number should be rejected")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected bare-minus JSON error")
+  }
+  match json_to_message(desc, "{\"id\":-0}") {
+    JsonDecodeErr(_) => fail("negative zero JSON number should parse")
+    JsonDecodeOk(msg) =>
+      assert_true(msg == message_value([message_field("id", UInt64Value(0UL))]))
+  }
+}
+
+///|
 test "protobuf style json parser treats null as absent" {
   let desc = MessageDescriptor::{
     name: "Contact",

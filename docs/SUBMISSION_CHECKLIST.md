@@ -20,7 +20,7 @@
 | 要求 | 证据 |
 | --- | --- |
 | MoonBit 为主要实现语言 | `*.mbt` runtime/parser/codegen/tests 共 15 个源文件 |
-| 项目规模 4k+ MoonBit LOC | 当前 MoonBit 源码约 `8232` 行 |
+| 项目规模 4k+ MoonBit LOC | 当前 MoonBit 源码约 `8321` 行 |
 | 清晰工程结构 | wire/schema/runtime/json/codegen/cli/tests/docs 分层 |
 | 示例 schema | `examples/simple/user.proto`、`examples/decorated/telemetry.proto`、`examples/decorated/telemetry_service.proto`、`examples/decorated/nested_types.proto`、`examples/decorated/nested_qualified.proto`、`examples/decorated/custom_options.proto`、`examples/decorated/edition_schema.proto`、`examples/decorated/oneof_options.proto`、`examples/decorated/enum_numbers.proto`、`examples/decorated/enum_alias.proto`、`examples/decorated/string_literals.proto` |
 | 文件版生成入口 | `scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/` |
@@ -40,7 +40,7 @@
 - nested message descriptor registry；
 - proto3 map parser/runtime/JSON/validation；
 - proto3 oneof parser/codegen/runtime/JSON conflict handling，并容错 oneof option statement；
-- protobuf-style JSON writer/parser，包含 protobuf JSON enum-name schema mapping（字段与 map value）、bytes URL-safe/unpadded base64 输入、标准 JSON string escape/Unicode/surrogate-pair 解析与非法 escape/control character 拒绝、integer exponent/decimal notation 解析与 uint64/int64 overflow-safe range checks、`null`-as-absent 解析语义与 lowerCamelCase 字段名输入/输出 helper；
+- protobuf-style JSON writer/parser，包含 protobuf JSON enum-name schema mapping（字段与 map value）、bytes URL-safe/unpadded base64 输入、标准 JSON string escape/Unicode/surrogate-pair 解析与非法 escape/control character 拒绝、strict JSON number grammar、integer exponent/decimal notation 解析与 uint64/int64 overflow-safe range checks、`null`-as-absent 解析语义与 lowerCamelCase 字段名输入/输出 helper；
 - MoonBit source code generator；
 - file-based generator wrapper；
 - Schema Doctor CLI；
@@ -60,7 +60,7 @@
 | Go oracle | `(cd tests/oracle && go run .)` |
 | MoonBit check | `moon check` |
 | MoonBit build | `moon build` |
-| MoonBit tests | `moon test`，当前 `58/58 passed` |
+| MoonBit tests | `moon test`，当前 `59/59 passed` |
 | All targets | `moon test --target all` 覆盖 wasm/wasm-gc/js/native |
 | CLI smoke | `moon run cmd/main -- gen --example` |
 | File-based generator | `python3 scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/` |
