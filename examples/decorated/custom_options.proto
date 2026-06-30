@@ -1,0 +1,18 @@
+syntax = "proto3";
+package moon.proto.lab.demo.v1;
+
+import "google/protobuf/descriptor.proto";
+
+extend google.protobuf.MessageOptions {
+  string message_note = 50001;
+  bool audited = 50002 [default = true];
+}
+
+extend .google.protobuf.FieldOptions {
+  string field_note = 50003;
+}
+
+message AnnotatedEvent {
+  option (message_note) = "demo; custom option";
+  string name = 1 [(field_note) = "display name"];
+}

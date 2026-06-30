@@ -165,6 +165,20 @@ grep -q 'StringLiteralCarrier' generated/verify_string_literals_report.md
 grep -q 'text : String' generated/verify_string_literals_report.md
 grep -q 'failures="0"' generated/verify_string_literals_report.xml
 
+python3 scripts/moon_proto_lab.py doctor examples/decorated/custom_options.proto \
+  | grep -q 'schema valid'
+
+python3 scripts/moon_proto_lab.py inspect examples/decorated/custom_options.proto \
+  | grep -q 'message AnnotatedEvent fields=1'
+
+python3 scripts/moon_proto_lab.py verify examples/decorated/custom_options.proto \
+  --report generated/verify_custom_options_report.md \
+  --junit-out generated/verify_custom_options_report.xml
+grep -Fq 'Overall status: **PASS**' generated/verify_custom_options_report.md
+grep -q 'AnnotatedEvent' generated/verify_custom_options_report.md
+grep -q 'name : String' generated/verify_custom_options_report.md
+grep -q 'failures="0"' generated/verify_custom_options_report.xml
+
 python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto \
   --report generated/compat_report.md \
   --junit-out generated/compat_report.xml

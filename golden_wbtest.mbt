@@ -715,6 +715,39 @@ test "codegen emits moonbit struct and descriptor" {
 }
 
 ///|
+test "parser tolerates top-level extend custom option blocks" {
+  let src =
+    #|syntax = "proto3";
+    #|package demo.options;
+    #|import "google/protobuf/descriptor.proto";
+    #|extend google.protobuf.MessageOptions {
+    #|  string message_note = 50001;
+    #|  bool audited = 50002 [default = true];
+    #|}
+    #|extend .google.protobuf.FieldOptions {
+    #|  string field_note = 50003;
+    #|}
+    #|message Annotated {
+    #|  option (message_note) = "hello";
+    #|  string name = 1 [(field_note) = "display"];
+    #|}
+  match parse_proto(src) {
+    ProtoErr(_) => fail("extend custom option schema should parse")
+    ProtoOk(file) => {
+      assert_eq(file.package_name, "demo.options")
+      assert_eq(file.messages.length(), 1)
+      assert_eq(file.messages[0].name, "Annotated")
+      assert_eq(file.messages[0].fields.length(), 1)
+      assert_true(file.messages[0].fields[0].typ == StringType)
+      assert_true(schema_is_valid(file))
+      let generated = generate_moonbit_source(file)
+      assert_true(generated.contains("pub(all) struct Annotated"))
+      assert_true(generated.contains("name : String"))
+    }
+  }
+}
+
+///|
 test "parse enum and codegen enum descriptor" {
   let src =
     #|syntax = "proto3";

@@ -866,6 +866,15 @@ pub fn parse_proto(src : String) -> ParseProtoResult {
           None => return ProtoErr(Expected("service name"))
         }
       }
+      Some("extend") => {
+        match p.parse_qualified_name() {
+          Some(_) =>
+            if !p.skip_braced_block() {
+              return ProtoErr(Expected("extend block"))
+            }
+          None => return ProtoErr(Expected("extend name"))
+        }
+      }
       Some("message") =>
         match p.parse_message() {
           Some(parsed) =>
