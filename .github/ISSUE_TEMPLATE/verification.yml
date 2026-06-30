@@ -1,0 +1,30 @@
+name: Verification task
+about: Track regression, conformance, oracle or generated-code verification work.
+title: "test: "
+labels: [verification, test]
+body:
+  - type: textarea
+    id: target
+    attributes:
+      label: Verification target
+      description: Which behavior, fixture, report or command is being checked?
+    validations:
+      required: true
+  - type: textarea
+    id: commands
+    attributes:
+      label: Commands
+      render: bash
+      value: |
+        moon check
+        moon build
+        moon test
+        moon test --target all
+        tests/codegen/compile_generated.sh
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence / output
+      description: Paste PASS/FAIL output, report paths or CI links.
