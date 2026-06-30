@@ -214,7 +214,11 @@ python3 scripts/moon_proto_conformance.py \
 grep -Fq 'Overall status: **PASS**' generated/conformance_lite_report.md
 grep -q 'proto3_map_string_and_int64_keys' generated/conformance_lite_report.md
 grep -q 'reject_hex_binary_mismatch' generated/conformance_lite_report.md
+grep -q 'Coverage gates' generated/conformance_lite_report.md
+grep -q 'coverage:fixture-integrity' generated/conformance_lite_report.md
 grep -q 'negative-self-check' generated/conformance_lite.json
+grep -q '"coverage_gates"' generated/conformance_lite.json
+grep -q 'coverage:map' generated/conformance_lite.xml
 grep -q '"overall_status": "PASS"' generated/conformance_lite.json
 grep -q '<testsuite' generated/conformance_lite.xml
 grep -q 'failures="0"' generated/conformance_lite.xml

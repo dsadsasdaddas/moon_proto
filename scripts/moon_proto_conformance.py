@@ -36,6 +36,7 @@ class ConformanceCase:
     feature: str
     oracle_function: str
     required_json: dict[str, Any]
+    axes: tuple[str, ...]
     allow_binary_semantic_equivalence: bool = False
     message_class_function: str = ""
 
@@ -48,6 +49,7 @@ class CaseResult:
     feature: str
     ok: bool
     details: str
+    axes: tuple[str, ...] = ()
     sha256: str = ""
     size: int = 0
 
@@ -58,6 +60,16 @@ class NegativeMutationCase:
     base_case: str
     mutation: str
     feature: str
+    axes: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class CoverageGate:
+    name: str
+    axis: str
+    min_count: int
+    ok: bool
+    details: str
 
 
 CASES = [
@@ -77,6 +89,7 @@ CASES = [
             "samples": ["1", "150"],
             "deltas": ["-1", "2"],
         },
+        axes=("oracle", "binary", "json", "scalar", "repeated", "packed", "bytes", "json-int64"),
     ),
     ConformanceCase(
         name="proto3_map_string_and_int64_keys",
@@ -88,6 +101,7 @@ CASES = [
             "scores": {"alice": "150", "bob": "7"},
             "labels": {"2": "two", "7": "seven"},
         },
+        axes=("oracle", "binary", "json", "map"),
         allow_binary_semantic_equivalence=True,
         message_class_function="make_bag_message_class",
     ),
@@ -98,6 +112,7 @@ CASES = [
         feature="oneof selected field binary encoding and JSON emission",
         oracle_function="contact_oracle_values",
         required_json={"id": "1", "phone": "123"},
+        axes=("oracle", "binary", "json", "oneof"),
     ),
     ConformanceCase(
         name="proto3_32bit_numeric_boundaries",
@@ -106,6 +121,7 @@ CASES = [
         feature="uint32/int32/sint32/fixed32/sfixed32 boundary values",
         oracle_function="numbers32_oracle_values",
         required_json={"u": 4294967295, "i": -1, "s": -2, "f": 4294967295, "sf": -3},
+        axes=("oracle", "binary", "json", "numeric32", "boundary"),
     ),
     ConformanceCase(
         name="proto3_float_double_roundtrip",
@@ -114,6 +130,7 @@ CASES = [
         feature="float and double finite numeric values",
         oracle_function="floats_oracle_values",
         required_json={"f": 1.5, "d": -2.25},
+        axes=("oracle", "binary", "json", "float", "double"),
     ),
     ConformanceCase(
         name="proto3_float_special_json_strings",
@@ -122,6 +139,7 @@ CASES = [
         feature='NaN, Infinity and -Infinity protobuf JSON string mapping',
         oracle_function="float_specials_oracle_values",
         required_json={"f_nan": "NaN", "f_inf": "Infinity", "d_neg_inf": "-Infinity"},
+        axes=("oracle", "binary", "json", "float", "double", "float-special"),
     ),
 ]
 
@@ -132,26 +150,44 @@ NEGATIVE_MUTATIONS = [
         base_case="proto3_scalar_repeated_packed_bytes_json64",
         mutation="hex_mismatch",
         feature="detects when a checked-in .hex file no longer decodes to the checked-in .bin fixture",
+        axes=("negative", "mutation", "fixture-integrity", "hex"),
     ),
     NegativeMutationCase(
         name="reject_json_missing_required_evidence",
         base_case="proto3_scalar_repeated_packed_bytes_json64",
         mutation="json_missing_required_evidence",
         feature="detects when a JSON fixture silently drops required oracle evidence fields",
+        axes=("negative", "mutation", "fixture-integrity", "json"),
     ),
     NegativeMutationCase(
         name="reject_missing_binary_fixture",
         base_case="proto3_oneof_last_selected_json",
         mutation="missing_bin",
         feature="detects when a binary golden fixture is absent from the conformance matrix",
+        axes=("negative", "mutation", "fixture-integrity", "missing-artifact"),
     ),
     NegativeMutationCase(
         name="reject_corrupt_binary_fixture",
         base_case="proto3_float_double_roundtrip",
         mutation="corrupt_bin",
         feature="detects when binary fixture bytes no longer match the official protobuf oracle",
+        axes=("negative", "mutation", "fixture-integrity", "binary"),
     ),
 ]
+
+
+COVERAGE_REQUIREMENTS = {
+    "oracle": 6,
+    "binary": 6,
+    "json": 6,
+    "map": 1,
+    "oneof": 1,
+    "numeric32": 1,
+    "float": 2,
+    "float-special": 1,
+    "negative": 4,
+    "fixture-integrity": 4,
+}
 
 
 def load_python_oracle_module():
@@ -258,6 +294,7 @@ def run_case(case: ConformanceCase, fixtures_dir: Path, oracle_module: Any) -> C
             feature=case.feature,
             ok=not failures,
             details=details,
+            axes=case.axes,
             sha256=digest,
             size=len(actual_bin),
         )
@@ -269,6 +306,7 @@ def run_case(case: ConformanceCase, fixtures_dir: Path, oracle_module: Any) -> C
             feature=case.feature,
             ok=False,
             details=str(exc),
+            axes=case.axes,
         )
 
 
@@ -317,17 +355,35 @@ def run_negative_case(
         feature=negative.feature,
         ok=ok,
         details=details,
+        axes=negative.axes,
         sha256=observed.sha256,
         size=observed.size,
     )
+
+
+def evaluate_coverage_gates(results: list[CaseResult], include_negative: bool = True) -> list[CoverageGate]:
+    gates: list[CoverageGate] = []
+    for axis, minimum in COVERAGE_REQUIREMENTS.items():
+        if not include_negative and axis in {"negative", "fixture-integrity"}:
+            continue
+        matching = [result for result in results if result.ok and axis in result.axes]
+        count = len(matching)
+        gates.append(CoverageGate(
+            name=f"coverage:{axis}",
+            axis=axis,
+            min_count=minimum,
+            ok=count >= minimum,
+            details=f"{count} passing case(s) for axis {axis}; required >= {minimum}",
+        ))
+    return gates
 
 
 def markdown_cell(text: str) -> str:
     return str(text).replace("|", "\\|").replace("\n", "<br>")
 
 
-def conformance_report(results: list[CaseResult]) -> str:
-    ok = all(result.ok for result in results)
+def conformance_report(results: list[CaseResult], gates: list[CoverageGate]) -> str:
+    ok = all(result.ok for result in results) and all(gate.ok for gate in gates)
     lines = [
         "# Moon Proto Lab conformance-lite report",
         "",
@@ -346,6 +402,18 @@ def conformance_report(results: list[CaseResult]) -> str:
         )
     lines.extend([
         "",
+        "## Coverage gates",
+        "",
+        "| Gate | Axis | Minimum | Status | Details |",
+        "| --- | --- | --- | --- | --- |",
+    ])
+    for gate in gates:
+        lines.append(
+            f"| {markdown_cell(gate.name)} | {markdown_cell(gate.axis)} | {gate.min_count} | "
+            f"{'PASS' if gate.ok else 'FAIL'} | {markdown_cell(gate.details)} |"
+        )
+    lines.extend([
+        "",
         "## Coverage axes",
         "",
         "- proto3 scalar, repeated and packed repeated fields;",
@@ -360,19 +428,30 @@ def conformance_report(results: list[CaseResult]) -> str:
     return "\n".join(lines)
 
 
-def result_json(results: list[CaseResult]) -> dict[str, Any]:
+def result_json(results: list[CaseResult], gates: list[CoverageGate]) -> dict[str, Any]:
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "overall_status": "PASS" if all(result.ok for result in results) else "FAIL",
+        "overall_status": "PASS" if all(result.ok for result in results) and all(gate.ok for gate in gates) else "FAIL",
         "case_count": len(results),
         "passing_count": sum(1 for result in results if result.ok),
         "oracle": "python google.protobuf dynamic descriptors; go oracle checked separately",
+        "coverage_gates": [
+            {
+                "name": gate.name,
+                "axis": gate.axis,
+                "min_count": gate.min_count,
+                "status": "PASS" if gate.ok else "FAIL",
+                "details": gate.details,
+            }
+            for gate in gates
+        ],
         "cases": [
             {
                 "name": result.name,
                 "fixture": result.fixture,
                 "category": result.category,
                 "feature": result.feature,
+                "axes": list(result.axes),
                 "status": "PASS" if result.ok else "FAIL",
                 "details": result.details,
                 "sha256": result.sha256,
@@ -387,11 +466,12 @@ def xml_escape(text: str) -> str:
     return html.escape(str(text), quote=True)
 
 
-def write_junit(path: Path, results: list[CaseResult]) -> None:
-    failures = sum(1 for result in results if not result.ok)
+def write_junit(path: Path, results: list[CaseResult], gates: list[CoverageGate]) -> None:
+    failures = sum(1 for result in results if not result.ok) + sum(1 for gate in gates if not gate.ok)
+    test_count = len(results) + len(gates)
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
-        f'<testsuite name="moon-proto-lab.conformance-lite" tests="{len(results)}" failures="{failures}">',
+        f'<testsuite name="moon-proto-lab.conformance-lite" tests="{test_count}" failures="{failures}">',
     ]
     for result in results:
         lines.append(f'  <testcase name="{xml_escape(result.name)}">')
@@ -399,6 +479,15 @@ def write_junit(path: Path, results: list[CaseResult]) -> None:
             lines.append(
                 f'    <failure message="{xml_escape(result.details.splitlines()[0] if result.details else "failed")}">'
                 + xml_escape(result.details)
+                + '</failure>'
+            )
+        lines.append('  </testcase>')
+    for gate in gates:
+        lines.append(f'  <testcase name="{xml_escape(gate.name)}">')
+        if not gate.ok:
+            lines.append(
+                f'    <failure message="{xml_escape(gate.details)}">'
+                + xml_escape(gate.details)
                 + '</failure>'
             )
         lines.append('  </testcase>')
@@ -425,25 +514,29 @@ def main(argv: list[str] | None = None) -> int:
             run_negative_case(negative, cases_by_name, fixtures_dir, oracle_module)
             for negative in NEGATIVE_MUTATIONS
         )
-    ok = all(result.ok for result in results)
+    gates = evaluate_coverage_gates(results, include_negative=not args.skip_negative_self_checks)
+    ok = all(result.ok for result in results) and all(gate.ok for gate in gates)
 
     if args.report:
         report = Path(args.report)
         report.parent.mkdir(parents=True, exist_ok=True)
-        report.write_text(conformance_report(results), encoding="utf-8")
+        report.write_text(conformance_report(results, gates), encoding="utf-8")
         print(f"report: {args.report}")
     if args.json_out:
         out = Path(args.json_out)
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(result_json(results), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        out.write_text(json.dumps(result_json(results, gates), indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(f"json: {args.json_out}")
     if args.junit_out:
-        write_junit(Path(args.junit_out), results)
+        write_junit(Path(args.junit_out), results, gates)
         print(f"junit: {args.junit_out}")
 
     print("Moon Proto Lab conformance-lite: " + ("PASS" if ok else "FAIL"))
     for result in results:
         print(f"- {result.name}: {'PASS' if result.ok else 'FAIL'} - {result.details.splitlines()[0] if result.details else ''}")
+    print("coverage gates: " + ("PASS" if all(gate.ok for gate in gates) else "FAIL"))
+    for gate in gates:
+        print(f"- {gate.name}: {'PASS' if gate.ok else 'FAIL'} - {gate.details}")
     return 0 if ok else 1
 
 
