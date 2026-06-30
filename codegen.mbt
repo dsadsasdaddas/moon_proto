@@ -193,6 +193,21 @@ pub fn generate_message_descriptor_registry(file : ProtoFile) -> String {
 }
 
 ///|
+/// Emit a registry function used by generated JSON helpers to resolve enum
+/// descriptors and render protobuf JSON enum names.
+pub fn generate_enum_descriptor_registry(file : ProtoFile) -> String {
+  let lines : Array[String] = []
+  lines.push("pub fn enum_descriptors() -> Array[EnumDescriptor] {")
+  lines.push("  [")
+  for enum_desc in file.enums {
+    lines.push("    descriptor_" + enum_desc.name + "(),")
+  }
+  lines.push("  ]")
+  lines.push("}")
+  join_strings(lines, "\n")
+}
+
+///|
 /// Emit dynamic encode/decode/JSON helper functions for one generated message.
 pub fn generate_message_runtime_helpers(desc : MessageDescriptor) -> String {
   let lines : Array[String] = []
@@ -224,9 +239,9 @@ pub fn generate_message_runtime_helpers(desc : MessageDescriptor) -> String {
     "(value : MessageValue) -> JsonEncodeResult {",
   )
   lines.push(
-    "  message_to_json_with_descriptors(descriptor_" +
+    "  message_to_json_with_schema(descriptor_" +
     desc.name +
-    "(), message_descriptors(), value)",
+    "(), message_descriptors(), enum_descriptors(), value)",
   )
   lines.push("}")
   lines.push("")
@@ -236,9 +251,9 @@ pub fn generate_message_runtime_helpers(desc : MessageDescriptor) -> String {
     "(value : MessageValue) -> JsonEncodeResult {",
   )
   lines.push(
-    "  message_to_json_lower_camel_with_descriptors(descriptor_" +
+    "  message_to_json_lower_camel_with_schema(descriptor_" +
     desc.name +
-    "(), message_descriptors(), value)",
+    "(), message_descriptors(), enum_descriptors(), value)",
   )
   lines.push("}")
   lines.push("")
@@ -246,9 +261,9 @@ pub fn generate_message_runtime_helpers(desc : MessageDescriptor) -> String {
     "pub fn from_json_" + desc.name + "(input : String) -> JsonDecodeResult {",
   )
   lines.push(
-    "  json_to_message_with_descriptors(descriptor_" +
+    "  json_to_message_with_schema(descriptor_" +
     desc.name +
-    "(), message_descriptors(), input)",
+    "(), message_descriptors(), enum_descriptors(), input)",
   )
   lines.push("}")
   join_strings(lines, "\n")
@@ -277,6 +292,7 @@ pub fn generate_moonbit_source(
     options.emit_runtime_helpers &&
     file.messages.length() > 0 {
     chunks.push(generate_message_descriptor_registry(file))
+    chunks.push(generate_enum_descriptor_registry(file))
     for msg in file.messages {
       chunks.push(generate_message_runtime_helpers(msg))
     }

@@ -315,6 +315,39 @@ fn json_find_message_descriptor(
 }
 
 ///|
+fn json_find_enum_descriptor(
+  descriptors : Array[EnumDescriptor],
+  name : String,
+) -> EnumDescriptor? {
+  for desc in descriptors {
+    if desc.name == name {
+      return Some(desc)
+    }
+  }
+  None
+}
+
+///|
+fn json_enum_name_for_number(desc : EnumDescriptor, number : Int64) -> String? {
+  for value in desc.values {
+    if value.number.to_int64() == number {
+      return Some(value.name)
+    }
+  }
+  None
+}
+
+///|
+fn json_enum_number_for_name(desc : EnumDescriptor, name : String) -> Int64? {
+  for value in desc.values {
+    if value.name == name {
+      return Some(value.number.to_int64())
+    }
+  }
+  None
+}
+
+///|
 fn json_oneof_group(label : FieldLabel) -> String? {
   match label {
     Oneof(group) => Some(group)
@@ -408,6 +441,7 @@ fn map_field_to_json(
   desc : FieldDescriptor,
   field : MessageField,
   descriptors : Array[MessageDescriptor],
+  enum_descriptors : Array[EnumDescriptor],
   lower_camel : Bool,
 ) -> JsonEncodeResult {
   match desc.typ {
@@ -430,7 +464,7 @@ fn map_field_to_json(
             }
             let value_text = match
               scalar_to_json_with_options(
-                value_typ, value, descriptors, lower_camel,
+                value_typ, value, descriptors, enum_descriptors, lower_camel,
               ) {
               JsonErr(e) => return JsonErr(e)
               JsonOk(text) => text
@@ -520,18 +554,21 @@ fn field_to_json(
   desc : FieldDescriptor,
   field : MessageField,
   descriptors : Array[MessageDescriptor],
+  enum_descriptors : Array[EnumDescriptor],
   lower_camel : Bool,
 ) -> JsonEncodeResult {
   match desc.typ {
     MapType(_, _) =>
-      return map_field_to_json(desc, field, descriptors, lower_camel)
+      return map_field_to_json(
+        desc, field, descriptors, enum_descriptors, lower_camel,
+      )
     _ => ()
   }
   if desc.label == Repeated {
     let items : Array[String] = []
     for value in field.values {
       match scalar_to_json_with_options(
-        desc.typ, value, descriptors, lower_camel,
+        desc.typ, value, descriptors, enum_descriptors, lower_camel,
       ) {
         JsonErr(e) => return JsonErr(e)
         JsonOk(item) => items.push(item)
@@ -542,7 +579,7 @@ fn field_to_json(
     JsonErr(Unsupported("singular field has no JSON value: " + field.name))
   } else {
     scalar_to_json_with_options(
-      desc.typ, field.values[0], descriptors, lower_camel,
+      desc.typ, field.values[0], descriptors, enum_descriptors, lower_camel,
     )
   }
 }
@@ -552,15 +589,27 @@ fn scalar_to_json_with_options(
   typ : ScalarType,
   value : ProtoValue,
   descriptors : Array[MessageDescriptor],
+  enum_descriptors : Array[EnumDescriptor],
   lower_camel : Bool,
 ) -> JsonEncodeResult {
   match (typ, value) {
+    (EnumType(name), Int64Value(v)) =>
+      match json_find_enum_descriptor(enum_descriptors, name) {
+        Some(desc) =>
+          match json_enum_name_for_number(desc, v) {
+            Some(enum_name) => JsonOk(json_escape_string(enum_name))
+            None => JsonOk(v.to_string())
+          }
+        None => scalar_to_json(typ, value)
+      }
     (NamedType(name), NestedMessageValue(v)) =>
       match json_find_message_descriptor(descriptors, name) {
         None =>
           JsonErr(Unsupported("missing descriptor for nested message: " + name))
         Some(desc) =>
-          message_to_json_with_options(desc, descriptors, v, lower_camel)
+          message_to_json_with_options(
+            desc, descriptors, enum_descriptors, v, lower_camel,
+          )
       }
     _ => scalar_to_json(typ, value)
   }
@@ -603,7 +652,7 @@ pub fn message_to_json_with_descriptors(
   descriptors : Array[MessageDescriptor],
   value : MessageValue,
 ) -> JsonEncodeResult {
-  message_to_json_with_options(desc, descriptors, value, false)
+  message_to_json_with_options(desc, descriptors, [], value, false)
 }
 
 ///|
@@ -614,13 +663,38 @@ pub fn message_to_json_lower_camel_with_descriptors(
   descriptors : Array[MessageDescriptor],
   value : MessageValue,
 ) -> JsonEncodeResult {
-  message_to_json_with_options(desc, descriptors, value, true)
+  message_to_json_with_options(desc, descriptors, [], value, true)
+}
+
+///|
+/// Convert protobuf-style JSON using enum value names when matching
+/// `EnumDescriptor`s are available.
+pub fn message_to_json_with_schema(
+  desc : MessageDescriptor,
+  descriptors : Array[MessageDescriptor],
+  enum_descriptors : Array[EnumDescriptor],
+  value : MessageValue,
+) -> JsonEncodeResult {
+  message_to_json_with_options(desc, descriptors, enum_descriptors, value, false)
+}
+
+///|
+/// Convert lowerCamelCase protobuf-style JSON using enum value names when
+/// matching `EnumDescriptor`s are available.
+pub fn message_to_json_lower_camel_with_schema(
+  desc : MessageDescriptor,
+  descriptors : Array[MessageDescriptor],
+  enum_descriptors : Array[EnumDescriptor],
+  value : MessageValue,
+) -> JsonEncodeResult {
+  message_to_json_with_options(desc, descriptors, enum_descriptors, value, true)
 }
 
 ///|
 fn message_to_json_with_options(
   desc : MessageDescriptor,
   descriptors : Array[MessageDescriptor],
+  enum_descriptors : Array[EnumDescriptor],
   value : MessageValue,
   lower_camel : Bool,
 ) -> JsonEncodeResult {
@@ -633,7 +707,9 @@ fn message_to_json_with_options(
     match json_find_message_field(value, fd.name) {
       None => ()
       Some(field) =>
-        match field_to_json(fd, field, descriptors, lower_camel) {
+        match field_to_json(
+          fd, field, descriptors, enum_descriptors, lower_camel,
+        ) {
           JsonErr(e) => return JsonErr(e)
           JsonOk(encoded) =>
             props.push(
@@ -846,6 +922,7 @@ fn parse_scalar_from_json(
   parser : JsonParser,
   typ : ScalarType,
   descriptors : Array[MessageDescriptor],
+  enum_descriptors : Array[EnumDescriptor],
 ) -> JsonScalarDecodeResult {
   match typ {
     StringType =>
@@ -916,13 +993,22 @@ fn parse_scalar_from_json(
             None => JsonScalarErr(Unsupported("invalid signed integer JSON"))
           }
       }
-    EnumType(_) =>
+    EnumType(name) =>
       match parser.parse_number_or_string_token() {
         JsonStringErr(e) => JsonScalarErr(e)
         JsonStringOk(text) =>
           match parse_i64_digits(text) {
             Some(v) => JsonScalarOk(Int64Value(v))
-            None => JsonScalarErr(Unsupported("invalid enum integer JSON"))
+            None =>
+              match json_find_enum_descriptor(enum_descriptors, name) {
+                Some(desc) =>
+                  match json_enum_number_for_name(desc, text) {
+                    Some(number) => JsonScalarOk(Int64Value(number))
+                    None =>
+                      JsonScalarErr(Unsupported("unknown enum JSON name"))
+                  }
+                None => JsonScalarErr(Unsupported("invalid enum integer JSON"))
+              }
           }
       }
     FloatType =>
@@ -950,7 +1036,10 @@ fn parse_scalar_from_json(
             Unsupported("missing descriptor for nested message: " + name),
           )
         Some(desc) =>
-          match parse_json_message_object(parser, desc, descriptors) {
+          match
+            parse_json_message_object(
+              parser, desc, descriptors, enum_descriptors,
+            ) {
             JsonDecodeErr(e) => JsonScalarErr(e)
             JsonDecodeOk(message) => JsonScalarOk(NestedMessageValue(message))
           }
@@ -1024,6 +1113,7 @@ fn parse_json_map_field(
   parser : JsonParser,
   fd : FieldDescriptor,
   descriptors : Array[MessageDescriptor],
+  enum_descriptors : Array[EnumDescriptor],
 ) -> JsonDecodeResult {
   match fd.typ {
     MapType(key_typ, value_typ) => {
@@ -1058,7 +1148,9 @@ fn parse_json_map_field(
           JsonScalarOk(v) => v
         }
         let value = match
-          parse_scalar_from_json(parser, value_typ, descriptors) {
+          parse_scalar_from_json(
+            parser, value_typ, descriptors, enum_descriptors,
+          ) {
           JsonScalarErr(e) => return JsonDecodeErr(e)
           JsonScalarOk(v) => v
         }
@@ -1083,12 +1175,16 @@ fn parse_json_field(
   parser : JsonParser,
   fd : FieldDescriptor,
   descriptors : Array[MessageDescriptor],
+  enum_descriptors : Array[EnumDescriptor],
 ) -> JsonDecodeResult {
   if parser.consume_literal("null") {
     return JsonDecodeOk(message_value([]))
   }
   match fd.typ {
-    MapType(_, _) => return parse_json_map_field(parser, fd, descriptors)
+    MapType(_, _) =>
+      return parse_json_map_field(
+        parser, fd, descriptors, enum_descriptors,
+      )
     _ => ()
   }
   if fd.label == Repeated {
@@ -1104,7 +1200,8 @@ fn parse_json_field(
     }
     let mut done = false
     while !done {
-      match parse_scalar_from_json(parser, fd.typ, descriptors) {
+      match
+        parse_scalar_from_json(parser, fd.typ, descriptors, enum_descriptors) {
         JsonScalarErr(e) => return JsonDecodeErr(e)
         JsonScalarOk(value) => values.push(value)
       }
@@ -1119,7 +1216,7 @@ fn parse_json_field(
     }
     JsonDecodeOk(message_value([repeated_message_field(fd.name, values)]))
   } else {
-    match parse_scalar_from_json(parser, fd.typ, descriptors) {
+    match parse_scalar_from_json(parser, fd.typ, descriptors, enum_descriptors) {
       JsonScalarErr(e) => JsonDecodeErr(e)
       JsonScalarOk(value) =>
         JsonDecodeOk(message_value([message_field(fd.name, value)]))
@@ -1156,6 +1253,7 @@ fn parse_json_message_object(
   parser : JsonParser,
   desc : MessageDescriptor,
   descriptors : Array[MessageDescriptor],
+  enum_descriptors : Array[EnumDescriptor],
 ) -> JsonDecodeResult {
   if !parser.consume('{') {
     return JsonDecodeErr(Unsupported("expected JSON object"))
@@ -1184,7 +1282,7 @@ fn parse_json_message_object(
       return JsonDecodeErr(Unsupported("duplicate JSON field: " + key))
     }
     seen_field_names.push(fd.name)
-    match parse_json_field(parser, fd, descriptors) {
+    match parse_json_field(parser, fd, descriptors, enum_descriptors) {
       JsonDecodeErr(e) => return JsonDecodeErr(e)
       JsonDecodeOk(one) =>
         if one.fields.length() > 0 {
@@ -1236,8 +1334,20 @@ pub fn json_to_message_with_descriptors(
   descriptors : Array[MessageDescriptor],
   input : String,
 ) -> JsonDecodeResult {
+  json_to_message_with_schema(desc, descriptors, [], input)
+}
+
+///|
+/// Parse protobuf-style JSON while resolving both nested message descriptors
+/// and enum value names.
+pub fn json_to_message_with_schema(
+  desc : MessageDescriptor,
+  descriptors : Array[MessageDescriptor],
+  enum_descriptors : Array[EnumDescriptor],
+  input : String,
+) -> JsonDecodeResult {
   let parser = JsonParser::{ src: input, chars: input.to_array(), i: 0 }
-  match parse_json_message_object(parser, desc, descriptors) {
+  match parse_json_message_object(parser, desc, descriptors, enum_descriptors) {
     JsonDecodeErr(e) => JsonDecodeErr(e)
     JsonDecodeOk(message) => {
       parser.skip_ws()

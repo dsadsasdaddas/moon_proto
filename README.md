@@ -40,7 +40,7 @@ The project has a small but end-to-end verifiable protobuf laboratory pipeline:
 - schema validator for field numbers, duplicate names/numbers, proto3 enum invariants, top-level conflicts, map constraints, and field/enum reserved-number/name reuse;
 - schema-driven dynamic message encode/decode for scalar, repeated, packed repeated, enum, nested message, map and oneof fields;
 - unknown-field skipping during decode;
-- protobuf-style JSON writer/parser for scalar/repeated/map/nested/oneof dynamic messages, including URL-safe/unpadded bytes base64 input, `null`-as-absent parsing semantics and lowerCamelCase input/output helpers;
+- protobuf-style JSON writer/parser for scalar/repeated/map/nested/oneof dynamic messages, including enum-name schema mapping, URL-safe/unpadded bytes base64 input, `null`-as-absent parsing semantics and lowerCamelCase input/output helpers;
 - MoonBit source generator for message structs, enums, descriptor registries and helper functions;
 - file-based generator wrapper for `.proto` input and generated `.mbt` output;
 - file-based Schema Doctor CLI for stable diagnostics on valid and invalid schemas;
@@ -293,6 +293,7 @@ tests/codegen/compile_generated.sh
 - M52: protobuf JSON lowerCamelCase field-name alias parsing with canonical duplicate detection. Done.
 - M53: protobuf JSON lowerCamelCase output helpers, including generated runtime helper coverage. Done.
 - M54: protobuf JSON bytes parser accepts URL-safe base64 and omitted final padding. Done.
+- M55: protobuf JSON enum-name schema mapping with generated enum descriptor registry coverage. Done.
 
 ## License
 

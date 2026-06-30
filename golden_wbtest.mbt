@@ -720,6 +720,11 @@ test "codegen emits moonbit struct and descriptor" {
         #|  ]
         #|}
         #|
+        #|pub fn enum_descriptors() -> Array[EnumDescriptor] {
+        #|  [
+        #|  ]
+        #|}
+        #|
         #|pub fn encode_User(value : MessageValue) -> EncodeMessageResult {
         #|  encode_message_with_descriptors(descriptor_User(), message_descriptors(), value)
         #|}
@@ -729,15 +734,15 @@ test "codegen emits moonbit struct and descriptor" {
         #|}
         #|
         #|pub fn to_json_User(value : MessageValue) -> JsonEncodeResult {
-        #|  message_to_json_with_descriptors(descriptor_User(), message_descriptors(), value)
+        #|  message_to_json_with_schema(descriptor_User(), message_descriptors(), enum_descriptors(), value)
         #|}
         #|
         #|pub fn to_json_lower_camel_User(value : MessageValue) -> JsonEncodeResult {
-        #|  message_to_json_lower_camel_with_descriptors(descriptor_User(), message_descriptors(), value)
+        #|  message_to_json_lower_camel_with_schema(descriptor_User(), message_descriptors(), enum_descriptors(), value)
         #|}
         #|
         #|pub fn from_json_User(input : String) -> JsonDecodeResult {
-        #|  json_to_message_with_descriptors(descriptor_User(), message_descriptors(), input)
+        #|  json_to_message_with_schema(descriptor_User(), message_descriptors(), enum_descriptors(), input)
         #|}
       assert_eq(generated, expected)
     }
@@ -837,6 +842,12 @@ test "parse enum and codegen enum descriptor" {
         #|  ]
         #|}
         #|
+        #|pub fn enum_descriptors() -> Array[EnumDescriptor] {
+        #|  [
+        #|    descriptor_Color(),
+        #|  ]
+        #|}
+        #|
         #|pub fn encode_Paint(value : MessageValue) -> EncodeMessageResult {
         #|  encode_message_with_descriptors(descriptor_Paint(), message_descriptors(), value)
         #|}
@@ -846,15 +857,15 @@ test "parse enum and codegen enum descriptor" {
         #|}
         #|
         #|pub fn to_json_Paint(value : MessageValue) -> JsonEncodeResult {
-        #|  message_to_json_with_descriptors(descriptor_Paint(), message_descriptors(), value)
+        #|  message_to_json_with_schema(descriptor_Paint(), message_descriptors(), enum_descriptors(), value)
         #|}
         #|
         #|pub fn to_json_lower_camel_Paint(value : MessageValue) -> JsonEncodeResult {
-        #|  message_to_json_lower_camel_with_descriptors(descriptor_Paint(), message_descriptors(), value)
+        #|  message_to_json_lower_camel_with_schema(descriptor_Paint(), message_descriptors(), enum_descriptors(), value)
         #|}
         #|
         #|pub fn from_json_Paint(input : String) -> JsonDecodeResult {
-        #|  json_to_message_with_descriptors(descriptor_Paint(), message_descriptors(), input)
+        #|  json_to_message_with_schema(descriptor_Paint(), message_descriptors(), enum_descriptors(), input)
         #|}
       assert_eq(generated, expected)
     }
@@ -863,6 +874,15 @@ test "parse enum and codegen enum descriptor" {
 
 ///|
 test "enum fields encode as protobuf varints" {
+  let enum_desc = EnumDescriptor::{
+    name: "Color",
+    values: [
+      EnumValueDescriptor::{ name: "COLOR_UNSPECIFIED", number: 0 },
+      EnumValueDescriptor::{ name: "RED", number: 1 },
+      EnumValueDescriptor::{ name: "BLUE", number: 2 },
+    ],
+    allow_alias: false,
+  }
   let desc = MessageDescriptor::{
     name: "Paint",
     fields: [
@@ -901,9 +921,36 @@ test "enum fields encode as protobuf varints" {
     JsonErr(_) => fail("enum json failed")
     JsonOk(json) => assert_eq(json, "{\"color\":2,\"history\":[1,2]}")
   }
+  match message_to_json_with_schema(desc, [], [enum_desc], msg) {
+    JsonErr(_) => fail("enum-name json failed")
+    JsonOk(json) =>
+      assert_eq(json, "{\"color\":\"BLUE\",\"history\":[\"RED\",\"BLUE\"]}")
+  }
+  match
+    message_to_json_with_schema(
+      desc,
+      [],
+      [enum_desc],
+      message_value([message_field("color", Int64Value(99L))]),
+    ) {
+    JsonErr(_) => fail("unknown enum number should remain JSON number")
+    JsonOk(json) => assert_eq(json, "{\"color\":99}")
+  }
   match json_to_message(desc, "{\"history\":[1,2],\"color\":2}") {
     JsonDecodeErr(_) => fail("enum json parse failed")
     JsonDecodeOk(decoded) => assert_true(decoded == msg)
+  }
+  match
+    json_to_message_with_schema(
+      desc, [], [enum_desc], "{\"history\":[\"RED\",2],\"color\":\"BLUE\"}",
+    ) {
+    JsonDecodeErr(_) => fail("enum-name json parse failed")
+    JsonDecodeOk(decoded) => assert_true(decoded == msg)
+  }
+  match json_to_message_with_schema(desc, [], [enum_desc], "{\"color\":\"GREEN\"}") {
+    JsonDecodeOk(_) => fail("unknown enum JSON name should be rejected")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected enum-name JSON error")
   }
 }
 
@@ -2007,6 +2054,11 @@ test "parse and codegen map fields" {
         #|  ]
         #|}
         #|
+        #|pub fn enum_descriptors() -> Array[EnumDescriptor] {
+        #|  [
+        #|  ]
+        #|}
+        #|
         #|pub fn encode_Bag(value : MessageValue) -> EncodeMessageResult {
         #|  encode_message_with_descriptors(descriptor_Bag(), message_descriptors(), value)
         #|}
@@ -2016,15 +2068,15 @@ test "parse and codegen map fields" {
         #|}
         #|
         #|pub fn to_json_Bag(value : MessageValue) -> JsonEncodeResult {
-        #|  message_to_json_with_descriptors(descriptor_Bag(), message_descriptors(), value)
+        #|  message_to_json_with_schema(descriptor_Bag(), message_descriptors(), enum_descriptors(), value)
         #|}
         #|
         #|pub fn to_json_lower_camel_Bag(value : MessageValue) -> JsonEncodeResult {
-        #|  message_to_json_lower_camel_with_descriptors(descriptor_Bag(), message_descriptors(), value)
+        #|  message_to_json_lower_camel_with_schema(descriptor_Bag(), message_descriptors(), enum_descriptors(), value)
         #|}
         #|
         #|pub fn from_json_Bag(input : String) -> JsonDecodeResult {
-        #|  json_to_message_with_descriptors(descriptor_Bag(), message_descriptors(), input)
+        #|  json_to_message_with_schema(descriptor_Bag(), message_descriptors(), enum_descriptors(), input)
         #|}
       assert_eq(generated, expected)
     }
@@ -2265,6 +2317,11 @@ test "parse and codegen oneof fields" {
         #|  ]
         #|}
         #|
+        #|pub fn enum_descriptors() -> Array[EnumDescriptor] {
+        #|  [
+        #|  ]
+        #|}
+        #|
         #|pub fn encode_Contact(value : MessageValue) -> EncodeMessageResult {
         #|  encode_message_with_descriptors(descriptor_Contact(), message_descriptors(), value)
         #|}
@@ -2274,15 +2331,15 @@ test "parse and codegen oneof fields" {
         #|}
         #|
         #|pub fn to_json_Contact(value : MessageValue) -> JsonEncodeResult {
-        #|  message_to_json_with_descriptors(descriptor_Contact(), message_descriptors(), value)
+        #|  message_to_json_with_schema(descriptor_Contact(), message_descriptors(), enum_descriptors(), value)
         #|}
         #|
         #|pub fn to_json_lower_camel_Contact(value : MessageValue) -> JsonEncodeResult {
-        #|  message_to_json_lower_camel_with_descriptors(descriptor_Contact(), message_descriptors(), value)
+        #|  message_to_json_lower_camel_with_schema(descriptor_Contact(), message_descriptors(), enum_descriptors(), value)
         #|}
         #|
         #|pub fn from_json_Contact(input : String) -> JsonDecodeResult {
-        #|  json_to_message_with_descriptors(descriptor_Contact(), message_descriptors(), input)
+        #|  json_to_message_with_schema(descriptor_Contact(), message_descriptors(), enum_descriptors(), input)
         #|}
       assert_eq(generated, expected)
     }
