@@ -30,7 +30,9 @@
     {
       "name": "simple_user",
       "proto": "examples/simple/user.proto",
-      "expected_messages": ["User"],
+      "expected_messages": [
+        "User"
+      ],
       "expected_enums": [],
       "expected_inspect": [
         "message User fields=6",
@@ -38,13 +40,29 @@
         "5 email : oneof contact string",
         "6 phone : oneof contact string"
       ],
-      "official_features": ["scalar", "repeated", "map", "oneof"]
+      "official_features": [
+        "scalar",
+        "repeated",
+        "map",
+        "oneof"
+      ],
+      "expected_official_generated": [
+        "pub struct User",
+        "Map[String, UInt64]",
+        "enum UserContact",
+        "fn encode_json"
+      ]
     },
     {
       "name": "decorated_telemetry",
       "proto": "examples/decorated/telemetry.proto",
-      "expected_messages": ["Metadata", "TelemetryEvent"],
-      "expected_enums": ["Severity"],
+      "expected_messages": [
+        "Metadata",
+        "TelemetryEvent"
+      ],
+      "expected_enums": [
+        "Severity"
+      ],
       "expected_inspect": [
         "package: moon.proto.lab.demo.v1",
         "message TelemetryEvent fields=7",
@@ -53,7 +71,21 @@
         "enum Severity values=4",
         "reserved numbers: 9 to 12"
       ],
-      "official_features": ["import", "option ignored by generator", "reserved", "enum", "optional", "map", "oneof"]
+      "official_features": [
+        "import",
+        "option ignored by generator",
+        "reserved",
+        "enum",
+        "optional",
+        "map",
+        "oneof"
+      ],
+      "expected_official_generated": [
+        "pub enum Severity",
+        "pub struct TelemetryEvent",
+        "Option[String]",
+        "Map[String, String]"
+      ]
     }
   ]
 }

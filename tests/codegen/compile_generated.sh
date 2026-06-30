@@ -197,6 +197,16 @@ grep -q '<testsuite' generated/official_diff_report.xml
 grep -q 'failures="0"' generated/official_diff_report.xml
 grep -q '<skipped' generated/official_diff_report.xml
 
+python3 scripts/moon_proto_official_diff.py \
+  --official-generated-dir tests/differential/official_generated_fixture \
+  --report generated/official_generated_diff_report.md \
+  --junit-out generated/official_generated_diff_report.xml
+grep -Fq 'Overall status: **PASS**' generated/official_generated_diff_report.md
+grep -q 'official generated output contract' generated/official_generated_diff_report.md
+grep -q 'expected snippets found' generated/official_generated_diff_report.md
+grep -q '<testsuite' generated/official_generated_diff_report.xml
+grep -q 'failures="0"' generated/official_generated_diff_report.xml
+
 python3 scripts/moon_proto_descriptor.py fixture \
   --hex-out generated/user_descriptor_set.hex \
   --json-out generated/user_descriptor_set.json

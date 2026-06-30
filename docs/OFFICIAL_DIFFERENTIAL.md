@@ -73,6 +73,19 @@ python3 scripts/moon_proto_official_diff.py \
 
 The generator step is only blocking when both `--require-official` and `--run-official-generator` are used. This keeps the main CI stable while still documenting a deeper path for environments where the official generator dependency graph resolves.
 
+## Validate pre-generated official output
+
+When the official generator has already been run in another environment, point the harness at the generated `.mbt` tree:
+
+```bash
+python3 scripts/moon_proto_official_diff.py \
+  --official-generated-dir tests/differential/official_generated_fixture \
+  --report generated/official_generated_diff_report.md \
+  --junit-out generated/official_generated_diff_report.xml
+```
+
+The harness checks each case against `expected_official_generated` snippets in `tests/differential/official_cases.json`. This mode is useful for CI environments that can consume cached official-generator artifacts but should not rebuild the official generator on every run.
+
 ## Why this matters
 
 This turns the project into ecosystem infrastructure rather than another protobuf runtime:
@@ -80,4 +93,5 @@ This turns the project into ecosystem infrastructure rather than another protobu
 - Moon Proto Lab can verify schemas before official code generation;
 - the manifest makes overlap with official capabilities explicit;
 - generated Markdown/HTML/JUnit reports are suitable for CI artifacts and contest demos;
+- pre-generated official output can be checked without requiring `protoc` or official generator dependencies in the same job;
 - intentional differences are documented instead of hidden: Moon Proto Lab focuses on descriptor-driven dynamic `MessageValue` verification, while the official generator emits production typed MoonBit structs, maps and oneof enums.

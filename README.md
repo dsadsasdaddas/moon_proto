@@ -130,6 +130,7 @@ python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/sim
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md --junit-out generated/verify_report.xml
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.html
 python3 scripts/moon_proto_official_diff.py --report generated/official_diff_report.md --junit-out generated/official_diff_report.xml
+python3 scripts/moon_proto_official_diff.py --official-generated-dir tests/differential/official_generated_fixture --report generated/official_generated_diff_report.md --junit-out generated/official_generated_diff_report.xml
 git clone --depth 1 https://github.com/moonbitlang/protoc-gen-mbt /tmp/protoc-gen-mbt
 python3 scripts/moon_proto_official_diff.py --official-repo /tmp/protoc-gen-mbt --require-official --report generated/official_source_diff_report.md --junit-out generated/official_source_diff_report.xml
 python3 scripts/moon_proto_descriptor.py verify tests/fixtures/user_descriptor_set.hex --report generated/descriptor_verify_report.md --junit-out generated/descriptor_verify_report.xml
@@ -174,6 +175,7 @@ python3 scripts/moon_proto_lab.py doctor examples/decorated/telemetry.proto
 python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md --junit-out generated/compat_report.xml
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md --junit-out generated/verify_report.xml
 python3 scripts/moon_proto_official_diff.py --report generated/official_diff_report.md --junit-out generated/official_diff_report.xml
+python3 scripts/moon_proto_official_diff.py --official-generated-dir tests/differential/official_generated_fixture --report generated/official_generated_diff_report.md --junit-out generated/official_generated_diff_report.xml
 git clone --depth 1 https://github.com/moonbitlang/protoc-gen-mbt /tmp/protoc-gen-mbt
 python3 scripts/moon_proto_official_diff.py --official-repo /tmp/protoc-gen-mbt --require-official --report generated/official_source_diff_report.md --junit-out generated/official_source_diff_report.xml
 python3 scripts/moon_proto_descriptor.py verify tests/fixtures/user_descriptor_set.hex --report generated/descriptor_verify_report.md --junit-out generated/descriptor_verify_report.xml
@@ -222,7 +224,7 @@ tests/codegen/compile_generated.sh
 - M21: reserved number/name validation and compatibility contracts. Done.
 - M22: official MoonBit protobuf differential harness manifest and report. Done.
 - M23: CI-enforced official source contract check against `moonbitlang/protoc-gen-mbt`. Done.
-- M24: deeper generated-code differential tests against an installed official generator. Planned.
+- M24: official generated-output differential contract for pre-generated or installed-generator output. Done.
 - M25: descriptor set / reflection import path with descriptor reports. Done.
 - M26: descriptor-set compatibility checks with reserved-field migration reports. Done.
 - M27: descriptor registry imports, version indexes and adjacent compatibility release gates. Done.

@@ -83,6 +83,35 @@ def check_expected_inspect(inspect_output: str, snippets: list[str]) -> StepResu
     return step('inspect contract', 'PASS', f'{len(snippets)} expected snippets found')
 
 
+def check_official_generated_output(generated_dir_arg: str | None, case: dict) -> StepResult:
+    snippets = case.get('expected_official_generated', [])
+    if not generated_dir_arg:
+        return step(
+            'official generated output contract',
+            'SKIP',
+            'pass --official-generated-dir to validate pre-generated official MoonBit output',
+        )
+    generated_dir = Path(generated_dir_arg)
+    if not generated_dir.exists():
+        return step('official generated output contract', 'FAIL', f'generated directory not found: {generated_dir}')
+    files = sorted(generated_dir.glob('**/*.mbt'))
+    if not files:
+        return step('official generated output contract', 'FAIL', f'no .mbt files found under {generated_dir}')
+    merged = '\n'.join(path.read_text(encoding='utf-8', errors='replace') for path in files)
+    missing = [snippet for snippet in snippets if snippet not in merged]
+    if missing:
+        return step(
+            'official generated output contract',
+            'FAIL',
+            'missing: ' + ', '.join(missing),
+        )
+    return step(
+        'official generated output contract',
+        'PASS',
+        f'{len(snippets)} expected snippets found in {len(files)} official generated file(s)',
+    )
+
+
 def official_plugin_path(repo: Path) -> Path | None:
     candidates = [
         repo / 'cli' / '_build' / 'native' / 'release' / 'build' / 'protoc-gen-mbt.exe',
@@ -253,10 +282,19 @@ def run_case(args: argparse.Namespace, case: dict, root: Path) -> CaseResult:
     else:
         steps.append(step('official protoc-gen-mbt', 'SKIP', 'pass --official-repo and --run-official-generator to run the optional generator check'))
 
+    steps.append(check_official_generated_output(args.official_generated_dir, case))
+
     return CaseResult(case['name'], proto, steps, inspect_output)
 
 
-def markdown_report(manifest: dict, source_step: StepResult, results: list[CaseResult], require_official: bool, run_generator: bool) -> str:
+def markdown_report(
+    manifest: dict,
+    source_step: StepResult,
+    results: list[CaseResult],
+    require_official: bool,
+    run_generator: bool,
+    generated_dir: str | None,
+) -> str:
     official = manifest['official']
     blocking_failures = [step for result in results for step in result.steps if step.blocking]
     if source_step.blocking or (require_official and source_step.status != 'PASS'):
@@ -277,6 +315,7 @@ def markdown_report(manifest: dict, source_step: StepResult, results: list[CaseR
         f'- Runtime package: `{official["runtime_package"]}`',
         f'- Official source required: `{str(require_official).lower()}`',
         f'- Official generator requested: `{str(run_generator).lower()}`',
+        f'- Official generated output directory: `{generated_dir or ""}`',
         '',
         '## Official feature contract used by this harness',
         '',
@@ -423,6 +462,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--moon-bin', default='moon')
     parser.add_argument('--protoc-bin', default='protoc')
     parser.add_argument('--official-repo', help='optional path to a moonbitlang/protoc-gen-mbt checkout')
+    parser.add_argument('--official-generated-dir', help='optional directory containing pre-generated official .mbt output to validate against the manifest contract')
     parser.add_argument('--require-official', action='store_true', help='fail if the official source contract is skipped or fails; also require generator success when --run-official-generator is used')
     parser.add_argument('--run-official-generator', action='store_true', help='build and run the official protoc-gen-mbt plugin when --official-repo is available')
     parser.add_argument('--skip-compile', action='store_true', help='skip Moon Proto Lab generated-code compile checks')
@@ -441,6 +481,7 @@ def main(argv: list[str] | None = None) -> int:
         results,
         args.require_official,
         args.run_official_generator,
+        args.official_generated_dir,
     )
     if args.report:
         write_report(Path(args.report), md)
