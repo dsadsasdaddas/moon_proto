@@ -253,16 +253,6 @@ fn json_find_message_descriptor(
 }
 
 ///|
-fn json_has_message_field(fields : Array[MessageField], name : String) -> Bool {
-  for field in fields {
-    if field.name == name {
-      return true
-    }
-  }
-  false
-}
-
-///|
 fn json_oneof_group(label : FieldLabel) -> String? {
   match label {
     Oneof(group) => Some(group)
@@ -977,6 +967,9 @@ fn parse_json_field(
   fd : FieldDescriptor,
   descriptors : Array[MessageDescriptor],
 ) -> JsonDecodeResult {
+  if parser.consume_literal("null") {
+    return JsonDecodeOk(message_value([]))
+  }
   match fd.typ {
     MapType(_, _) => return parse_json_map_field(parser, fd, descriptors)
     _ => ()
@@ -1051,6 +1044,7 @@ fn parse_json_message_object(
     return JsonDecodeErr(Unsupported("expected JSON object"))
   }
   let parsed : Array[MessageField] = []
+  let seen_keys : Array[String] = []
   let seen_oneofs : Array[String] = []
   parser.skip_ws()
   if parser.consume('}') {
@@ -1062,9 +1056,10 @@ fn parse_json_message_object(
       JsonStringErr(e) => return JsonDecodeErr(e)
       JsonStringOk(k) => k
     }
-    if json_has_message_field(parsed, key) {
+    if json_string_array_contains(seen_keys, key) {
       return JsonDecodeErr(Unsupported("duplicate JSON field: " + key))
     }
+    seen_keys.push(key)
     if !parser.consume(':') {
       return JsonDecodeErr(Unsupported("expected JSON object colon"))
     }
@@ -1072,22 +1067,27 @@ fn parse_json_message_object(
       None => return JsonDecodeErr(Unsupported("unknown JSON field: " + key))
       Some(found) => found
     }
-    match json_oneof_group(fd.label) {
-      None => ()
-      Some(group) => {
-        for seen in seen_oneofs {
-          if seen == group {
-            return JsonDecodeErr(
-              Unsupported("multiple JSON fields for oneof group: " + group),
-            )
-          }
-        }
-        seen_oneofs.push(group)
-      }
-    }
     match parse_json_field(parser, fd, descriptors) {
       JsonDecodeErr(e) => return JsonDecodeErr(e)
-      JsonDecodeOk(one) => append_json_field(parsed, one.fields[0])
+      JsonDecodeOk(one) =>
+        if one.fields.length() > 0 {
+          match json_oneof_group(fd.label) {
+            None => ()
+            Some(group) => {
+              for seen in seen_oneofs {
+                if seen == group {
+                  return JsonDecodeErr(
+                    Unsupported(
+                      "multiple JSON fields for oneof group: " + group,
+                    ),
+                  )
+                }
+              }
+              seen_oneofs.push(group)
+            }
+          }
+          append_json_field(parsed, one.fields[0])
+        }
     }
     parser.skip_ws()
     if parser.consume(',') {

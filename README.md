@@ -40,7 +40,7 @@ The project has a small but end-to-end verifiable protobuf laboratory pipeline:
 - schema validator for field numbers, duplicate names/numbers, proto3 enum invariants, top-level conflicts, map constraints, and field/enum reserved-number/name reuse;
 - schema-driven dynamic message encode/decode for scalar, repeated, packed repeated, enum, nested message, map and oneof fields;
 - unknown-field skipping during decode;
-- protobuf-style JSON writer/parser for scalar/repeated/map/nested/oneof dynamic messages;
+- protobuf-style JSON writer/parser for scalar/repeated/map/nested/oneof dynamic messages, including `null`-as-absent parsing semantics;
 - MoonBit source generator for message structs, enums, descriptor registries and helper functions;
 - file-based generator wrapper for `.proto` input and generated `.mbt` output;
 - file-based Schema Doctor CLI for stable diagnostics on valid and invalid schemas;
@@ -289,6 +289,7 @@ tests/codegen/compile_generated.sh
 - M48: top-level `extend` custom-option block parser tolerance with generated-code verify coverage. Done.
 - M49: protobuf `edition = "2023"` declaration parser tolerance with generated-code verify coverage. Done.
 - M50: oneof option statement parser tolerance with generated-code verify coverage. Done.
+- M51: protobuf JSON `null` parsing as absent fields, with duplicate-field and repeated-element guards. Done.
 
 ## License
 

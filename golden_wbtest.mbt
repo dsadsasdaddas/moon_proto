@@ -1145,6 +1145,72 @@ test "protobuf style json parser roundtrip" {
 }
 
 ///|
+test "protobuf style json parser treats null as absent" {
+  let desc = MessageDescriptor::{
+    name: "Contact",
+    fields: [
+      FieldDescriptor::{
+        name: "id",
+        typ: UInt64Type,
+        number: 1,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "name",
+        typ: StringType,
+        number: 2,
+        label: Optional,
+      },
+      FieldDescriptor::{
+        name: "tags",
+        typ: StringType,
+        number: 3,
+        label: Repeated,
+      },
+      FieldDescriptor::{
+        name: "email",
+        typ: StringType,
+        number: 4,
+        label: Oneof("reach"),
+      },
+      FieldDescriptor::{
+        name: "phone",
+        typ: StringType,
+        number: 5,
+        label: Oneof("reach"),
+      },
+    ],
+  }
+  let json = "{\"id\":null,\"name\":\"Alice\",\"tags\":null,\"email\":null,\"phone\":\"123\"}"
+  match json_to_message(desc, json) {
+    JsonDecodeErr(_) => fail("protobuf JSON null should parse as absent")
+    JsonDecodeOk(msg) => {
+      assert_true(
+        msg ==
+        message_value([
+          message_field("name", StringValue("Alice")),
+          message_field("phone", StringValue("123")),
+        ]),
+      )
+      match message_to_json(desc, msg) {
+        JsonErr(_) => fail("JSON writer failed after null parse")
+        JsonOk(canonical) => assert_eq(canonical, "{\"name\":\"Alice\",\"phone\":\"123\"}")
+      }
+    }
+  }
+  match json_to_message(desc, "{\"id\":null,\"id\":\"1\"}") {
+    JsonDecodeOk(_) => fail("duplicate JSON field with null should be rejected")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected duplicate null-field error")
+  }
+  match json_to_message(desc, "{\"tags\":[null]}") {
+    JsonDecodeOk(_) => fail("null inside repeated JSON array should be rejected")
+    JsonDecodeErr(Unsupported(_)) => ()
+    JsonDecodeErr(_) => fail("unexpected repeated null error")
+  }
+}
+
+///|
 test "json parser rejects duplicate and invalid values" {
   let desc = MessageDescriptor::{
     name: "User",
