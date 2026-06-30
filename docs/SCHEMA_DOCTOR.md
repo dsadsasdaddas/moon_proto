@@ -76,7 +76,7 @@ The compatibility checker treats these changes as breaking:
 - old reserved number/name contracts are dropped or reused by new fields/enum values;
 - either old or new schema fails Schema Doctor validation.
 
-Adding new fields or new enum values is accepted. The command returns a non-zero exit status for incompatible schemas and can emit Markdown or HTML reports by choosing the report file suffix.
+Adding new fields or new enum values is accepted. The command returns a non-zero exit status for incompatible schemas and can emit Markdown/HTML reports through `--report` and CI-readable JUnit XML through `--junit-out`.
 
 ## AI verify workflow
 
@@ -93,13 +93,15 @@ The verify command performs:
 2. Schema inspection summary.
 3. MoonBit source generation.
 4. Generated-code compile check through `moon check` in a temporary copy of the repository.
-5. Optional Markdown or HTML report generation.
+5. Optional Markdown/HTML and JUnit XML report generation.
 
-Write an HTML report by using an `.html` suffix:
+Write an HTML report by using an `.html` suffix, or write CI-readable JUnit XML with `--junit-out`:
 
 ```bash
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto \
   --report generated/verify_report.html
+python3 scripts/moon_proto_lab.py verify examples/simple/user.proto \
+  --junit-out generated/verify_report.xml
 ```
 
 Use `--skip-compile` only when a fast report is needed and the caller will run compile checks elsewhere.

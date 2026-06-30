@@ -155,6 +155,59 @@ def markdown_table_cell(text: str) -> str:
     return text.replace('|', '\\|').replace('\n', '<br>')
 
 
+def xml_escape(text: str) -> str:
+    return html.escape(text, quote=True)
+
+
+def write_junit_cases(path: Path, suite_name: str, cases: list[tuple[str, bool, str]]) -> None:
+    failures = sum(1 for _name, ok, _details in cases if not ok)
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        f'<testsuite name="{xml_escape(suite_name)}" tests="{len(cases)}" failures="{failures}">',
+    ]
+    for name, ok, details in cases:
+        lines.append(f'  <testcase name="{xml_escape(name)}">')
+        if not ok:
+            first = details.splitlines()[0] if details else 'failed'
+            lines.append(
+                f'    <failure message="{xml_escape(first)}">'
+                + xml_escape(details)
+                + '</failure>'
+            )
+        lines.append('  </testcase>')
+    lines.append('</testsuite>')
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+
+
+def descriptor_step_cases(steps: list[DescriptorStep]) -> list[tuple[str, bool, str]]:
+    return [(step.name, step.ok, step.details) for step in steps]
+
+
+def policy_check_cases(checks: list[PolicyCheck]) -> list[tuple[str, bool, str]]:
+    return [(check.name, check.ok, check.details) for check in checks]
+
+
+def registry_cases(
+    versions: list[RegistryVersion],
+    edges: list[RegistryEdge],
+    policy_checks: list[PolicyCheck] | None = None,
+) -> list[tuple[str, bool, str]]:
+    cases: list[tuple[str, bool, str]] = []
+    for version in versions:
+        cases.append((f'version {version.index}: {version.path.name}', version.ok, version.details))
+    for edge in edges:
+        cases.append((
+            f'compat {edge.old_index}->{edge.new_index}: {edge.old_path.name} to {edge.new_path.name}',
+            edge.compatible,
+            edge.output,
+        ))
+    if policy_checks is not None:
+        for check in policy_checks:
+            cases.append((f'policy: {check.name}', check.ok, check.details))
+    return cases
+
+
 def load_json_object(path: Path) -> dict:
     data = json.loads(path.read_text(encoding='utf-8'))
     if not isinstance(data, dict):
@@ -849,6 +902,13 @@ def command_compat(args: argparse.Namespace) -> int:
             ),
         )
         print(f'report: {args.report}')
+    if args.junit_out:
+        write_junit_cases(
+            Path(args.junit_out),
+            'moon-proto-lab.descriptor-compat',
+            descriptor_step_cases(steps),
+        )
+        print(f'junit: {args.junit_out}')
     print(compat_output, end='' if compat_output.endswith('\n') else '\n')
     print('Moon Proto Lab descriptor compat: ' + ('PASS' if compatible else 'FAIL'))
     return 0 if compatible else 1
@@ -971,6 +1031,13 @@ def command_registry(args: argparse.Namespace) -> int:
             encoding='utf-8',
         )
         print(f'json: {args.json_out}')
+    if args.junit_out:
+        write_junit_cases(
+            Path(args.junit_out),
+            'moon-proto-lab.descriptor-registry',
+            registry_cases(versions, edges, policy_checks),
+        )
+        print(f'junit: {args.junit_out}')
 
     print('Moon Proto Lab descriptor registry: ' + ('PASS' if ok else 'FAIL'))
     print(f'versions: {len(versions)}')
@@ -1007,6 +1074,13 @@ def command_policy(args: argparse.Namespace) -> int:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(policy_result_dict(policy_path, checks), indent=2, sort_keys=True) + '\n', encoding='utf-8')
         print(f'json: {args.json_out}')
+    if args.junit_out:
+        write_junit_cases(
+            Path(args.junit_out),
+            'moon-proto-lab.registry-policy',
+            policy_check_cases(checks),
+        )
+        print(f'junit: {args.junit_out}')
     print('Moon Proto Lab registry policy: ' + ('PASS' if ok else 'FAIL'))
     for check in checks:
         print(f'- {check.name}: {"PASS" if check.ok else "FAIL"} - {check.details}')
@@ -1058,6 +1132,13 @@ def command_verify(args: argparse.Namespace) -> int:
     if args.report:
         write_text_report(Path(args.report), descriptor_report(descriptor_path, fds, proto_text, steps))
         print(f'report: {args.report}')
+    if args.junit_out:
+        write_junit_cases(
+            Path(args.junit_out),
+            'moon-proto-lab.descriptor-verify',
+            descriptor_step_cases(steps),
+        )
+        print(f'junit: {args.junit_out}')
     print('Moon Proto Lab descriptor verify: ' + ('PASS' if ok else 'FAIL'))
     for step in steps:
         print(f'- {step.name}: {"PASS" if step.ok else "FAIL"} - {step.details.splitlines()[0]}')
@@ -1089,6 +1170,7 @@ def build_parser() -> argparse.ArgumentParser:
     compat.add_argument('old_descriptor')
     compat.add_argument('new_descriptor')
     compat.add_argument('--report')
+    compat.add_argument('--junit-out')
     compat.add_argument('--moon-bin', default='moon')
     compat.set_defaults(func=command_compat)
 
@@ -1098,6 +1180,7 @@ def build_parser() -> argparse.ArgumentParser:
     registry.add_argument('--report')
     registry.add_argument('--json-out')
     registry.add_argument('--policy', help='optional registry release policy JSON')
+    registry.add_argument('--junit-out')
     registry.add_argument('--moon-bin', default='moon')
     registry.set_defaults(func=command_registry)
 
@@ -1106,11 +1189,13 @@ def build_parser() -> argparse.ArgumentParser:
     policy.add_argument('policy')
     policy.add_argument('--report')
     policy.add_argument('--json-out')
+    policy.add_argument('--junit-out')
     policy.set_defaults(func=command_policy)
 
     verify = sub.add_parser('verify', help='convert descriptor set and run doctor/codegen/compile checks')
     verify.add_argument('descriptor')
     verify.add_argument('--report')
+    verify.add_argument('--junit-out')
     verify.add_argument('--skip-compile', action='store_true')
     verify.add_argument('--moon-bin', default='moon')
     verify.set_defaults(func=command_verify)

@@ -44,7 +44,7 @@ The project has a small but end-to-end verifiable protobuf laboratory pipeline:
 - MoonBit source generator for message structs, enums, descriptor registries and helper functions;
 - file-based generator wrapper for `.proto` input and generated `.mbt` output;
 - file-based Schema Doctor CLI for stable diagnostics on valid and invalid schemas;
-- AI verification CLI that runs doctor, schema inspection, codegen, generated-code compile checks, and Markdown/HTML report generation;
+- AI verification CLI that runs doctor, schema inspection, codegen, generated-code compile checks, and Markdown/HTML/JUnit XML report generation;
 - old/new schema compatibility checker for detecting field, enum, package, type and reserved-contract breaking changes;
 - official MoonBit protobuf differential harness manifest/report for schemas overlapping with `moonbitlang/protoc-gen-mbt`;
 - FileDescriptorSet descriptor/reflection bridge for `.pb`/`.hex`/`.json` descriptor imports, proto reconstruction, verification reports, old/new descriptor-set compatibility reports, descriptor-registry release gates, and JSON release-policy checks;
@@ -126,16 +126,16 @@ python3 scripts/moon_proto_lab.py doctor examples/simple/user.proto
 python3 scripts/moon_proto_lab.py doctor examples/decorated/telemetry.proto
 python3 scripts/moon_proto_lab.py inspect examples/decorated/telemetry.proto
 python3 scripts/moon_proto_lab.py inspect examples/simple/user.proto
-python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md
-python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md
+python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md --junit-out generated/compat_report.xml
+python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md --junit-out generated/verify_report.xml
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.html
 python3 scripts/moon_proto_official_diff.py --report generated/official_diff_report.md
 git clone --depth 1 https://github.com/moonbitlang/protoc-gen-mbt /tmp/protoc-gen-mbt
 python3 scripts/moon_proto_official_diff.py --official-repo /tmp/protoc-gen-mbt --require-official --report generated/official_source_diff_report.md
-python3 scripts/moon_proto_descriptor.py verify tests/fixtures/user_descriptor_set.hex --report generated/descriptor_verify_report.md
-python3 scripts/moon_proto_descriptor.py compat tests/fixtures/user_descriptor_set.hex tests/fixtures/user_descriptor_set_reserved_v2.hex --report generated/descriptor_compat_report.md
-python3 scripts/moon_proto_descriptor.py registry tests/fixtures/user_descriptor_set.hex tests/fixtures/user_descriptor_set_reserved_v2.hex --name demo-user --report generated/descriptor_registry_report.md --json-out generated/descriptor_registry.json --policy tests/fixtures/descriptor_registry_policy.json
-python3 scripts/moon_proto_descriptor.py policy generated/descriptor_registry.json tests/fixtures/descriptor_registry_policy.json --report generated/descriptor_policy_report.md --json-out generated/descriptor_policy.json
+python3 scripts/moon_proto_descriptor.py verify tests/fixtures/user_descriptor_set.hex --report generated/descriptor_verify_report.md --junit-out generated/descriptor_verify_report.xml
+python3 scripts/moon_proto_descriptor.py compat tests/fixtures/user_descriptor_set.hex tests/fixtures/user_descriptor_set_reserved_v2.hex --report generated/descriptor_compat_report.md --junit-out generated/descriptor_compat_report.xml
+python3 scripts/moon_proto_descriptor.py registry tests/fixtures/user_descriptor_set.hex tests/fixtures/user_descriptor_set_reserved_v2.hex --name demo-user --report generated/descriptor_registry_report.md --json-out generated/descriptor_registry.json --policy tests/fixtures/descriptor_registry_policy.json --junit-out generated/descriptor_registry_report.xml
+python3 scripts/moon_proto_descriptor.py policy generated/descriptor_registry.json tests/fixtures/descriptor_registry_policy.json --report generated/descriptor_policy_report.md --json-out generated/descriptor_policy.json --junit-out generated/descriptor_policy_report.xml
 ```
 
 Convert a dynamic message to protobuf-style JSON:
@@ -169,15 +169,15 @@ moon run cmd/main -- gen --example
 python3 scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/
 python3 scripts/moon_proto_lab.py doctor examples/simple/user.proto
 python3 scripts/moon_proto_lab.py doctor examples/decorated/telemetry.proto
-python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md
-python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md
+python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md --junit-out generated/compat_report.xml
+python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md --junit-out generated/verify_report.xml
 python3 scripts/moon_proto_official_diff.py --report generated/official_diff_report.md
 git clone --depth 1 https://github.com/moonbitlang/protoc-gen-mbt /tmp/protoc-gen-mbt
 python3 scripts/moon_proto_official_diff.py --official-repo /tmp/protoc-gen-mbt --require-official --report generated/official_source_diff_report.md
-python3 scripts/moon_proto_descriptor.py verify tests/fixtures/user_descriptor_set.hex --report generated/descriptor_verify_report.md
-python3 scripts/moon_proto_descriptor.py compat tests/fixtures/user_descriptor_set.hex tests/fixtures/user_descriptor_set_reserved_v2.hex --report generated/descriptor_compat_report.md
-python3 scripts/moon_proto_descriptor.py registry tests/fixtures/user_descriptor_set.hex tests/fixtures/user_descriptor_set_reserved_v2.hex --name demo-user --report generated/descriptor_registry_report.md --json-out generated/descriptor_registry.json --policy tests/fixtures/descriptor_registry_policy.json
-python3 scripts/moon_proto_descriptor.py policy generated/descriptor_registry.json tests/fixtures/descriptor_registry_policy.json --report generated/descriptor_policy_report.md --json-out generated/descriptor_policy.json
+python3 scripts/moon_proto_descriptor.py verify tests/fixtures/user_descriptor_set.hex --report generated/descriptor_verify_report.md --junit-out generated/descriptor_verify_report.xml
+python3 scripts/moon_proto_descriptor.py compat tests/fixtures/user_descriptor_set.hex tests/fixtures/user_descriptor_set_reserved_v2.hex --report generated/descriptor_compat_report.md --junit-out generated/descriptor_compat_report.xml
+python3 scripts/moon_proto_descriptor.py registry tests/fixtures/user_descriptor_set.hex tests/fixtures/user_descriptor_set_reserved_v2.hex --name demo-user --report generated/descriptor_registry_report.md --json-out generated/descriptor_registry.json --policy tests/fixtures/descriptor_registry_policy.json --junit-out generated/descriptor_registry_report.xml
+python3 scripts/moon_proto_descriptor.py policy generated/descriptor_registry.json tests/fixtures/descriptor_registry_policy.json --report generated/descriptor_policy_report.md --json-out generated/descriptor_policy.json --junit-out generated/descriptor_policy_report.xml
 tests/codegen/compile_generated.sh
 ```
 
@@ -223,7 +223,8 @@ tests/codegen/compile_generated.sh
 - M26: descriptor-set compatibility checks with reserved-field migration reports. Done.
 - M27: descriptor registry imports, version indexes and adjacent compatibility release gates. Done.
 - M28: JSON release-policy gate for descriptor registry manifests. Done.
-- M29: real remote schema registry adapters and richer release-policy DSL. Planned.
+- M29: JUnit XML outputs for CI/test dashboards. Done.
+- M30: real remote schema registry adapters and richer release-policy DSL. Planned.
 
 ## License
 

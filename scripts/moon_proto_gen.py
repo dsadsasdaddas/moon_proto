@@ -102,6 +102,30 @@ def schema_is_compatible(compat_output: str) -> bool:
     return compat_output.splitlines()[0:1] == ['schema compatible']
 
 
+def xml_escape(text: str) -> str:
+    return html.escape(text, quote=True)
+
+
+def write_junit_report(path: Path, suite_name: str, cases: list[VerifyStep]) -> None:
+    failures = sum(1 for case in cases if not case.ok)
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        f'<testsuite name="{xml_escape(suite_name)}" tests="{len(cases)}" failures="{failures}">',
+    ]
+    for case in cases:
+        lines.append(f'  <testcase name="{xml_escape(case.name)}">')
+        if not case.ok:
+            lines.append(
+                f'    <failure message="{xml_escape(case.details.splitlines()[0] if case.details else "failed")}">'
+                + xml_escape(case.details)
+                + '</failure>'
+            )
+        lines.append('  </testcase>')
+    lines.append('</testsuite>')
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+
+
 def command_gen(args: argparse.Namespace) -> int:
     root = repo_root()
     try:
@@ -160,6 +184,13 @@ def command_compat(args: argparse.Namespace) -> int:
     if args.report:
         write_compat_report(Path(args.report), old_proto, new_proto, ok, output)
         print(f'report: {args.report}')
+    if args.junit_out:
+        write_junit_report(
+            Path(args.junit_out),
+            'moon-proto-lab.schema-compat',
+            [VerifyStep('schema compatibility', ok, output)],
+        )
+        print(f'junit: {args.junit_out}')
     return 0 if ok else 1
 
 
@@ -417,6 +448,9 @@ def command_verify(args: argparse.Namespace) -> int:
         report_path = Path(args.report)
         write_report(report_path, proto, overall_ok, steps, doctor_output, inspect_output, generated)
         print(f'report: {report_path}')
+    if args.junit_out:
+        write_junit_report(Path(args.junit_out), 'moon-proto-lab.verify', steps)
+        print(f'junit: {args.junit_out}')
 
     print('Moon Proto Lab verify: ' + ('PASS' if overall_ok else 'FAIL'))
     for step in steps:
@@ -472,12 +506,14 @@ def build_parser() -> argparse.ArgumentParser:
     compat.add_argument('old_proto', help='old .proto schema path')
     compat.add_argument('new_proto', help='new .proto schema path')
     compat.add_argument('--report', help='write a Markdown or HTML compatibility report')
+    compat.add_argument('--junit-out', help='write a JUnit XML compatibility report')
     add_common_moon_arg(compat)
     compat.set_defaults(func=command_compat)
 
     verify = sub.add_parser('verify', help='run schema doctor, codegen, compile check, and optional report')
     verify.add_argument('proto', help='input .proto schema path')
     verify.add_argument('--report', help='write a Markdown or HTML verification report')
+    verify.add_argument('--junit-out', help='write a JUnit XML verification report')
     verify.add_argument('--skip-compile', action='store_true', help='skip generated-code moon check')
     add_common_moon_arg(verify)
     verify.set_defaults(func=command_verify)

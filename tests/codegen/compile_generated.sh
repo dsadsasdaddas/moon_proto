@@ -64,9 +64,12 @@ python3 scripts/moon_proto_lab.py inspect examples/decorated/telemetry.proto \
   | grep -q 'reserved numbers: 7, 9 to 12'
 
 python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto \
-  --report generated/compat_report.md
+  --report generated/compat_report.md \
+  --junit-out generated/compat_report.xml
 grep -q 'schema compatible' generated/compat_report.md
 grep -Fq 'Overall status: **PASS**' generated/compat_report.md
+grep -q '<testsuite' generated/compat_report.xml
+grep -q 'failures="0"' generated/compat_report.xml
 
 cat > user_v2_breaking.proto <<'EOF'
 syntax = "proto3";
@@ -167,9 +170,12 @@ grep -q 'field uses reserved number' invalid_reserved_doctor.txt
 grep -q 'field uses reserved name' invalid_reserved_doctor.txt
 
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto \
-  --report generated/verify_report.md
+  --report generated/verify_report.md \
+  --junit-out generated/verify_report.xml
 grep -Fq 'Overall status: **PASS**' generated/verify_report.md
 grep -q 'Generated MoonBit source preview' generated/verify_report.md
+grep -q '<testsuite' generated/verify_report.xml
+grep -q 'failures="0"' generated/verify_report.xml
 
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto \
   --report generated/verify_report.html --skip-compile
@@ -207,24 +213,32 @@ grep -q 'map<string, uint64> counters = 4;' generated/user_from_descriptor.proto
 grep -q 'oneof contact' generated/user_from_descriptor.proto
 
 python3 scripts/moon_proto_descriptor.py verify tests/fixtures/user_descriptor_set.hex \
-  --report generated/descriptor_verify_report.md
+  --report generated/descriptor_verify_report.md \
+  --junit-out generated/descriptor_verify_report.xml
 grep -Fq 'Overall status: **PASS**' generated/descriptor_verify_report.md
+grep -q '<testsuite' generated/descriptor_verify_report.xml
+grep -q 'failures="0"' generated/descriptor_verify_report.xml
 
 python3 scripts/moon_proto_descriptor.py compat \
   tests/fixtures/user_descriptor_set.hex \
   tests/fixtures/user_descriptor_set_reserved_v2.hex \
-  --report generated/descriptor_compat_report.md
+  --report generated/descriptor_compat_report.md \
+  --junit-out generated/descriptor_compat_report.xml
 grep -Fq 'Overall status: **PASS**' generated/descriptor_compat_report.md
+grep -q '<testsuite' generated/descriptor_compat_report.xml
+grep -q 'failures="0"' generated/descriptor_compat_report.xml
 
 if python3 scripts/moon_proto_descriptor.py compat \
   tests/fixtures/user_descriptor_set.hex \
   tests/fixtures/user_descriptor_set_breaking.hex \
-  --report generated/descriptor_breaking_report.md; then
+  --report generated/descriptor_breaking_report.md \
+  --junit-out generated/descriptor_breaking_report.xml; then
   echo "expected descriptor compat failure" >&2
   exit 1
 fi
 grep -Fq 'Overall status: **FAIL**' generated/descriptor_breaking_report.md
 grep -q 'field type changed' generated/descriptor_breaking_report.md
+grep -q '<failure' generated/descriptor_breaking_report.xml
 
 python3 scripts/moon_proto_descriptor.py registry \
   tests/fixtures/user_descriptor_set.hex \
@@ -232,20 +246,26 @@ python3 scripts/moon_proto_descriptor.py registry \
   --name demo-user \
   --report generated/descriptor_registry_report.md \
   --json-out generated/descriptor_registry.json \
-  --policy tests/fixtures/descriptor_registry_policy.json
+  --policy tests/fixtures/descriptor_registry_policy.json \
+  --junit-out generated/descriptor_registry_report.xml
 grep -Fq 'Overall status: **PASS**' generated/descriptor_registry_report.md
 grep -q 'schema compatible' generated/descriptor_registry_report.md
 grep -q 'Release policy checks' generated/descriptor_registry_report.md
 grep -q '"overall_status": "PASS"' generated/descriptor_registry.json
 grep -q '"policy"' generated/descriptor_registry.json
+grep -q '<testsuite' generated/descriptor_registry_report.xml
+grep -q 'failures="0"' generated/descriptor_registry_report.xml
 
 python3 scripts/moon_proto_descriptor.py policy \
   generated/descriptor_registry.json \
   tests/fixtures/descriptor_registry_policy.json \
   --report generated/descriptor_policy_report.md \
-  --json-out generated/descriptor_policy.json
+  --json-out generated/descriptor_policy.json \
+  --junit-out generated/descriptor_policy_report.xml
 grep -Fq 'Overall status: **PASS**' generated/descriptor_policy_report.md
 grep -q '"status": "PASS"' generated/descriptor_policy.json
+grep -q '<testsuite' generated/descriptor_policy_report.xml
+grep -q 'failures="0"' generated/descriptor_policy_report.xml
 
 if python3 scripts/moon_proto_descriptor.py registry \
   tests/fixtures/user_descriptor_set.hex \
@@ -253,23 +273,27 @@ if python3 scripts/moon_proto_descriptor.py registry \
   --name demo-user-breaking \
   --report generated/descriptor_registry_breaking_report.md \
   --json-out generated/descriptor_registry_breaking.json \
-  --policy tests/fixtures/descriptor_registry_policy.json; then
+  --policy tests/fixtures/descriptor_registry_policy.json \
+  --junit-out generated/descriptor_registry_breaking_report.xml; then
   echo "expected descriptor registry failure" >&2
   exit 1
 fi
 grep -Fq 'Overall status: **FAIL**' generated/descriptor_registry_breaking_report.md
 grep -q 'field type changed' generated/descriptor_registry_breaking_report.md
 grep -q '"overall_status": "FAIL"' generated/descriptor_registry_breaking.json
+grep -q '<failure' generated/descriptor_registry_breaking_report.xml
 if python3 scripts/moon_proto_descriptor.py policy \
   generated/descriptor_registry_breaking.json \
   tests/fixtures/descriptor_registry_policy.json \
   --report generated/descriptor_policy_breaking_report.md \
-  --json-out generated/descriptor_policy_breaking.json; then
+  --json-out generated/descriptor_policy_breaking.json \
+  --junit-out generated/descriptor_policy_breaking_report.xml; then
   echo "expected descriptor policy failure" >&2
   exit 1
 fi
 grep -Fq 'Overall status: **FAIL**' generated/descriptor_policy_breaking_report.md
 grep -q 'no breaking adjacent changes' generated/descriptor_policy_breaking_report.md
 grep -q '"status": "FAIL"' generated/descriptor_policy_breaking.json
+grep -q '<failure' generated/descriptor_policy_breaking_report.xml
 
 echo "Generated MoonBit source compiles"
