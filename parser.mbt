@@ -147,6 +147,27 @@ fn ProtoParser::consume_int(self : ProtoParser) -> Int? {
 }
 
 ///|
+fn ProtoParser::consume_signed_int(self : ProtoParser) -> Int? {
+  let neg = self.match_sym("-")
+  match self.consume_int() {
+    Some(n) => Some(if neg { 0 - n } else { n })
+    None => None
+  }
+}
+
+///|
+fn ProtoParser::consume_reserved_number(
+  self : ProtoParser,
+  allow_negative : Bool,
+) -> Int? {
+  if allow_negative {
+    self.consume_signed_int()
+  } else {
+    self.consume_int()
+  }
+}
+
+///|
 fn ProtoParser::consume_string(self : ProtoParser) -> String? {
   match self.advance() {
     Some(StrLit(s)) => Some(s)
@@ -271,6 +292,7 @@ fn ProtoParser::parse_reserved_clause(
   self : ProtoParser,
   owner : String,
   max_value : Int,
+  allow_negative? : Bool = false,
 ) -> ReservedDescriptor? {
   let numbers : Array[ReservedNumberRange] = []
   let names : Array[String] = []
@@ -287,10 +309,10 @@ fn ProtoParser::parse_reserved_clause(
         }
       }
     }
-    Some(IntLit(_)) => {
+    Some(IntLit(_)) | Some(Sym("-")) => {
       let mut done = false
       while !done {
-        let start = match self.consume_int() {
+        let start = match self.consume_reserved_number(allow_negative) {
           Some(n) => n
           None => return None
         }
@@ -299,8 +321,8 @@ fn ProtoParser::parse_reserved_clause(
           Some(Ident("to")) => {
             let _ = self.advance()
             match self.peek() {
-              Some(IntLit(_)) =>
-                match self.consume_int() {
+              Some(IntLit(_)) | Some(Sym("-")) =>
+                match self.consume_reserved_number(allow_negative) {
                   Some(n) => end = n
                   None => return None
                 }
@@ -416,6 +438,8 @@ fn ProtoParser::parse_oneof_fields(
         if s == "}" {
           let _ = self.advance()
           done = true
+        } else if s == ";" {
+          let _ = self.advance()
         } else if s == "." {
           match self.parse_field() {
             Some(f) =>
@@ -508,6 +532,8 @@ fn ProtoParser::parse_message(self : ProtoParser) -> ParsedMessage? {
         if s == "}" {
           let _ = self.advance()
           done = true
+        } else if s == ";" {
+          let _ = self.advance()
         } else if s == "." {
           match self.parse_field() {
             Some(f) => fields.push(f)
@@ -584,7 +610,7 @@ fn ProtoParser::parse_enum_value(self : ProtoParser) -> EnumValueDescriptor? {
   if !self.consume_sym("=") {
     return None
   }
-  let number = match self.consume_int() {
+  let number = match self.consume_signed_int() {
     Some(n) => n
     None => return None
   }
@@ -614,13 +640,15 @@ fn ProtoParser::parse_enum(self : ProtoParser) -> ParsedEnum? {
         if s == "}" {
           let _ = self.advance()
           done = true
+        } else if s == ";" {
+          let _ = self.advance()
         } else {
           return None
         }
       Some(Ident(word)) =>
         if word == "reserved" {
           let _ = self.advance()
-          match self.parse_reserved_clause(name, 2147483647) {
+          match self.parse_reserved_clause(name, 2147483647, allow_negative=true) {
             Some(reserved) => {
               for range in reserved.numbers {
                 reserved_numbers.push(range)
@@ -713,6 +741,9 @@ pub fn parse_proto(src : String) -> ParseProtoResult {
   let message_reservations : Array[ReservedDescriptor] = []
   let enum_reservations : Array[ReservedDescriptor] = []
   while p.i < p.tokens.length() {
+    if p.match_sym(";") {
+      continue
+    }
     match p.consume_ident() {
       Some("syntax") => {
         if !p.consume_sym("=") {

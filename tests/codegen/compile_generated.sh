@@ -98,6 +98,23 @@ grep -q 'pub(all) struct Payload' generated/verify_nested_types_report.md
 grep -q 'history : Array\[Payload\]' generated/verify_nested_types_report.md
 grep -q 'failures="0"' generated/verify_nested_types_report.xml
 
+python3 scripts/moon_proto_lab.py doctor examples/decorated/enum_numbers.proto \
+  | grep -q 'schema valid'
+
+python3 scripts/moon_proto_lab.py inspect examples/decorated/enum_numbers.proto \
+  | grep -q -- '-1 STATUS_NEGATIVE'
+
+python3 scripts/moon_proto_lab.py inspect examples/decorated/enum_numbers.proto \
+  | grep -q -- 'reserved numbers: -10 to -2'
+
+python3 scripts/moon_proto_lab.py verify examples/decorated/enum_numbers.proto \
+  --report generated/verify_enum_numbers_report.md \
+  --junit-out generated/verify_enum_numbers_report.xml
+grep -Fq 'Overall status: **PASS**' generated/verify_enum_numbers_report.md
+grep -q 'STATUS_NEGATIVE' generated/verify_enum_numbers_report.md
+grep -q 'number : -1' generated/verify_enum_numbers_report.md
+grep -q 'failures="0"' generated/verify_enum_numbers_report.xml
+
 python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto \
   --report generated/compat_report.md \
   --junit-out generated/compat_report.xml

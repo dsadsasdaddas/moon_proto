@@ -1,0 +1,16 @@
+syntax = "proto3";
+package moon.proto.lab.demo.v1;
+;
+
+enum SignedStatus {
+  ;
+  option allow_alias = false;
+  reserved -10 to -2;
+  STATUS_UNSPECIFIED = 0;
+  STATUS_NEGATIVE = -1 [(deprecated) = true];
+  STATUS_POSITIVE = 1;
+}
+
+message EnumNumberCarrier {
+  SignedStatus status = 1;
+}

@@ -326,7 +326,7 @@ fn has_duplicate_enum_value_number(
 
 ///|
 fn is_valid_enum_reserved_number(number : Int) -> Bool {
-  number >= 0
+  number >= (-2147483647 - 1) && number <= 2147483647
 }
 
 ///|

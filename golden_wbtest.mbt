@@ -134,6 +134,43 @@ test "parser tolerates imports options reserved and field options" {
 }
 
 ///|
+test "parser tolerates negative enum values and empty statements" {
+  let src =
+    #|syntax = "proto3";
+    #|package demo.enums;
+    #|;
+    #|enum SignedStatus {
+    #|  ;
+    #|  reserved -10 to -2;
+    #|  STATUS_UNSPECIFIED = 0;
+    #|  STATUS_NEGATIVE = -1 [(deprecated) = true];
+    #|  STATUS_POSITIVE = 1;
+    #|}
+    #|message Carrier {
+    #|  SignedStatus status = 1;
+    #|}
+  match parse_proto(src) {
+    ProtoErr(_) => fail("negative enum schema should parse")
+    ProtoOk(file) => {
+      assert_eq(file.enums.length(), 1)
+      assert_eq(file.enums[0].name, "SignedStatus")
+      assert_eq(file.enums[0].values.length(), 3)
+      assert_eq(file.enums[0].values[1].name, "STATUS_NEGATIVE")
+      assert_eq(file.enums[0].values[1].number, -1)
+      assert_eq(file.enum_reservations.length(), 1)
+      assert_eq(file.enum_reservations[0].numbers[0].start, -10)
+      assert_eq(file.enum_reservations[0].numbers[0].end, -2)
+      assert_eq(file.messages.length(), 1)
+      assert_true(file.messages[0].fields[0].typ == EnumType("SignedStatus"))
+      assert_true(schema_is_valid(file))
+      let generated = generate_moonbit_source(file)
+      assert_true(generated.contains("STATUS_NEGATIVE"))
+      assert_true(generated.contains("number : -1"))
+    }
+  }
+}
+
+///|
 test "parser lifts nested message and enum descriptors" {
   let src =
     #|syntax = "proto3";
