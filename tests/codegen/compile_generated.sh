@@ -101,6 +101,25 @@ grep -q 'pub(all) struct Payload' generated/verify_nested_types_report.md
 grep -q 'history : Array\[Payload\]' generated/verify_nested_types_report.md
 grep -q 'failures="0"' generated/verify_nested_types_report.xml
 
+python3 scripts/moon_proto_lab.py doctor examples/decorated/nested_qualified.proto \
+  | grep -q 'schema valid'
+
+python3 scripts/moon_proto_lab.py inspect examples/decorated/nested_qualified.proto \
+  | grep -q 'message AuditTrail fields=4'
+
+python3 scripts/moon_proto_lab.py inspect examples/decorated/nested_qualified.proto \
+  | grep -q 'map<string, Payload>'
+
+python3 scripts/moon_proto_lab.py verify examples/decorated/nested_qualified.proto \
+  --report generated/verify_nested_qualified_report.md \
+  --junit-out generated/verify_nested_qualified_report.xml
+grep -Fq 'Overall status: **PASS**' generated/verify_nested_qualified_report.md
+grep -q 'latest : Payload' generated/verify_nested_qualified_report.md
+grep -q 'kind : Kind' generated/verify_nested_qualified_report.md
+grep -q 'history : Array\[Payload\]' generated/verify_nested_qualified_report.md
+grep -q 'MapType(StringType, NamedType("Payload"))' generated/verify_nested_qualified_report.md
+grep -q 'failures="0"' generated/verify_nested_qualified_report.xml
+
 python3 scripts/moon_proto_lab.py doctor examples/decorated/enum_numbers.proto \
   | grep -q 'schema valid'
 

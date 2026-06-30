@@ -255,6 +255,47 @@ test "parser lifts nested message and enum descriptors" {
 }
 
 ///|
+test "parser resolves qualified nested type references" {
+  let src =
+    #|syntax = "proto3";
+    #|package demo.nested;
+    #|message Envelope {
+    #|  enum Kind {
+    #|    KIND_UNSPECIFIED = 0;
+    #|    KIND_CREATED = 1;
+    #|  }
+    #|  message Payload {
+    #|    string body = 1;
+    #|  }
+    #|}
+    #|message Audit {
+    #|  Envelope.Payload payload = 1;
+    #|  .demo.nested.Envelope.Kind kind = 2;
+    #|  repeated Envelope.Payload history = 3;
+    #|  map<string, Envelope.Payload> by_id = 4;
+    #|}
+  match parse_proto(src) {
+    ProtoErr(_) => fail("qualified nested schema should parse")
+    ProtoOk(file) => {
+      assert_eq(file.messages.length(), 3)
+      assert_eq(file.messages[0].name, "Payload")
+      assert_eq(file.messages[2].name, "Audit")
+      let fields = file.messages[2].fields
+      assert_true(fields[0].typ == NamedType("Payload"))
+      assert_true(fields[1].typ == EnumType("Kind"))
+      assert_true(fields[2].typ == NamedType("Payload"))
+      assert_true(fields[3].typ == MapType(StringType, NamedType("Payload")))
+      assert_true(schema_is_valid(file))
+      let generated = generate_moonbit_source(file)
+      assert_true(generated.contains("payload : Payload"))
+      assert_true(generated.contains("kind : Kind"))
+      assert_true(generated.contains("history : Array[Payload]"))
+      assert_true(generated.contains("MapType(StringType, NamedType(\"Payload\"))"))
+    }
+  }
+}
+
+///|
 test "parser tolerates service rpc blocks and block comments" {
   let src =
     #|syntax = "proto3";

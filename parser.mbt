@@ -727,26 +727,70 @@ fn ProtoParser::parse_enum(self : ProtoParser) -> ParsedEnum? {
 }
 
 ///|
-fn is_top_level_enum(enums : Array[EnumDescriptor], name : String) -> Bool {
-  for e in enums {
-    if e.name == name {
-      return true
+fn terminal_qualified_name(name : String) -> String {
+  let chars = name.to_array()
+  let mut start = 0
+  for i = 0; i < chars.length(); i = i + 1 {
+    if chars[i] == '.' {
+      start = i + 1
     }
   }
-  false
+  if start >= chars.length() {
+    ""
+  } else {
+    name[start:chars.length()].to_owned()
+  }
 }
 
 ///|
-fn resolve_type(typ : ScalarType, enums : Array[EnumDescriptor]) -> ScalarType {
+fn canonical_enum_name(
+  enums : Array[EnumDescriptor],
+  name : String,
+) -> String? {
+  let terminal = terminal_qualified_name(name)
+  for e in enums {
+    if e.name == name || e.name == terminal {
+      return Some(e.name)
+    }
+  }
+  None
+}
+
+///|
+fn canonical_message_name(
+  messages : Array[MessageDescriptor],
+  name : String,
+) -> String? {
+  let terminal = terminal_qualified_name(name)
+  for msg in messages {
+    if msg.name == name || msg.name == terminal {
+      return Some(msg.name)
+    }
+  }
+  None
+}
+
+///|
+fn resolve_type(
+  typ : ScalarType,
+  messages : Array[MessageDescriptor],
+  enums : Array[EnumDescriptor],
+) -> ScalarType {
   match typ {
     NamedType(name) =>
-      if is_top_level_enum(enums, name) {
-        EnumType(name)
-      } else {
-        NamedType(name)
+      match canonical_enum_name(enums, name) {
+        Some(enum_name) => EnumType(enum_name)
+        None =>
+          match canonical_message_name(messages, name) {
+            Some(message_name) => NamedType(message_name)
+            None => NamedType(name)
+          }
       }
     MapType(key_typ, value_typ) =>
-      MapType(resolve_type(key_typ, enums), resolve_type(value_typ, enums))
+      MapType(
+        resolve_type(key_typ, messages, enums),
+        resolve_type(value_typ, messages, enums),
+      )
     other => other
   }
 }
@@ -762,7 +806,7 @@ fn resolve_message_types(
     for field in msg.fields {
       fields.push(FieldDescriptor::{
         ..field,
-        typ: resolve_type(field.typ, enums),
+        typ: resolve_type(field.typ, messages, enums),
       })
     }
     out.push(MessageDescriptor::{ name: msg.name, fields })
