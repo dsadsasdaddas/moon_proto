@@ -395,11 +395,6 @@ def verify_fixtures() -> None:
         (HEX, hex_text, HEX.read_text(encoding="utf-8") if HEX.exists() else None),
         (JSON, json_text, JSON.read_text(encoding="utf-8") if JSON.exists() else None),
         (
-            BAG_JSON,
-            bag_json_text,
-            BAG_JSON.read_text(encoding="utf-8") if BAG_JSON.exists() else None,
-        ),
-        (
             CONTACT_BIN,
             contact_binary,
             CONTACT_BIN.read_bytes() if CONTACT_BIN.exists() else None,
@@ -481,6 +476,15 @@ def verify_fixtures() -> None:
             bag_binary,
         ):
             failures.append(str(BAG_BIN.relative_to(ROOT)))
+    actual_bag_json_text = BAG_JSON.read_text(encoding="utf-8") if BAG_JSON.exists() else None
+    if actual_bag_json_text is None:
+        failures.append(str(BAG_JSON.relative_to(ROOT)))
+    else:
+        try:
+            if json.loads(actual_bag_json_text) != json.loads(bag_json_text):
+                failures.append(str(BAG_JSON.relative_to(ROOT)))
+        except json.JSONDecodeError:
+            failures.append(str(BAG_JSON.relative_to(ROOT)))
     for path, expected, actual in checks:
         if actual != expected:
             failures.append(str(path.relative_to(ROOT)))

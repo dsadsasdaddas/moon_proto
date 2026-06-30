@@ -179,30 +179,53 @@ def check_official_source_contract(repo_arg: str | None, official: dict) -> Step
 
 def run_official_generator(
     proto: Path,
-    repo: Path,
+    repo: Path | None,
+    official_plugin_bin: str | None,
     moon_bin: str,
     protoc_bin: str,
     root: Path,
 ) -> StepResult:
-    if not repo.exists():
-        return step('official protoc-gen-mbt', 'SKIP', f'checkout not found: {repo}')
-    if shutil.which(protoc_bin) is None:
+    if shutil.which(protoc_bin) is None and not Path(protoc_bin).exists():
         return step('official protoc-gen-mbt', 'SKIP', f'{protoc_bin} not found')
-    if shutil.which(moon_bin) is None and not Path(moon_bin).exists():
-        return step('official protoc-gen-mbt', 'SKIP', f'{moon_bin} not found')
+    plugin: Path | None = None
+    if official_plugin_bin:
+        plugin_candidate = Path(official_plugin_bin)
+        resolved = shutil.which(official_plugin_bin)
+        if plugin_candidate.exists():
+            plugin = plugin_candidate
+        elif resolved:
+            plugin = Path(resolved)
+        else:
+            return step('official protoc-gen-mbt', 'SKIP', f'official plugin not found: {official_plugin_bin}')
+    else:
+        resolved = shutil.which('protoc-gen-mbt')
+        if resolved:
+            plugin = Path(resolved)
 
-    build = subprocess.run(
-        [moon_bin, '-C', str(repo / 'cli'), 'build', '--release'],
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    if build.returncode != 0:
-        return step('official protoc-gen-mbt', 'FAIL', (build.stdout + build.stderr).strip() or 'official plugin build failed')
-
-    plugin = official_plugin_path(repo)
     if plugin is None:
-        return step('official protoc-gen-mbt', 'FAIL', 'built plugin not found under cli/_build')
+        if repo is None:
+            return step(
+                'official protoc-gen-mbt',
+                'SKIP',
+                'pass --official-plugin-bin, put protoc-gen-mbt on PATH, or pass --official-repo to build it',
+            )
+        if not repo.exists():
+            return step('official protoc-gen-mbt', 'SKIP', f'checkout not found: {repo}')
+        if shutil.which(moon_bin) is None and not Path(moon_bin).exists():
+            return step('official protoc-gen-mbt', 'SKIP', f'{moon_bin} not found')
+
+        build = subprocess.run(
+            [moon_bin, '-C', str(repo / 'cli'), 'build', '--release'],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if build.returncode != 0:
+            return step('official protoc-gen-mbt', 'FAIL', (build.stdout + build.stderr).strip() or 'official plugin build failed')
+
+        plugin = official_plugin_path(repo)
+        if plugin is None:
+            return step('official protoc-gen-mbt', 'FAIL', 'built plugin not found under cli/_build')
 
     with tempfile.TemporaryDirectory(prefix='moon_proto_official_diff_') as tmp:
         out_root = Path(tmp)
@@ -267,11 +290,12 @@ def run_case(args: argparse.Namespace, case: dict, root: Path) -> CaseResult:
     except RuntimeError as exc:
         steps.append(step('Moon Proto Lab codegen/compile', 'FAIL', str(exc)))
 
-    if args.official_repo and args.run_official_generator:
+    if args.run_official_generator:
         steps.append(
             run_official_generator(
                 proto,
-                Path(args.official_repo),
+                Path(args.official_repo) if args.official_repo else None,
+                args.official_plugin_bin,
                 args.moon_bin,
                 args.protoc_bin,
                 root,
@@ -280,7 +304,7 @@ def run_case(args: argparse.Namespace, case: dict, root: Path) -> CaseResult:
     elif args.official_repo:
         steps.append(step('official protoc-gen-mbt', 'SKIP', 'official generator not requested; pass --run-official-generator to execute it'))
     else:
-        steps.append(step('official protoc-gen-mbt', 'SKIP', 'pass --official-repo and --run-official-generator to run the optional generator check'))
+        steps.append(step('official protoc-gen-mbt', 'SKIP', 'pass --run-official-generator with --official-plugin-bin, PATH protoc-gen-mbt, or --official-repo'))
 
     steps.append(check_official_generated_output(args.official_generated_dir, case))
 
@@ -462,9 +486,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--moon-bin', default='moon')
     parser.add_argument('--protoc-bin', default='protoc')
     parser.add_argument('--official-repo', help='optional path to a moonbitlang/protoc-gen-mbt checkout')
+    parser.add_argument('--official-plugin-bin', help='optional installed protoc-gen-mbt executable path or PATH name')
     parser.add_argument('--official-generated-dir', help='optional directory containing pre-generated official .mbt output to validate against the manifest contract')
     parser.add_argument('--require-official', action='store_true', help='fail if the official source contract is skipped or fails; also require generator success when --run-official-generator is used')
-    parser.add_argument('--run-official-generator', action='store_true', help='build and run the official protoc-gen-mbt plugin when --official-repo is available')
+    parser.add_argument('--run-official-generator', action='store_true', help='run official protoc-gen-mbt from --official-plugin-bin, PATH, or a --official-repo build')
     parser.add_argument('--skip-compile', action='store_true', help='skip Moon Proto Lab generated-code compile checks')
     return parser
 

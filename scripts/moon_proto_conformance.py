@@ -38,6 +38,7 @@ class ConformanceCase:
     required_json: dict[str, Any]
     axes: tuple[str, ...]
     allow_binary_semantic_equivalence: bool = False
+    allow_json_semantic_equivalence: bool = False
     message_class_function: str = ""
 
 
@@ -103,6 +104,7 @@ CASES = [
         },
         axes=("oracle", "binary", "json", "map"),
         allow_binary_semantic_equivalence=True,
+        allow_json_semantic_equivalence=True,
         message_class_function="make_bag_message_class",
     ),
     ConformanceCase(
@@ -255,6 +257,7 @@ def run_case(case: ConformanceCase, fixtures_dir: Path, oracle_module: Any) -> C
 
         failures: list[str] = []
         semantic_binary_note = ""
+        semantic_json_note = ""
         if actual_bin != expected_bin:
             if case.allow_binary_semantic_equivalence and case.message_class_function:
                 actual_dict = parsed_message_dict(oracle_module, case.message_class_function, actual_bin)
@@ -271,7 +274,16 @@ def run_case(case: ConformanceCase, fixtures_dir: Path, oracle_module: Any) -> C
         if bytes.fromhex(actual_hex.strip()) != actual_bin:
             failures.append("hex fixture does not decode to the binary fixture")
         if actual_json != expected_json:
-            failures.append(f"{display_path(json_path)} differs from Python protobuf oracle")
+            if case.allow_json_semantic_equivalence:
+                try:
+                    if json.loads(actual_json) == json.loads(expected_json):
+                        semantic_json_note = "json object order accepted by parsed semantic equivalence; "
+                    else:
+                        failures.append(f"{display_path(json_path)} differs from Python protobuf oracle")
+                except json.JSONDecodeError:
+                    failures.append(f"{display_path(json_path)} differs from Python protobuf oracle")
+            else:
+                failures.append(f"{display_path(json_path)} differs from Python protobuf oracle")
         try:
             parsed_json = json.loads(actual_json)
         except json.JSONDecodeError as exc:
@@ -283,7 +295,7 @@ def run_case(case: ConformanceCase, fixtures_dir: Path, oracle_module: Any) -> C
         digest = hashlib.sha256(actual_bin).hexdigest()
         details = (
             f"{case.feature}; {semantic_binary_note}bytes={len(actual_bin)}; sha256={digest[:16]}; "
-            f"fixtures={bin_path.name},{hex_path.name},{json_path.name}"
+            f"{semantic_json_note}fixtures={bin_path.name},{hex_path.name},{json_path.name}"
         )
         if failures:
             details = "; ".join(failures)

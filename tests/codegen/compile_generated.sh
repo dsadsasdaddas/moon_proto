@@ -207,6 +207,43 @@ grep -q 'expected snippets found' generated/official_generated_diff_report.md
 grep -q '<testsuite' generated/official_generated_diff_report.xml
 grep -q 'failures="0"' generated/official_generated_diff_report.xml
 
+cat > generated/fake_protoc <<'PY'
+#!/usr/bin/env python3
+import pathlib
+import sys
+
+out_root = None
+project = "official_diff_gen"
+for arg in sys.argv[1:]:
+    if arg.startswith("--mbt_out="):
+        out_root = pathlib.Path(arg.split("=", 1)[1])
+    elif arg.startswith("--mbt_opt="):
+        for item in arg.split("=", 1)[1].split(","):
+            if item.startswith("project_name="):
+                project = item.split("=", 1)[1]
+if out_root is None:
+    raise SystemExit("--mbt_out is required")
+target = out_root / project / "fake_official_output.mbt"
+target.parent.mkdir(parents=True, exist_ok=True)
+target.write_text("// fake official protoc-gen-mbt output for installed-plugin smoke test\n", encoding="utf-8")
+PY
+cat > generated/fake_protoc_gen_mbt <<'SH'
+#!/usr/bin/env sh
+exit 0
+SH
+chmod +x generated/fake_protoc generated/fake_protoc_gen_mbt
+python3 scripts/moon_proto_official_diff.py \
+  --run-official-generator \
+  --official-plugin-bin generated/fake_protoc_gen_mbt \
+  --protoc-bin generated/fake_protoc \
+  --report generated/official_installed_plugin_diff_report.md \
+  --junit-out generated/official_installed_plugin_diff_report.xml
+grep -Fq 'Overall status: **PASS**' generated/official_installed_plugin_diff_report.md
+grep -q 'Official generator requested: `true`' generated/official_installed_plugin_diff_report.md
+grep -q 'official protoc-gen-mbt | PASS' generated/official_installed_plugin_diff_report.md
+grep -q 'generated 1 file' generated/official_installed_plugin_diff_report.md
+grep -q 'failures="0"' generated/official_installed_plugin_diff_report.xml
+
 python3 scripts/moon_proto_conformance.py \
   --report generated/conformance_lite_report.md \
   --json-out generated/conformance_lite.json \
