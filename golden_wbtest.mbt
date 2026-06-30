@@ -2071,6 +2071,35 @@ test "parse and codegen oneof fields" {
 }
 
 ///|
+test "parser tolerates oneof option statements" {
+  let src =
+    #|syntax = "proto3";
+    #|package demo.oneof_options;
+    #|message RoutedContact {
+    #|  oneof route {
+    #|    option (demo.route) = { priority: "primary; still option" };
+    #|    string email = 1;
+    #|    string phone = 2;
+    #|  }
+    #|}
+  match parse_proto(src) {
+    ProtoErr(_) => fail("oneof option schema should parse")
+    ProtoOk(file) => {
+      assert_eq(file.messages.length(), 1)
+      assert_eq(file.messages[0].name, "RoutedContact")
+      assert_eq(file.messages[0].fields.length(), 2)
+      assert_true(file.messages[0].fields[0].label == Oneof("route"))
+      assert_true(file.messages[0].fields[1].label == Oneof("route"))
+      assert_true(schema_is_valid(file))
+      let generated = generate_moonbit_source(file)
+      assert_true(generated.contains("email : String?"))
+      assert_true(generated.contains("phone : String?"))
+      assert_true(generated.contains("Oneof(\"route\")"))
+    }
+  }
+}
+
+///|
 test "oneof binary and json semantics" {
   let desc = MessageDescriptor::{
     name: "Contact",

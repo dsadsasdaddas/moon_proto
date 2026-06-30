@@ -477,6 +477,12 @@ fn ProtoParser::parse_oneof_fields(
         } else {
           return None
         }
+      Some(Ident("option")) => {
+        let _ = self.advance()
+        if !self.skip_until_semicolon() {
+          return None
+        }
+      }
       Some(_) =>
         match self.parse_field() {
           Some(f) =>

@@ -1,0 +1,10 @@
+syntax = "proto3";
+package moon.proto.lab.demo.v1;
+
+message RoutedContact {
+  oneof route {
+    option (moon.proto.lab.route) = { priority: "primary; still option" };
+    string email = 1;
+    string phone = 2;
+  }
+}

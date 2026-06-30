@@ -193,6 +193,21 @@ grep -q 'EditionEvent' generated/verify_edition_schema_report.md
 grep -q 'tags : Array\[String\]' generated/verify_edition_schema_report.md
 grep -q 'failures="0"' generated/verify_edition_schema_report.xml
 
+python3 scripts/moon_proto_lab.py doctor examples/decorated/oneof_options.proto \
+  | grep -q 'schema valid'
+
+python3 scripts/moon_proto_lab.py inspect examples/decorated/oneof_options.proto \
+  | grep -q 'message RoutedContact fields=2'
+
+python3 scripts/moon_proto_lab.py verify examples/decorated/oneof_options.proto \
+  --report generated/verify_oneof_options_report.md \
+  --junit-out generated/verify_oneof_options_report.xml
+grep -Fq 'Overall status: **PASS**' generated/verify_oneof_options_report.md
+grep -q 'RoutedContact' generated/verify_oneof_options_report.md
+grep -q 'email : String?' generated/verify_oneof_options_report.md
+grep -q 'Oneof("route")' generated/verify_oneof_options_report.md
+grep -q 'failures="0"' generated/verify_oneof_options_report.xml
+
 python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto \
   --report generated/compat_report.md \
   --junit-out generated/compat_report.xml

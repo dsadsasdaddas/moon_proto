@@ -36,7 +36,7 @@ The project has a small but end-to-end verifiable protobuf laboratory pipeline:
 - length-delimited bytes/string helpers;
 - field-level helpers for `uint64`, `bool`, `sint64`, `string`, `bytes`;
 - proto3 schema model for messages, fields, labels, scalar types, enums, named messages, maps and oneof groups;
-- `.proto` lexer/parser for `syntax`, `edition` declaration tolerance, dotted `package` names, `import`, top-level/message/enum `option`, real `reserved` number/name descriptors, `extensions`, `message`, `enum`, nested message/enum definitions, qualified nested type references, scalar/named fields, field/enum options, signed enum values and enum reserved ranges, enum `allow_alias` duplicate-number semantics, single-quoted/escaped string literals, empty statements, `optional`, `repeated`, `map`, `oneof`, block comments, and ignored `service`/`rpc`/`extend` blocks;
+- `.proto` lexer/parser for `syntax`, `edition` declaration tolerance, dotted `package` names, `import`, top-level/message/enum `option`, real `reserved` number/name descriptors, `extensions`, `message`, `enum`, nested message/enum definitions, qualified nested type references, scalar/named fields, field/enum options, signed enum values and enum reserved ranges, enum `allow_alias` duplicate-number semantics, single-quoted/escaped string literals, empty statements, `optional`, `repeated`, `map`, `oneof`, oneof options, block comments, and ignored `service`/`rpc`/`extend` blocks;
 - schema validator for field numbers, duplicate names/numbers, proto3 enum invariants, top-level conflicts, map constraints, and field/enum reserved-number/name reuse;
 - schema-driven dynamic message encode/decode for scalar, repeated, packed repeated, enum, nested message, map and oneof fields;
 - unknown-field skipping during decode;
@@ -133,6 +133,7 @@ python3 scripts/moon_proto_lab.py doctor examples/decorated/enum_alias.proto
 python3 scripts/moon_proto_lab.py doctor examples/decorated/string_literals.proto
 python3 scripts/moon_proto_lab.py doctor examples/decorated/custom_options.proto
 python3 scripts/moon_proto_lab.py doctor examples/decorated/edition_schema.proto
+python3 scripts/moon_proto_lab.py doctor examples/decorated/oneof_options.proto
 python3 scripts/moon_proto_lab.py inspect examples/decorated/telemetry.proto
 python3 scripts/moon_proto_lab.py inspect examples/simple/user.proto
 python3 scripts/moon_proto_lab.py inspect examples/decorated/enum_numbers.proto
@@ -140,6 +141,7 @@ python3 scripts/moon_proto_lab.py inspect examples/decorated/enum_alias.proto
 python3 scripts/moon_proto_lab.py inspect examples/decorated/string_literals.proto
 python3 scripts/moon_proto_lab.py inspect examples/decorated/custom_options.proto
 python3 scripts/moon_proto_lab.py inspect examples/decorated/edition_schema.proto
+python3 scripts/moon_proto_lab.py inspect examples/decorated/oneof_options.proto
 python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md --junit-out generated/compat_report.xml
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md --junit-out generated/verify_report.xml
 python3 scripts/moon_proto_lab.py verify examples/decorated/enum_numbers.proto --report generated/verify_enum_numbers_report.md --junit-out generated/verify_enum_numbers_report.xml
@@ -148,6 +150,7 @@ python3 scripts/moon_proto_lab.py verify examples/decorated/string_literals.prot
 python3 scripts/moon_proto_lab.py verify examples/decorated/nested_qualified.proto --report generated/verify_nested_qualified_report.md --junit-out generated/verify_nested_qualified_report.xml
 python3 scripts/moon_proto_lab.py verify examples/decorated/custom_options.proto --report generated/verify_custom_options_report.md --junit-out generated/verify_custom_options_report.xml
 python3 scripts/moon_proto_lab.py verify examples/decorated/edition_schema.proto --report generated/verify_edition_schema_report.md --junit-out generated/verify_edition_schema_report.xml
+python3 scripts/moon_proto_lab.py verify examples/decorated/oneof_options.proto --report generated/verify_oneof_options_report.md --junit-out generated/verify_oneof_options_report.xml
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.html
 python3 scripts/moon_proto_official_diff.py --report generated/official_diff_report.md --junit-out generated/official_diff_report.xml
 python3 scripts/moon_proto_official_diff.py --official-generated-dir tests/differential/official_generated_fixture --report generated/official_generated_diff_report.md --junit-out generated/official_generated_diff_report.xml
@@ -285,6 +288,7 @@ tests/codegen/compile_generated.sh
 - M47: qualified nested message/enum type reference resolution with generated-code verify coverage. Done.
 - M48: top-level `extend` custom-option block parser tolerance with generated-code verify coverage. Done.
 - M49: protobuf `edition = "2023"` declaration parser tolerance with generated-code verify coverage. Done.
+- M50: oneof option statement parser tolerance with generated-code verify coverage. Done.
 
 ## License
 
