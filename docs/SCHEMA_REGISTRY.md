@@ -108,7 +108,20 @@ python3 scripts/moon_proto_descriptor.py pull \
   --junit-out generated/descriptor_registry_http_pull_report.xml
 ```
 
-This gives CI and demos a concrete registry adapter story: generate a registry manifest, publish immutable descriptor blobs, pull them over HTTP, and verify every artifact before accepting a release gate.
+Authenticated HTTP registries are supported through either `--bearer-token`, `--token-env`, or repeated `--header 'Name: value'` options. The same headers are used for the manifest request and descriptor artifact requests:
+
+```bash
+MOON_PROTO_REGISTRY_TOKEN=moon-secret-token \
+python3 scripts/moon_proto_descriptor.py pull \
+  https://schemas.example.test/registries/demo-user.json \
+  --token-env MOON_PROTO_REGISTRY_TOKEN \
+  --output-dir generated/schema_registry_auth_pull \
+  --report generated/descriptor_registry_auth_pull_report.md \
+  --json-out generated/descriptor_registry_auth_pulled.json \
+  --junit-out generated/descriptor_registry_auth_pull_report.xml
+```
+
+This gives CI and demos a concrete registry adapter story: generate a registry manifest, publish immutable descriptor blobs, pull them over HTTP(S), authenticate against hosted registries when needed, and verify every artifact before accepting a release gate.
 
 ## What the registry command checks
 

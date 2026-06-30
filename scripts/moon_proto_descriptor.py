@@ -11,6 +11,7 @@ import argparse
 import hashlib
 import html
 import json
+import os
 import sys
 import tempfile
 import urllib.parse
@@ -1102,9 +1103,10 @@ def location_is_url(location: str) -> bool:
     return location_scheme(location) in {'http', 'https', 'file'}
 
 
-def read_location_bytes(location: str) -> bytes:
+def read_location_bytes(location: str, headers: dict[str, str] | None = None) -> bytes:
     if location_is_url(location):
-        with urllib.request.urlopen(location) as response:
+        request = urllib.request.Request(location, headers=headers or {})
+        with urllib.request.urlopen(request) as response:
             return response.read()
     return Path(location).read_bytes()
 
@@ -1128,6 +1130,33 @@ def location_suffix(location: str) -> str:
     parsed = urllib.parse.urlparse(location)
     path = parsed.path if parsed.scheme else location
     return Path(path).suffix.lower()
+
+
+def registry_pull_headers(header_args: list[str], bearer_token: str | None, token_env: str | None) -> dict[str, str]:
+    headers: dict[str, str] = {}
+    for item in header_args:
+        if ':' not in item:
+            raise ValueError(f'HTTP header must use "Name: value" syntax: {item}')
+        name, value = item.split(':', 1)
+        name = name.strip()
+        value = value.strip()
+        if not name:
+            raise ValueError('HTTP header name must not be empty')
+        headers[name] = value
+
+    token = bearer_token
+    if token_env:
+        env_value = os.environ.get(token_env)
+        if env_value is None:
+            raise ValueError(f'environment variable not set: {token_env}')
+        if token and token != env_value:
+            raise ValueError('use only one bearer token source: --bearer-token or --token-env')
+        token = env_value
+    if token:
+        if any(name.lower() == 'authorization' for name in headers):
+            raise ValueError('use only one Authorization source: --header Authorization or --bearer-token/--token-env')
+        headers['Authorization'] = f'Bearer {token}'
+    return headers
 
 
 def registry_adapter_report(title: str, registry_name: str, steps: list[DescriptorStep]) -> str:
@@ -1250,7 +1279,18 @@ def command_pull(args: argparse.Namespace) -> int:
     base = location_parent(source)
     steps: list[DescriptorStep] = []
     try:
-        manifest = json.loads(read_location_bytes(source).decode('utf-8'))
+        headers = registry_pull_headers(args.header or [], args.bearer_token, args.token_env)
+        if headers:
+            steps.append(DescriptorStep(
+                'configure HTTP headers',
+                True,
+                'headers: ' + ', '.join(sorted(headers.keys())),
+            ))
+    except Exception as exc:
+        headers = {}
+        steps.append(DescriptorStep('configure HTTP headers', False, str(exc)))
+    try:
+        manifest = json.loads(read_location_bytes(source, headers).decode('utf-8'))
         if not isinstance(manifest, dict):
             raise ValueError('registry manifest must be a JSON object')
         steps.append(DescriptorStep('fetch manifest', True, source))
@@ -1277,7 +1317,7 @@ def command_pull(args: argparse.Namespace) -> int:
         try:
             ref = artifact_reference(version)
             location = resolve_location(base, ref)
-            data = read_location_bytes(location)
+            data = read_location_bytes(location, headers)
             suffix = location_suffix(location) or '.pb'
             fds = parse_descriptor_set_data(data, suffix)
             digest = descriptor_digest(fds)
@@ -1594,6 +1634,9 @@ def build_parser() -> argparse.ArgumentParser:
     pull = sub.add_parser('pull', help='pull and verify a registry manifest from a local path, file:// URL, or HTTP(S) URL')
     pull.add_argument('source', help='registry manifest location')
     pull.add_argument('--output-dir', help='optional directory for downloaded descriptor artifacts')
+    pull.add_argument('--header', action='append', default=[], help='extra HTTP header as "Name: value"; can be repeated')
+    pull.add_argument('--bearer-token', help='HTTP bearer token for registry manifest and artifact requests')
+    pull.add_argument('--token-env', help='environment variable containing an HTTP bearer token')
     pull.add_argument('--report')
     pull.add_argument('--json-out')
     pull.add_argument('--junit-out')

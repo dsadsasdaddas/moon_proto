@@ -370,7 +370,20 @@ import sys
 
 directory = sys.argv[1]
 port_file = pathlib.Path(sys.argv[2])
-handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=directory)
+token = sys.argv[3] if len(sys.argv) > 3 else ""
+
+class AuthenticatedHandler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        if token and self.headers.get("Authorization") != f"Bearer {token}":
+            self.send_response(401)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"unauthorized")
+            return
+        super().do_GET()
+
+handler_class = AuthenticatedHandler if token else http.server.SimpleHTTPRequestHandler
+handler = functools.partial(handler_class, directory=directory)
 with socketserver.TCPServer(("127.0.0.1", 0), handler) as httpd:
     port_file.write_text(str(httpd.server_address[1]), encoding="utf-8")
     httpd.serve_forever()
@@ -396,6 +409,45 @@ grep -q 'http://127.0.0.1' generated/descriptor_registry_http_pulled.json
 grep -q '<testsuite' generated/descriptor_registry_http_pull_report.xml
 grep -q 'failures="0"' generated/descriptor_registry_http_pull_report.xml
 find generated/schema_registry_http_pull -type f | grep -q 'version_1_'
+kill "$HTTP_PID" 2>/dev/null || true
+wait "$HTTP_PID" 2>/dev/null || true
+HTTP_PID=""
+
+python3 generated/registry_http_server.py generated/schema_registry_store generated/registry_auth_http_port.txt moon-secret-token > generated/registry_auth_http.log 2>&1 &
+HTTP_PID="$!"
+for _ in $(seq 1 50); do
+  if [ -s generated/registry_auth_http_port.txt ]; then
+    break
+  fi
+  sleep 0.1
+done
+test -s generated/registry_auth_http_port.txt
+REGISTRY_AUTH_HTTP_PORT="$(cat generated/registry_auth_http_port.txt)"
+if python3 scripts/moon_proto_descriptor.py pull \
+  "http://127.0.0.1:${REGISTRY_AUTH_HTTP_PORT}/registries/demo-user.json" \
+  --output-dir generated/schema_registry_auth_missing_pull \
+  --report generated/descriptor_registry_auth_missing_pull_report.md \
+  --json-out generated/descriptor_registry_auth_missing_pulled.json \
+  --junit-out generated/descriptor_registry_auth_missing_pull_report.xml; then
+  echo "expected authenticated registry pull failure without token" >&2
+  exit 1
+fi
+grep -Fq 'Overall status: **FAIL**' generated/descriptor_registry_auth_missing_pull_report.md
+grep -q '<failure' generated/descriptor_registry_auth_missing_pull_report.xml
+
+MOON_PROTO_REGISTRY_TOKEN=moon-secret-token python3 scripts/moon_proto_descriptor.py pull \
+  "http://127.0.0.1:${REGISTRY_AUTH_HTTP_PORT}/registries/demo-user.json" \
+  --token-env MOON_PROTO_REGISTRY_TOKEN \
+  --output-dir generated/schema_registry_auth_pull \
+  --report generated/descriptor_registry_auth_pull_report.md \
+  --json-out generated/descriptor_registry_auth_pulled.json \
+  --junit-out generated/descriptor_registry_auth_pull_report.xml
+grep -Fq 'Overall status: **PASS**' generated/descriptor_registry_auth_pull_report.md
+grep -q 'configure HTTP headers' generated/descriptor_registry_auth_pull_report.md
+grep -q 'Authorization' generated/descriptor_registry_auth_pull_report.md
+grep -q '<testsuite' generated/descriptor_registry_auth_pull_report.xml
+grep -q 'failures="0"' generated/descriptor_registry_auth_pull_report.xml
+find generated/schema_registry_auth_pull -type f | grep -q 'version_1_'
 kill "$HTTP_PID" 2>/dev/null || true
 wait "$HTTP_PID" 2>/dev/null || true
 HTTP_PID=""
