@@ -54,6 +54,10 @@ The project has a small but end-to-end verifiable protobuf laboratory pipeline:
 - deterministic property-style roundtrip corpora for binary and JSON paths;
 - generated-code compile checks and GitHub Actions CI.
 
+## Reviewer quick demo
+
+For a short contest-review walkthrough, see [`docs/DEMO.md`](docs/DEMO.md). It provides copy/paste commands for schema doctor, JSON roundtrip normalization, generated-code compile checks, compatibility checks, conformance-lite evidence and official differential reports.
+
 ## Example
 
 Encode a small hand-written message:
@@ -302,6 +306,7 @@ tests/codegen/compile_generated.sh
 - M59: protobuf JSON number tokenizer enforces JSON grammar and rejects leading plus, leading-zero, missing fraction and missing exponent digit forms. Done.
 - M60: protobuf JSON numeric map keys use exact integer exponent/decimal normalization, overflow guards and canonical duplicate-key rejection. Done.
 - M61: schema-aware CLI `json-roundtrip` command normalizes protobuf JSON and smoke-tests lowerCamel/numeric map-key duplicate behavior. Done.
+- M62: reviewer-facing 5-minute demo guide covering doctor, JSON roundtrip, codegen compile, compat, conformance-lite and official differential evidence. Done.
 
 ## License
 

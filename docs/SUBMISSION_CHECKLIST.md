@@ -26,6 +26,7 @@
 | 文件版生成入口 | `scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/` |
 | Schema Doctor / compat / verify / official diff / conformance-lite / descriptor verify/compat/registry/policy | `scripts/moon_proto_lab.py doctor examples/simple/user.proto` / `compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md` / `verify --report generated/verify_report.md` / `scripts/moon_proto_official_diff.py --report generated/official_diff_report.md --junit-out generated/official_diff_report.xml` / `scripts/moon_proto_official_diff.py --run-official-generator --official-plugin-bin protoc-gen-mbt --protoc-bin protoc --report generated/official_installed_plugin_diff_report.md --junit-out generated/official_installed_plugin_diff_report.xml` / `scripts/moon_proto_conformance.py --report generated/conformance_lite_report.md --json-out generated/conformance_lite.json --junit-out generated/conformance_lite.xml` / `scripts/moon_proto_descriptor.py verify tests/fixtures/user_descriptor_set.hex --report generated/descriptor_verify_report.md` / `scripts/moon_proto_descriptor.py compat tests/fixtures/user_descriptor_set.hex tests/fixtures/user_descriptor_set_reserved_v2.hex --report generated/descriptor_compat_report.md` / `scripts/moon_proto_descriptor.py registry tests/fixtures/user_descriptor_set.hex tests/fixtures/user_descriptor_set_reserved_v2.hex --name demo-user --report generated/descriptor_registry_report.md --json-out generated/descriptor_registry.json` |
 | 生态定位说明 | `docs/ECOSYSTEM_POSITIONING.md` |
+| 5 分钟评审演示 | `docs/DEMO.md` |
 
 ## 核心能力
 
@@ -80,6 +81,7 @@
 | --- | --- |
 | README | `README.md` |
 | 生态定位说明 | `docs/ECOSYSTEM_POSITIONING.md` |
+| 5 分钟评审演示 | `docs/DEMO.md` |
 | Schema Doctor 文档 | `docs/SCHEMA_DOCTOR.md` |
 | Official differential 文档 | `docs/OFFICIAL_DIFFERENTIAL.md` |
 | Descriptor set 文档 | `docs/DESCRIPTOR_SET.md` |

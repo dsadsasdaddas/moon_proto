@@ -148,7 +148,8 @@ tests/codegen/compile_generated.sh
 - `moon test --target all`: wasm、wasm-gc、js、native 全通过；
 - generated-code compile check 通过，并覆盖 `json-roundtrip` CLI canonical JSON / lowerCamel / duplicate numeric map-key smoke checks；
 - Schema Doctor、AI verify report（含 oneof options、edition declarations、custom option extend blocks、nested qualified references、signed enum、allow_alias 与 string literal 示例）、protobuf JSON enum-name mapping（含 map value）、standard JSON string escape/Unicode/surrogate-pair 测试、strict JSON number grammar 负例、integer exponent notation 与 uint64/int64 overflow guard 测试、numeric map-key normalization/canonical duplicate 测试、null-as-absent 与 lowerCamelCase 字段名输入/输出测试、official differential report（含 scalar-matrix adapter 与 manifest feature coverage gate）、installed-plugin official generator smoke report、conformance-lite evidence report（含 upstream-style wire-decode edge vectors、11-case upstream-lite manifest、expected-fail mutation self-checks 与 coverage gates）、descriptor verify/compat/registry/policy report and JUnit XML 与 CI 官方源码契约检查通过；
-- GitHub Actions CI 通过。
+- GitHub Actions CI 通过；
+- `docs/DEMO.md` 提供 5 分钟评审演示路径，覆盖 doctor、JSON roundtrip、codegen compile、compat、conformance-lite 和 official differential 证据。
 
 ## 6. 跨语言兼容 fixtures
 
