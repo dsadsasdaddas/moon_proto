@@ -382,7 +382,28 @@ class AuthenticatedHandler(http.server.SimpleHTTPRequestHandler):
             return
         super().do_GET()
 
-handler_class = AuthenticatedHandler if token else http.server.SimpleHTTPRequestHandler
+    def do_PUT(self):
+        if token and self.headers.get("Authorization") != f"Bearer {token}":
+            self.send_response(401)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"unauthorized")
+            return
+        root = pathlib.Path(directory).resolve()
+        target = (root / self.path.lstrip("/")).resolve()
+        if root not in target.parents and target != root:
+            self.send_response(400)
+            self.end_headers()
+            self.wfile.write(b"invalid path")
+            return
+        target.parent.mkdir(parents=True, exist_ok=True)
+        length = int(self.headers.get("Content-Length", "0"))
+        target.write_bytes(self.rfile.read(length))
+        self.send_response(201)
+        self.end_headers()
+        self.wfile.write(b"created")
+
+handler_class = AuthenticatedHandler
 handler = functools.partial(handler_class, directory=directory)
 with socketserver.TCPServer(("127.0.0.1", 0), handler) as httpd:
     port_file.write_text(str(httpd.server_address[1]), encoding="utf-8")
@@ -448,6 +469,61 @@ grep -q 'Authorization' generated/descriptor_registry_auth_pull_report.md
 grep -q '<testsuite' generated/descriptor_registry_auth_pull_report.xml
 grep -q 'failures="0"' generated/descriptor_registry_auth_pull_report.xml
 find generated/schema_registry_auth_pull -type f | grep -q 'version_1_'
+kill "$HTTP_PID" 2>/dev/null || true
+wait "$HTTP_PID" 2>/dev/null || true
+HTTP_PID=""
+
+mkdir -p generated/schema_registry_hosted
+python3 generated/registry_http_server.py generated/schema_registry_hosted generated/registry_push_http_port.txt moon-secret-token > generated/registry_push_http.log 2>&1 &
+HTTP_PID="$!"
+for _ in $(seq 1 50); do
+  if [ -s generated/registry_push_http_port.txt ]; then
+    break
+  fi
+  sleep 0.1
+done
+test -s generated/registry_push_http_port.txt
+REGISTRY_PUSH_HTTP_PORT="$(cat generated/registry_push_http_port.txt)"
+if python3 scripts/moon_proto_descriptor.py push \
+  generated/schema_registry_store \
+  --base-url "http://127.0.0.1:${REGISTRY_PUSH_HTTP_PORT}/" \
+  --registry demo-user.json \
+  --report generated/descriptor_registry_push_missing_report.md \
+  --json-out generated/descriptor_registry_push_missing.json \
+  --junit-out generated/descriptor_registry_push_missing.xml; then
+  echo "expected authenticated registry push failure without token" >&2
+  exit 1
+fi
+grep -Fq 'Overall status: **FAIL**' generated/descriptor_registry_push_missing_report.md
+grep -q '<failure' generated/descriptor_registry_push_missing.xml
+
+MOON_PROTO_REGISTRY_TOKEN=moon-secret-token python3 scripts/moon_proto_descriptor.py push \
+  generated/schema_registry_store \
+  --base-url "http://127.0.0.1:${REGISTRY_PUSH_HTTP_PORT}/" \
+  --registry demo-user.json \
+  --token-env MOON_PROTO_REGISTRY_TOKEN \
+  --report generated/descriptor_registry_push_report.md \
+  --json-out generated/descriptor_registry_pushed.json \
+  --junit-out generated/descriptor_registry_push_report.xml
+grep -Fq 'Overall status: **PASS**' generated/descriptor_registry_push_report.md
+grep -q 'push registry manifest' generated/descriptor_registry_push_report.md
+grep -q '"remote_base_url"' generated/descriptor_registry_pushed.json
+grep -q '<testsuite' generated/descriptor_registry_push_report.xml
+grep -q 'failures="0"' generated/descriptor_registry_push_report.xml
+test -f generated/schema_registry_hosted/registries/demo-user.json
+find generated/schema_registry_hosted/blobs -type f | grep -q '.hex'
+
+MOON_PROTO_REGISTRY_TOKEN=moon-secret-token python3 scripts/moon_proto_descriptor.py pull \
+  "http://127.0.0.1:${REGISTRY_PUSH_HTTP_PORT}/registries/demo-user.json" \
+  --token-env MOON_PROTO_REGISTRY_TOKEN \
+  --output-dir generated/schema_registry_hosted_pull \
+  --report generated/descriptor_registry_hosted_pull_report.md \
+  --json-out generated/descriptor_registry_hosted_pulled.json \
+  --junit-out generated/descriptor_registry_hosted_pull_report.xml
+grep -Fq 'Overall status: **PASS**' generated/descriptor_registry_hosted_pull_report.md
+grep -q '<testsuite' generated/descriptor_registry_hosted_pull_report.xml
+grep -q 'failures="0"' generated/descriptor_registry_hosted_pull_report.xml
+find generated/schema_registry_hosted_pull -type f | grep -q 'version_1_'
 kill "$HTTP_PID" 2>/dev/null || true
 wait "$HTTP_PID" 2>/dev/null || true
 HTTP_PID=""

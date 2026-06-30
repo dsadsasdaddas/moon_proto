@@ -1111,6 +1111,21 @@ def read_location_bytes(location: str, headers: dict[str, str] | None = None) ->
     return Path(location).read_bytes()
 
 
+def write_http_bytes(location: str, data: bytes, headers: dict[str, str] | None = None) -> int:
+    scheme = location_scheme(location)
+    if scheme not in {'http', 'https'}:
+        raise ValueError(f'HTTP(S) location required for push: {location}')
+    request = urllib.request.Request(
+        location,
+        data=data,
+        headers=headers or {},
+        method='PUT',
+    )
+    with urllib.request.urlopen(request) as response:
+        response.read()
+        return int(getattr(response, 'status', response.getcode()))
+
+
 def location_parent(location: str) -> str:
     parsed = urllib.parse.urlparse(location)
     if parsed.scheme in {'http', 'https', 'file'}:
@@ -1124,6 +1139,17 @@ def resolve_location(base: str, reference: str) -> str:
     if location_is_url(base):
         return urllib.parse.urljoin(base, reference)
     return str(Path(base) / reference)
+
+
+def remote_registry_url(base_url: str, relative_path: str) -> str:
+    return urllib.parse.urljoin(base_url.rstrip('/') + '/', relative_path.lstrip('/'))
+
+
+def artifact_remote_relative_path(reference: str) -> str:
+    if location_is_url(reference):
+        parsed = urllib.parse.urlparse(reference)
+        return parsed.path.lstrip('/')
+    return urllib.parse.urljoin('registries/', reference).lstrip('/')
 
 
 def location_suffix(location: str) -> str:
@@ -1182,6 +1208,19 @@ def artifact_reference(version: dict) -> str:
         if isinstance(value, str) and value:
             return value
     raise ValueError('version is missing artifact_url, artifact_path or path')
+
+
+def published_registry_manifest_path(store: Path, registry: str | None) -> Path:
+    registries_dir = store / 'registries'
+    if registry:
+        path = Path(registry)
+        return path if path.is_absolute() else registries_dir / path
+    candidates = sorted(registries_dir.glob('*.json'))
+    if len(candidates) != 1:
+        raise ValueError(
+            f'expected exactly one registry manifest under {registries_dir}, found {len(candidates)}; pass --registry'
+        )
+    return candidates[0]
 
 
 def command_publish(args: argparse.Namespace) -> int:
@@ -1356,6 +1395,99 @@ def command_pull(args: argparse.Namespace) -> int:
 
     ok = all(step.ok for step in steps)
     print('Moon Proto Lab registry pull: ' + ('PASS' if ok else 'FAIL'))
+    for step in steps:
+        print(f'- {step.name}: {"PASS" if step.ok else "FAIL"} - {step.details.splitlines()[0] if step.details else ""}')
+    return 0 if ok else 1
+
+
+def command_push(args: argparse.Namespace) -> int:
+    store = Path(args.store)
+    steps: list[DescriptorStep] = []
+    try:
+        headers = registry_pull_headers(args.header or [], args.bearer_token, args.token_env)
+        if headers:
+            steps.append(DescriptorStep(
+                'configure HTTP headers',
+                True,
+                'headers: ' + ', '.join(sorted(headers.keys())),
+            ))
+    except Exception as exc:
+        headers = {}
+        steps.append(DescriptorStep('configure HTTP headers', False, str(exc)))
+
+    try:
+        manifest_path = published_registry_manifest_path(store, args.registry)
+        manifest = load_json_object(manifest_path)
+        steps.append(DescriptorStep('load registry manifest', True, str(manifest_path)))
+    except Exception as exc:
+        manifest_path = store / 'registries' / (args.registry or '')
+        manifest = {'name': '', 'versions': []}
+        steps.append(DescriptorStep('load registry manifest', False, str(exc)))
+
+    registry_name = str(manifest.get('name') or '')
+    pushed = json.loads(json.dumps(manifest))
+    versions = pushed.get('versions', [])
+    if not isinstance(versions, list):
+        steps.append(DescriptorStep('manifest versions', False, 'manifest.versions must be a list'))
+        versions = []
+
+    for version in versions:
+        if not isinstance(version, dict):
+            steps.append(DescriptorStep('push version', False, 'version entry must be an object'))
+            continue
+        index = version.get('index', '?')
+        try:
+            ref = artifact_reference(version)
+            if location_is_url(ref):
+                raise ValueError('push expects local artifact_path/path references in the registry store')
+            artifact_path = (manifest_path.parent / ref).resolve()
+            data = artifact_path.read_bytes()
+            fds = parse_descriptor_set_data(data, artifact_path.suffix.lower())
+            digest = descriptor_digest(fds)
+            expected = version.get('sha256')
+            if not isinstance(expected, str) or not expected:
+                raise ValueError('version.sha256 must be present for artifact verification')
+            if digest != expected:
+                raise ValueError(f'digest mismatch: expected {expected}, got {digest}')
+            remote_path = artifact_remote_relative_path(ref)
+            remote_url = remote_registry_url(args.base_url, remote_path)
+            status = write_http_bytes(remote_url, data, headers)
+            steps.append(DescriptorStep(
+                f'push version {index}',
+                True,
+                f'{artifact_path} -> {remote_url} status={status} sha256={digest}',
+            ))
+        except Exception as exc:
+            steps.append(DescriptorStep(f'push version {index}', False, str(exc)))
+
+    pushed['pushed_at'] = datetime.now(timezone.utc).isoformat()
+    pushed['remote_base_url'] = args.base_url
+    try:
+        manifest_data = json.dumps(pushed, indent=2, sort_keys=True).encode('utf-8') + b'\n'
+        remote_manifest = remote_registry_url(args.base_url, 'registries/' + manifest_path.name)
+        status = write_http_bytes(remote_manifest, manifest_data, headers)
+        steps.append(DescriptorStep('push registry manifest', True, f'{remote_manifest} status={status}'))
+    except Exception as exc:
+        steps.append(DescriptorStep('push registry manifest', False, str(exc)))
+
+    if args.json_out:
+        out = Path(args.json_out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(pushed, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+        print(f'json: {args.json_out}')
+    if args.report:
+        write_text_report(Path(args.report), registry_adapter_report('registry push report', registry_name, steps))
+        print(f'report: {args.report}')
+    if args.junit_out:
+        write_junit_cases(
+            Path(args.junit_out),
+            'moon-proto-lab.registry-push',
+            descriptor_step_cases(steps),
+        )
+        print(f'junit: {args.junit_out}')
+
+    ok = all(step.ok for step in steps)
+    print('Moon Proto Lab registry push: ' + ('PASS' if ok else 'FAIL'))
     for step in steps:
         print(f'- {step.name}: {"PASS" if step.ok else "FAIL"} - {step.details.splitlines()[0] if step.details else ""}')
     return 0 if ok else 1
@@ -1641,6 +1773,18 @@ def build_parser() -> argparse.ArgumentParser:
     pull.add_argument('--json-out')
     pull.add_argument('--junit-out')
     pull.set_defaults(func=command_pull)
+
+    push = sub.add_parser('push', help='push a local registry store to an HTTP(S) registry endpoint with digest verification')
+    push.add_argument('store', help='local registry store directory produced by publish')
+    push.add_argument('--base-url', required=True, help='HTTP(S) base URL that accepts PUT for blobs/ and registries/')
+    push.add_argument('--registry', help='registry manifest filename under <store>/registries; required when multiple manifests exist')
+    push.add_argument('--header', action='append', default=[], help='extra HTTP header as "Name: value"; can be repeated')
+    push.add_argument('--bearer-token', help='HTTP bearer token for registry artifact and manifest PUT requests')
+    push.add_argument('--token-env', help='environment variable containing an HTTP bearer token')
+    push.add_argument('--report')
+    push.add_argument('--json-out')
+    push.add_argument('--junit-out')
+    push.set_defaults(func=command_push)
 
     verify = sub.add_parser('verify', help='convert descriptor set and run doctor/codegen/compile checks')
     verify.add_argument('descriptor')
