@@ -35,7 +35,8 @@ Current tests cover:
 - proto3 oneof parser/codegen snapshot, encode-time conflict rejection, binary last-one-wins decode and JSON conflict rejection;
 - codegen runtime helper snapshots, inline/file-based CLI smoke generation, Schema Doctor diagnostics, compatibility checks, verify report and JUnit XML generation, official differential/source/generated-output report and JUnit XML generation, descriptor verify/compat/registry/policy report and JUnit XML generation, registry adapter publish/push/pull/authenticated HTTP/profile/managed GitHub Contents backend report and JUnit XML generation, CI official source-contract checks, and generated-code compile checks;
 - deterministic property-style roundtrip corpora for varint, zig-zag, dynamic message binary and JSON;
-- official Python `google.protobuf` and Go `google.golang.org/protobuf` oracle fixtures for full scalar/repeated, map, oneof, 32-bit numeric boundary, float/double and special float messages.
+- official Python `google.protobuf` and Go `google.golang.org/protobuf` oracle fixtures for full scalar/repeated, map, oneof, 32-bit numeric boundary, float/double and special float messages;
+- conformance-lite Markdown/JSON/JUnit evidence report over the same oracle-backed fixture matrix.
 
 Run the full matrix:
 
@@ -54,6 +55,7 @@ python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/sim
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md --junit-out generated/verify_report.xml
 python3 scripts/moon_proto_official_diff.py --report generated/official_diff_report.md --junit-out generated/official_diff_report.xml
 python3 scripts/moon_proto_official_diff.py --official-generated-dir tests/differential/official_generated_fixture --report generated/official_generated_diff_report.md --junit-out generated/official_generated_diff_report.xml
+python3 scripts/moon_proto_conformance.py --report generated/conformance_lite_report.md --json-out generated/conformance_lite.json --junit-out generated/conformance_lite.xml
 python3 scripts/moon_proto_descriptor.py verify tests/fixtures/user_descriptor_set.hex --report generated/descriptor_verify_report.md --junit-out generated/descriptor_verify_report.xml
 python3 scripts/moon_proto_descriptor.py compat tests/fixtures/user_descriptor_set.hex tests/fixtures/user_descriptor_set_reserved_v2.hex --report generated/descriptor_compat_report.md --junit-out generated/descriptor_compat_report.xml
 python3 scripts/moon_proto_descriptor.py registry tests/fixtures/user_descriptor_set.hex tests/fixtures/user_descriptor_set_reserved_v2.hex --name demo-user --report generated/descriptor_registry_report.md --json-out generated/descriptor_registry.json --policy tests/fixtures/descriptor_registry_policy.json --junit-out generated/descriptor_registry_report.xml
@@ -80,7 +82,7 @@ The project is positioned as a protobuf ecosystem verification lab for MoonBit. 
 - generated-code compile checks ensure generated MoonBit source actually builds;
 - verify reports make the result reviewable as Markdown/HTML artifacts.
 
-Completed parser/schema-tool verification now includes old/new compatibility checks, descriptor-set compatibility checks, descriptor-registry release gates, JSON release-policy checks, richer release-policy DSL checks with warning severity, official generated-output contract checks, registry adapter publish/push/pull checks over local paths, HTTP, authenticated HTTP, hosted registry profiles, and managed GitHub Contents backend profiles, larger conformance-lite oracle fixtures, import/option/reserved parser tolerance, and reserved contract validation. Planned next verification:
+Completed parser/schema-tool verification now includes old/new compatibility checks, descriptor-set compatibility checks, descriptor-registry release gates, JSON release-policy checks, richer release-policy DSL checks with warning severity, official generated-output contract checks, conformance-lite Markdown/JSON/JUnit evidence reports, registry adapter publish/push/pull checks over local paths, HTTP, authenticated HTTP, hosted registry profiles, and managed GitHub Contents backend profiles, larger conformance-lite oracle fixtures, import/option/reserved parser tolerance, and reserved contract validation. Planned next verification:
 
 - live differential tests against an installed official `protoc-gen-mbt` generator when its external registry dependencies resolve;
-- selected upstream protobuf conformance-suite cases.
+- a larger imported subset of the upstream protobuf conformance suite.

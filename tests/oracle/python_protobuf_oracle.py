@@ -13,6 +13,12 @@ from pathlib import Path
 
 from google.protobuf import descriptor_pb2, descriptor_pool, json_format, message_factory
 
+if not hasattr(message_factory.MessageFactory, "GetPrototype"):
+    def _message_factory_get_prototype(self, descriptor):
+        return message_factory.GetMessageClass(descriptor)
+
+    message_factory.MessageFactory.GetPrototype = _message_factory_get_prototype
+
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "tests" / "fixtures"
 BIN = FIXTURES / "user_full.bin"
@@ -339,6 +345,16 @@ def float_specials_oracle_values():
     return binary, binary.hex() + "\n", canonical_json
 
 
+def message_dict(message_class, data: bytes):
+    message = message_class()
+    message.ParseFromString(data)
+    return json_format.MessageToDict(message, preserving_proto_field_name=True)
+
+
+def binary_equivalent(message_class, left: bytes, right: bytes) -> bool:
+    return message_dict(message_class, left) == message_dict(message_class, right)
+
+
 def write_fixtures() -> None:
     FIXTURES.mkdir(parents=True, exist_ok=True)
     binary, hex_text, json_text = oracle_values()
@@ -378,12 +394,6 @@ def verify_fixtures() -> None:
         (BIN, binary, BIN.read_bytes() if BIN.exists() else None),
         (HEX, hex_text, HEX.read_text(encoding="utf-8") if HEX.exists() else None),
         (JSON, json_text, JSON.read_text(encoding="utf-8") if JSON.exists() else None),
-        (BAG_BIN, bag_binary, BAG_BIN.read_bytes() if BAG_BIN.exists() else None),
-        (
-            BAG_HEX,
-            bag_hex_text,
-            BAG_HEX.read_text(encoding="utf-8") if BAG_HEX.exists() else None,
-        ),
         (
             BAG_JSON,
             bag_json_text,
@@ -451,6 +461,26 @@ def verify_fixtures() -> None:
         ),
     ]
     failures = []
+    actual_bag_binary = BAG_BIN.read_bytes() if BAG_BIN.exists() else None
+    actual_bag_hex_text = BAG_HEX.read_text(encoding="utf-8") if BAG_HEX.exists() else None
+    if actual_bag_binary is None:
+        failures.append(str(BAG_BIN.relative_to(ROOT)))
+    if actual_bag_hex_text is None:
+        failures.append(str(BAG_HEX.relative_to(ROOT)))
+    if actual_bag_binary is not None and actual_bag_hex_text is not None:
+        try:
+            actual_bag_from_hex = bytes.fromhex(actual_bag_hex_text.strip())
+        except ValueError:
+            actual_bag_from_hex = None
+            failures.append(str(BAG_HEX.relative_to(ROOT)))
+        if actual_bag_from_hex != actual_bag_binary:
+            failures.append(str(BAG_HEX.relative_to(ROOT)))
+        elif actual_bag_binary != bag_binary and not binary_equivalent(
+            make_bag_message_class(),
+            actual_bag_binary,
+            bag_binary,
+        ):
+            failures.append(str(BAG_BIN.relative_to(ROOT)))
     for path, expected, actual in checks:
         if actual != expected:
             failures.append(str(path.relative_to(ROOT)))

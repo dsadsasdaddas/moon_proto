@@ -207,6 +207,16 @@ grep -q 'expected snippets found' generated/official_generated_diff_report.md
 grep -q '<testsuite' generated/official_generated_diff_report.xml
 grep -q 'failures="0"' generated/official_generated_diff_report.xml
 
+python3 scripts/moon_proto_conformance.py \
+  --report generated/conformance_lite_report.md \
+  --json-out generated/conformance_lite.json \
+  --junit-out generated/conformance_lite.xml
+grep -Fq 'Overall status: **PASS**' generated/conformance_lite_report.md
+grep -q 'proto3_map_string_and_int64_keys' generated/conformance_lite_report.md
+grep -q '"overall_status": "PASS"' generated/conformance_lite.json
+grep -q '<testsuite' generated/conformance_lite.xml
+grep -q 'failures="0"' generated/conformance_lite.xml
+
 python3 scripts/moon_proto_descriptor.py fixture \
   --hex-out generated/user_descriptor_set.hex \
   --json-out generated/user_descriptor_set.json
