@@ -46,7 +46,7 @@
 - Schema Doctor CLI；
 - old/new schema compatibility checker，包含 removed-but-reserved 与 reserved 契约保留检查；
 - official MoonBit protobuf differential harness manifest/report、CI source-contract check 与预生成官方输出 contract check；
-- FileDescriptorSet descriptor/reflection bridge、descriptor verify report、old/new descriptor compatibility report、descriptor registry release gate、JSON release-policy DSL/warning check、file/HTTP/authenticated/profile registry adapter publish/push/pull 与 JUnit XML CI report；
+- FileDescriptorSet descriptor/reflection bridge、descriptor verify report、old/new descriptor compatibility report、descriptor registry release gate、JSON release-policy DSL/warning check、file/HTTP/authenticated/profile/GitHub Contents managed-backend registry adapter publish/push/pull 与 JUnit XML CI report；
 - AI verify Markdown/HTML report generator；
 - Python/Go official protobuf oracle fixtures, including 32-bit numeric boundary, float/double and special float fixtures；
 - generated-code compile check，适合验证 AI 生成代码。

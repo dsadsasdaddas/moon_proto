@@ -177,6 +177,46 @@ python3 scripts/moon_proto_descriptor.py pull \
 
 When `pull` receives a relative source and the profile has `base_url`, the source is resolved against that base URL. Profile headers are merged with CLI `--header` values, and CLI token flags override profile token settings.
 
+## Managed hosted backend: GitHub Contents
+
+Profiles can also describe a managed hosted backend instead of a plain HTTP `PUT` endpoint. The first supported managed backend is `github-contents`, which uploads blobs and registry manifests through the GitHub Contents API while still pulling through a raw/static URL for digest verification:
+
+```json
+{
+  "profiles": {
+    "github-prod": {
+      "backend": "github-contents",
+      "owner": "moonbit-community",
+      "repo": "schema-registry",
+      "branch": "main",
+      "path": "moon-registry",
+      "registry": "demo-user.json",
+      "token_env": "GITHUB_TOKEN"
+    }
+  }
+}
+```
+
+With this profile, push writes:
+
+- `moon-registry/blobs/<descriptor-sha>.hex`;
+- `moon-registry/registries/demo-user.json`.
+
+The command first performs a GitHub Contents `GET` to discover the current file SHA when an object already exists, then sends a `PUT` containing the base64 descriptor artifact or manifest. This makes CI re-runs idempotent for already-published paths:
+
+```bash
+GITHUB_TOKEN=github_pat_or_fine_grained_token \
+python3 scripts/moon_proto_descriptor.py push \
+  generated/schema_registry_store \
+  --profile-file registry_profiles.json \
+  --profile github-prod \
+  --report generated/descriptor_registry_github_push_report.md \
+  --json-out generated/descriptor_registry_github_pushed.json \
+  --junit-out generated/descriptor_registry_github_push_report.xml
+```
+
+For private mirrors or tests, `api_base_url` and `raw_base_url` can override GitHub's default API/raw endpoints. `path` is applied to both the API object path and raw pull base, so a relative pull source such as `registries/demo-user.json` resolves to the published managed-registry prefix.
+
 ## What the registry command checks
 
 For each imported version it records:

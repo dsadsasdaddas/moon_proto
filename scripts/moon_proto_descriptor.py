@@ -8,12 +8,14 @@ subset, and fed into the existing doctor/codegen/compile verification pipeline.
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import html
 import json
 import os
 import sys
 import tempfile
+import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
@@ -1225,6 +1227,145 @@ def registry_profile_string(profile: dict, key: str) -> str | None:
     return value
 
 
+def registry_profile_required_string(profile: dict, key: str) -> str:
+    value = registry_profile_string(profile, key)
+    if not value:
+        raise ValueError(f'registry profile key {key} is required')
+    return value
+
+
+def registry_profile_backend(profile: dict) -> str:
+    value = profile.get('backend', profile.get('kind', 'static-http'))
+    if value is None:
+        return 'static-http'
+    if not isinstance(value, str):
+        raise ValueError('registry profile backend must be a string')
+    normalized = value.strip().lower()
+    return normalized or 'static-http'
+
+
+def registry_profile_path_prefix(profile: dict) -> str:
+    value = profile.get('path', profile.get('prefix', ''))
+    if value is None:
+        return ''
+    if not isinstance(value, str):
+        raise ValueError('registry profile path/prefix must be a string')
+    return value.strip('/')
+
+
+def relative_registry_path(*parts: str) -> str:
+    clean_parts: list[str] = []
+    for part in parts:
+        if not part:
+            continue
+        clean = part.strip('/')
+        if clean:
+            clean_parts.append(clean)
+    return '/'.join(clean_parts)
+
+
+def quoted_path(path: str) -> str:
+    return '/'.join(urllib.parse.quote(part, safe='') for part in path.strip('/').split('/') if part)
+
+
+def registry_backend_base_url(profile: dict) -> str | None:
+    base_url = registry_profile_string(profile, 'base_url')
+    if base_url:
+        return base_url
+    backend = registry_profile_backend(profile)
+    if backend in {'static-http', 'http', 'generic-http'}:
+        return None
+    if backend == 'github-contents':
+        raw_base_url = registry_profile_string(profile, 'raw_base_url')
+        prefix = registry_profile_path_prefix(profile)
+        if raw_base_url:
+            return remote_registry_url(raw_base_url, prefix)
+        owner = registry_profile_required_string(profile, 'owner')
+        repo = registry_profile_required_string(profile, 'repo')
+        branch = registry_profile_string(profile, 'branch') or 'main'
+        raw_root = (
+            'https://raw.githubusercontent.com/'
+            + urllib.parse.quote(owner, safe='')
+            + '/'
+            + urllib.parse.quote(repo, safe='')
+            + '/'
+            + urllib.parse.quote(branch, safe='')
+            + '/'
+        )
+        return remote_registry_url(raw_root, prefix)
+    raise ValueError(f'unsupported registry backend: {backend}')
+
+
+def github_contents_api_url(profile: dict, relative_path: str) -> str:
+    owner = registry_profile_required_string(profile, 'owner')
+    repo = registry_profile_required_string(profile, 'repo')
+    api_base_url = registry_profile_string(profile, 'api_base_url') or 'https://api.github.com'
+    prefixed_path = relative_registry_path(registry_profile_path_prefix(profile), relative_path)
+    if not prefixed_path:
+        raise ValueError('GitHub Contents backend requires a non-empty object path')
+    return remote_registry_url(
+        api_base_url,
+        'repos/'
+        + urllib.parse.quote(owner, safe='')
+        + '/'
+        + urllib.parse.quote(repo, safe='')
+        + '/contents/'
+        + quoted_path(prefixed_path),
+    )
+
+
+def github_api_headers(headers: dict[str, str]) -> dict[str, str]:
+    merged = dict(headers)
+    merged.setdefault('Accept', 'application/vnd.github+json')
+    merged.setdefault('Content-Type', 'application/json')
+    return merged
+
+
+def github_contents_current_sha(api_url: str, headers: dict[str, str]) -> str | None:
+    request = urllib.request.Request(api_url, headers=github_api_headers(headers), method='GET')
+    try:
+        with urllib.request.urlopen(request) as response:
+            body = response.read()
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return None
+        raise
+    data = json.loads(body.decode('utf-8'))
+    if isinstance(data, dict):
+        sha = data.get('sha')
+        if isinstance(sha, str) and sha:
+            return sha
+    return None
+
+
+def write_github_contents_bytes(
+    profile: dict,
+    relative_path: str,
+    data: bytes,
+    headers: dict[str, str],
+    message: str,
+) -> tuple[int, str]:
+    api_url = github_contents_api_url(profile, relative_path)
+    branch = registry_profile_string(profile, 'branch') or 'main'
+    body = {
+        'message': message,
+        'content': base64.b64encode(data).decode('ascii'),
+        'branch': branch,
+    }
+    sha = github_contents_current_sha(api_url, headers)
+    if sha:
+        body['sha'] = sha
+    request = urllib.request.Request(
+        api_url,
+        data=json.dumps(body, sort_keys=True).encode('utf-8'),
+        headers=github_api_headers(headers),
+        method='PUT',
+    )
+    with urllib.request.urlopen(request) as response:
+        response.read()
+        return int(getattr(response, 'status', response.getcode())), api_url
+
+
 def merged_registry_headers(profile: dict, args: argparse.Namespace) -> dict[str, str]:
     header_args = registry_profile_headers(profile) + (args.header or [])
     if args.bearer_token or args.token_env:
@@ -1237,7 +1378,7 @@ def merged_registry_headers(profile: dict, args: argparse.Namespace) -> dict[str
 
 
 def resolve_profile_source(source: str, profile: dict) -> str:
-    base_url = registry_profile_string(profile, 'base_url')
+    base_url = registry_backend_base_url(profile)
     if base_url and not location_is_url(source) and not Path(source).exists():
         return remote_registry_url(base_url, source)
     return source
@@ -1382,6 +1523,12 @@ def command_pull(args: argparse.Namespace) -> int:
         profile = {}
         steps.append(DescriptorStep('load registry profile', False, str(exc)))
     try:
+        backend = registry_profile_backend(profile)
+        if profile:
+            steps.append(DescriptorStep('resolve registry backend', True, backend))
+    except Exception as exc:
+        steps.append(DescriptorStep('resolve registry backend', False, str(exc)))
+    try:
         source = resolve_profile_source(source, profile)
         headers = merged_registry_headers(profile, args)
         if headers:
@@ -1477,6 +1624,15 @@ def command_push(args: argparse.Namespace) -> int:
         profile = {}
         steps.append(DescriptorStep('load registry profile', False, str(exc)))
     try:
+        backend = registry_profile_backend(profile)
+        if backend not in {'static-http', 'http', 'generic-http', 'github-contents'}:
+            raise ValueError(f'unsupported registry backend: {backend}')
+        if profile:
+            steps.append(DescriptorStep('resolve registry backend', True, backend))
+    except Exception as exc:
+        backend = 'static-http'
+        steps.append(DescriptorStep('resolve registry backend', False, str(exc)))
+    try:
         headers = merged_registry_headers(profile, args)
         if headers:
             steps.append(DescriptorStep(
@@ -1488,7 +1644,7 @@ def command_push(args: argparse.Namespace) -> int:
         headers = {}
         steps.append(DescriptorStep('configure HTTP headers', False, str(exc)))
     try:
-        base_url = args.base_url or registry_profile_string(profile, 'base_url')
+        base_url = args.base_url or registry_backend_base_url(profile)
         if not base_url:
             steps.append(DescriptorStep('resolve registry base URL', False, 'pass --base-url or configure profile.base_url'))
             base_url = ''
@@ -1540,8 +1696,17 @@ def command_push(args: argparse.Namespace) -> int:
             if digest != expected:
                 raise ValueError(f'digest mismatch: expected {expected}, got {digest}')
             remote_path = artifact_remote_relative_path(ref)
-            remote_url = remote_registry_url(base_url, remote_path)
-            status = write_http_bytes(remote_url, data, headers)
+            if backend == 'github-contents':
+                status, remote_url = write_github_contents_bytes(
+                    profile,
+                    remote_path,
+                    data,
+                    headers,
+                    f'moon_proto: publish descriptor artifact {digest}',
+                )
+            else:
+                remote_url = remote_registry_url(base_url, remote_path)
+                status = write_http_bytes(remote_url, data, headers)
             steps.append(DescriptorStep(
                 f'push version {index}',
                 True,
@@ -1551,11 +1716,22 @@ def command_push(args: argparse.Namespace) -> int:
             steps.append(DescriptorStep(f'push version {index}', False, str(exc)))
 
     pushed['pushed_at'] = datetime.now(timezone.utc).isoformat()
+    pushed['remote_backend'] = backend
     pushed['remote_base_url'] = base_url
     try:
         manifest_data = json.dumps(pushed, indent=2, sort_keys=True).encode('utf-8') + b'\n'
-        remote_manifest = remote_registry_url(base_url, 'registries/' + manifest_path.name)
-        status = write_http_bytes(remote_manifest, manifest_data, headers)
+        manifest_remote_path = 'registries/' + manifest_path.name
+        if backend == 'github-contents':
+            status, remote_manifest = write_github_contents_bytes(
+                profile,
+                manifest_remote_path,
+                manifest_data,
+                headers,
+                f'moon_proto: publish registry manifest {manifest_path.name}',
+            )
+        else:
+            remote_manifest = remote_registry_url(base_url, manifest_remote_path)
+            status = write_http_bytes(remote_manifest, manifest_data, headers)
         steps.append(DescriptorStep('push registry manifest', True, f'{remote_manifest} status={status}'))
     except Exception as exc:
         steps.append(DescriptorStep('push registry manifest', False, str(exc)))

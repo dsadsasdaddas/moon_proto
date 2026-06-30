@@ -578,4 +578,176 @@ kill "$HTTP_PID" 2>/dev/null || true
 wait "$HTTP_PID" 2>/dev/null || true
 HTTP_PID=""
 
+cat > generated/managed_registry_server.py <<'PY'
+import base64
+import hashlib
+import http.server
+import json
+import pathlib
+import socketserver
+import sys
+import urllib.parse
+
+root = pathlib.Path(sys.argv[1]).resolve()
+port_file = pathlib.Path(sys.argv[2])
+token = sys.argv[3]
+
+def safe_target(relative_path):
+    target = (root / relative_path.lstrip("/")).resolve()
+    if root not in target.parents and target != root:
+        raise ValueError("invalid path")
+    return target
+
+def api_relative_path(request_path):
+    parts = urllib.parse.urlparse(request_path).path.split("/")
+    if len(parts) < 7 or parts[1] != "repos" or parts[4] != "contents":
+        raise ValueError("expected /repos/<owner>/<repo>/contents/<path>")
+    return "/".join(urllib.parse.unquote(part) for part in parts[5:])
+
+class ManagedRegistryHandler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, fmt, *args):
+        return
+
+    def require_auth(self):
+        if self.headers.get("Authorization") == f"Bearer {token}":
+            return True
+        self.send_response(401)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"unauthorized")
+        return False
+
+    def write_json(self, status, payload):
+        data = json.dumps(payload, sort_keys=True).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def do_GET(self):
+        if not self.require_auth():
+            return
+        try:
+            if urllib.parse.urlparse(self.path).path.startswith("/repos/"):
+                target = safe_target(api_relative_path(self.path))
+                if not target.is_file():
+                    self.write_json(404, {"message": "not found"})
+                    return
+                self.write_json(200, {"sha": hashlib.sha1(target.read_bytes()).hexdigest()})
+                return
+            target = safe_target(urllib.parse.unquote(urllib.parse.urlparse(self.path).path))
+            if not target.is_file():
+                self.send_response(404)
+                self.end_headers()
+                return
+            data = target.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        except Exception as exc:
+            self.write_json(400, {"message": str(exc)})
+
+    def do_PUT(self):
+        if not self.require_auth():
+            return
+        try:
+            target = safe_target(api_relative_path(self.path))
+            length = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            if target.exists() and not payload.get("sha"):
+                self.write_json(409, {"message": "sha required for update"})
+                return
+            data = base64.b64decode(payload["content"])
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+            self.write_json(200 if payload.get("sha") else 201, {
+                "content": {
+                    "path": api_relative_path(self.path),
+                    "sha": hashlib.sha1(data).hexdigest(),
+                }
+            })
+        except Exception as exc:
+            self.write_json(400, {"message": str(exc)})
+
+with socketserver.TCPServer(("127.0.0.1", 0), ManagedRegistryHandler) as httpd:
+    port_file.write_text(str(httpd.server_address[1]), encoding="utf-8")
+    httpd.serve_forever()
+PY
+mkdir -p generated/schema_registry_managed
+python3 generated/managed_registry_server.py generated/schema_registry_managed generated/registry_managed_http_port.txt moon-secret-token > generated/registry_managed_http.log 2>&1 &
+HTTP_PID="$!"
+for _ in $(seq 1 50); do
+  if [ -s generated/registry_managed_http_port.txt ]; then
+    break
+  fi
+  sleep 0.1
+done
+test -s generated/registry_managed_http_port.txt
+REGISTRY_MANAGED_HTTP_PORT="$(cat generated/registry_managed_http_port.txt)"
+cat > generated/registry_managed_profiles.json <<EOF
+{
+  "profiles": {
+    "github-managed": {
+      "backend": "github-contents",
+      "api_base_url": "http://127.0.0.1:${REGISTRY_MANAGED_HTTP_PORT}/",
+      "raw_base_url": "http://127.0.0.1:${REGISTRY_MANAGED_HTTP_PORT}/",
+      "owner": "moonbit-community",
+      "repo": "schema-registry",
+      "branch": "main",
+      "path": "moon-registry",
+      "registry": "demo-user.json",
+      "token_env": "MOON_PROTO_REGISTRY_TOKEN",
+      "headers": {
+        "X-Registry-Client": "moon-proto-lab"
+      }
+    }
+  }
+}
+EOF
+MOON_PROTO_REGISTRY_TOKEN=moon-secret-token python3 scripts/moon_proto_descriptor.py push \
+  generated/schema_registry_store \
+  --profile-file generated/registry_managed_profiles.json \
+  --profile github-managed \
+  --report generated/descriptor_registry_managed_push_report.md \
+  --json-out generated/descriptor_registry_managed_pushed.json \
+  --junit-out generated/descriptor_registry_managed_push_report.xml
+grep -Fq 'Overall status: **PASS**' generated/descriptor_registry_managed_push_report.md
+grep -q 'resolve registry backend' generated/descriptor_registry_managed_push_report.md
+grep -q 'github-contents' generated/descriptor_registry_managed_push_report.md
+grep -q '"remote_backend": "github-contents"' generated/descriptor_registry_managed_pushed.json
+grep -q 'failures="0"' generated/descriptor_registry_managed_push_report.xml
+test -f generated/schema_registry_managed/moon-registry/registries/demo-user.json
+find generated/schema_registry_managed/moon-registry/blobs -type f | grep -q '.hex'
+
+MOON_PROTO_REGISTRY_TOKEN=moon-secret-token python3 scripts/moon_proto_descriptor.py push \
+  generated/schema_registry_store \
+  --profile-file generated/registry_managed_profiles.json \
+  --profile github-managed \
+  --report generated/descriptor_registry_managed_update_report.md \
+  --json-out generated/descriptor_registry_managed_updated.json \
+  --junit-out generated/descriptor_registry_managed_update_report.xml
+grep -Fq 'Overall status: **PASS**' generated/descriptor_registry_managed_update_report.md
+grep -q 'failures="0"' generated/descriptor_registry_managed_update_report.xml
+
+MOON_PROTO_REGISTRY_TOKEN=moon-secret-token python3 scripts/moon_proto_descriptor.py pull \
+  registries/demo-user.json \
+  --profile-file generated/registry_managed_profiles.json \
+  --profile github-managed \
+  --output-dir generated/schema_registry_managed_pull \
+  --report generated/descriptor_registry_managed_pull_report.md \
+  --json-out generated/descriptor_registry_managed_pulled.json \
+  --junit-out generated/descriptor_registry_managed_pull_report.xml
+grep -Fq 'Overall status: **PASS**' generated/descriptor_registry_managed_pull_report.md
+grep -q 'resolve registry backend' generated/descriptor_registry_managed_pull_report.md
+grep -q 'github-contents' generated/descriptor_registry_managed_pull_report.md
+grep -q 'moon-registry' generated/descriptor_registry_managed_pulled.json
+grep -q 'failures="0"' generated/descriptor_registry_managed_pull_report.xml
+find generated/schema_registry_managed_pull -type f | grep -q 'version_1_'
+kill "$HTTP_PID" 2>/dev/null || true
+wait "$HTTP_PID" 2>/dev/null || true
+HTTP_PID=""
+
 echo "Generated MoonBit source compiles"
