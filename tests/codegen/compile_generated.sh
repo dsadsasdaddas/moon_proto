@@ -213,6 +213,8 @@ python3 scripts/moon_proto_conformance.py \
   --junit-out generated/conformance_lite.xml
 grep -Fq 'Overall status: **PASS**' generated/conformance_lite_report.md
 grep -q 'proto3_map_string_and_int64_keys' generated/conformance_lite_report.md
+grep -q 'reject_hex_binary_mismatch' generated/conformance_lite_report.md
+grep -q 'negative-self-check' generated/conformance_lite.json
 grep -q '"overall_status": "PASS"' generated/conformance_lite.json
 grep -q '<testsuite' generated/conformance_lite.xml
 grep -q 'failures="0"' generated/conformance_lite.xml

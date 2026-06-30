@@ -15,7 +15,9 @@ import hashlib
 import html
 import importlib.util
 import json
+import shutil
 import sys
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -48,6 +50,14 @@ class CaseResult:
     details: str
     sha256: str = ""
     size: int = 0
+
+
+@dataclass(frozen=True)
+class NegativeMutationCase:
+    name: str
+    base_case: str
+    mutation: str
+    feature: str
 
 
 CASES = [
@@ -116,6 +126,34 @@ CASES = [
 ]
 
 
+NEGATIVE_MUTATIONS = [
+    NegativeMutationCase(
+        name="reject_hex_binary_mismatch",
+        base_case="proto3_scalar_repeated_packed_bytes_json64",
+        mutation="hex_mismatch",
+        feature="detects when a checked-in .hex file no longer decodes to the checked-in .bin fixture",
+    ),
+    NegativeMutationCase(
+        name="reject_json_missing_required_evidence",
+        base_case="proto3_scalar_repeated_packed_bytes_json64",
+        mutation="json_missing_required_evidence",
+        feature="detects when a JSON fixture silently drops required oracle evidence fields",
+    ),
+    NegativeMutationCase(
+        name="reject_missing_binary_fixture",
+        base_case="proto3_oneof_last_selected_json",
+        mutation="missing_bin",
+        feature="detects when a binary golden fixture is absent from the conformance matrix",
+    ),
+    NegativeMutationCase(
+        name="reject_corrupt_binary_fixture",
+        base_case="proto3_float_double_roundtrip",
+        mutation="corrupt_bin",
+        feature="detects when binary fixture bytes no longer match the official protobuf oracle",
+    ),
+]
+
+
 def load_python_oracle_module():
     from google.protobuf import message_factory
 
@@ -136,6 +174,13 @@ def load_python_oracle_module():
 
 def read_fixture_text(path: Path) -> str:
     return path.read_text(encoding="utf-8") if path.exists() else ""
+
+
+def display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
 
 
 def compare_json_subset(actual: Any, expected: Any, path: str = "$") -> list[str]:
@@ -181,16 +226,16 @@ def run_case(case: ConformanceCase, fixtures_dir: Path, oracle_module: Any) -> C
                 if actual_dict == expected_dict:
                     semantic_binary_note = "binary order accepted by parsed semantic equivalence; "
                 else:
-                    failures.append(f"{bin_path.relative_to(ROOT)} differs from Python protobuf oracle")
+                    failures.append(f"{display_path(bin_path)} differs from Python protobuf oracle")
             else:
-                failures.append(f"{bin_path.relative_to(ROOT)} differs from Python protobuf oracle")
+                failures.append(f"{display_path(bin_path)} differs from Python protobuf oracle")
         if actual_hex != expected_hex:
             if not case.allow_binary_semantic_equivalence:
-                failures.append(f"{hex_path.relative_to(ROOT)} differs from Python protobuf oracle")
+                failures.append(f"{display_path(hex_path)} differs from Python protobuf oracle")
         if bytes.fromhex(actual_hex.strip()) != actual_bin:
             failures.append("hex fixture does not decode to the binary fixture")
         if actual_json != expected_json:
-            failures.append(f"{json_path.relative_to(ROOT)} differs from Python protobuf oracle")
+            failures.append(f"{display_path(json_path)} differs from Python protobuf oracle")
         try:
             parsed_json = json.loads(actual_json)
         except json.JSONDecodeError as exc:
@@ -227,6 +272,56 @@ def run_case(case: ConformanceCase, fixtures_dir: Path, oracle_module: Any) -> C
         )
 
 
+def copy_fixture_triplet(source_dir: Path, target_dir: Path, fixture: str) -> None:
+    target_dir.mkdir(parents=True, exist_ok=True)
+    for suffix in (".bin", ".hex", ".json"):
+        shutil.copy2(source_dir / f"{fixture}{suffix}", target_dir / f"{fixture}{suffix}")
+
+
+def apply_negative_mutation(fixtures_dir: Path, fixture: str, mutation: str) -> None:
+    if mutation == "hex_mismatch":
+        (fixtures_dir / f"{fixture}.hex").write_text("00\n", encoding="utf-8")
+    elif mutation == "json_missing_required_evidence":
+        (fixtures_dir / f"{fixture}.json").write_text("{}\n", encoding="utf-8")
+    elif mutation == "missing_bin":
+        (fixtures_dir / f"{fixture}.bin").unlink()
+    elif mutation == "corrupt_bin":
+        (fixtures_dir / f"{fixture}.bin").write_bytes(b"\x00")
+        (fixtures_dir / f"{fixture}.hex").write_text("00\n", encoding="utf-8")
+    else:
+        raise ValueError(f"unknown negative mutation: {mutation}")
+
+
+def run_negative_case(
+    negative: NegativeMutationCase,
+    cases_by_name: dict[str, ConformanceCase],
+    fixtures_dir: Path,
+    oracle_module: Any,
+) -> CaseResult:
+    base_case = cases_by_name[negative.base_case]
+    with tempfile.TemporaryDirectory(prefix="moon_proto_conformance_negative_") as tmp:
+        mutated_dir = Path(tmp)
+        copy_fixture_triplet(fixtures_dir, mutated_dir, base_case.fixture)
+        apply_negative_mutation(mutated_dir, base_case.fixture, negative.mutation)
+        observed = run_case(base_case, mutated_dir, oracle_module)
+    ok = not observed.ok
+    details = (
+        f"expected rejection observed via {negative.mutation}: {observed.details}"
+        if ok
+        else f"mutation was unexpectedly accepted via {negative.mutation}: {observed.details}"
+    )
+    return CaseResult(
+        name=negative.name,
+        fixture=base_case.fixture,
+        category="negative-self-check",
+        feature=negative.feature,
+        ok=ok,
+        details=details,
+        sha256=observed.sha256,
+        size=observed.size,
+    )
+
+
 def markdown_cell(text: str) -> str:
     return str(text).replace("|", "\\|").replace("\n", "<br>")
 
@@ -259,6 +354,7 @@ def conformance_report(results: list[CaseResult]) -> str:
         "- oneof JSON selection;",
         "- 32-bit numeric boundary values;",
         "- float/double finite and special JSON values.",
+        "- negative mutation self-checks for fixture corruption, missing artifacts and JSON evidence loss.",
         "",
     ])
     return "\n".join(lines)
@@ -317,11 +413,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--report", help="write Markdown report")
     parser.add_argument("--json-out", help="write machine-readable JSON result")
     parser.add_argument("--junit-out", help="write JUnit XML result")
+    parser.add_argument("--skip-negative-self-checks", action="store_true", help="only run positive oracle fixtures")
     args = parser.parse_args(argv)
 
     fixtures_dir = Path(args.fixtures_dir)
     oracle_module = load_python_oracle_module()
     results = [run_case(case, fixtures_dir, oracle_module) for case in CASES]
+    if not args.skip_negative_self_checks:
+        cases_by_name = {case.name: case for case in CASES}
+        results.extend(
+            run_negative_case(negative, cases_by_name, fixtures_dir, oracle_module)
+            for negative in NEGATIVE_MUTATIONS
+        )
     ok = all(result.ok for result in results)
 
     if args.report:
