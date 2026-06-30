@@ -24,7 +24,28 @@
         "oneof` fields are encoded as MoonBit `Enum`",
         "Maps are fully supported and will map to MoonBit `Map`"
       ]
-    }
+    },
+    "required_feature_coverage": [
+      "scalar",
+      "repeated",
+      "optional",
+      "map",
+      "oneof",
+      "enum",
+      "import",
+      "reserved",
+      "float",
+      "double",
+      "int32",
+      "int64",
+      "uint32",
+      "uint64",
+      "fixed32",
+      "fixed64",
+      "bool",
+      "string",
+      "bytes"
+    ]
   },
   "cases": [
     {
@@ -85,6 +106,52 @@
         "pub struct TelemetryEvent",
         "Option[String]",
         "Map[String, String]"
+      ]
+    },
+    {
+      "name": "scalar_matrix",
+      "proto": "examples/official/scalar_matrix.proto",
+      "expected_messages": [
+        "ScalarMatrix"
+      ],
+      "expected_enums": [],
+      "expected_inspect": [
+        "message ScalarMatrix fields=17",
+        "1 d : singular double",
+        "2 f : singular float",
+        "3 i32 : singular int32",
+        "4 i64 : singular int64",
+        "15 payload : singular bytes",
+        "16 note : optional string",
+        "17 samples : repeated uint32"
+      ],
+      "official_features": [
+        "scalar",
+        "float",
+        "double",
+        "int32",
+        "int64",
+        "uint32",
+        "uint64",
+        "fixed32",
+        "fixed64",
+        "bool",
+        "string",
+        "bytes",
+        "optional",
+        "repeated"
+      ],
+      "expected_official_generated": [
+        "pub struct ScalarMatrix",
+        "d : Double",
+        "f : Float",
+        "i32 : Int",
+        "i64 : Int64",
+        "u32 : UInt",
+        "u64 : UInt64",
+        "payload : Bytes",
+        "note : Option[String]",
+        "samples : Array[UInt]"
       ]
     }
   ]

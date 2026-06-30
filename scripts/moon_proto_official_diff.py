@@ -80,7 +80,10 @@ def check_expected_inspect(inspect_output: str, snippets: list[str]) -> StepResu
     missing = [snippet for snippet in snippets if snippet not in inspect_output]
     if missing:
         return step('inspect contract', 'FAIL', 'missing: ' + ', '.join(missing))
-    return step('inspect contract', 'PASS', f'{len(snippets)} expected snippets found')
+    detail = f'{len(snippets)} expected snippets found'
+    if snippets:
+        detail += ': ' + ', '.join(snippets)
+    return step('inspect contract', 'PASS', detail)
 
 
 def check_official_generated_output(generated_dir_arg: str | None, case: dict) -> StepResult:
@@ -108,7 +111,7 @@ def check_official_generated_output(generated_dir_arg: str | None, case: dict) -
     return step(
         'official generated output contract',
         'PASS',
-        f'{len(snippets)} expected snippets found in {len(files)} official generated file(s)',
+        f'{len(snippets)} expected snippets found in {len(files)} official generated file(s): ' + ', '.join(snippets),
     )
 
 
@@ -175,6 +178,21 @@ def check_official_source_contract(repo_arg: str | None, official: dict) -> Step
         )
     suffix = f'; checkout HEAD {head}' if head else ''
     return step('official source contract', 'PASS', 'source contract matched' + suffix)
+
+
+def check_official_feature_coverage(manifest: dict) -> StepResult:
+    required = set(manifest.get('official', {}).get('required_feature_coverage', []))
+    observed: set[str] = set()
+    for case in manifest.get('cases', []):
+        observed.update(str(feature) for feature in case.get('official_features', []))
+    missing = sorted(required - observed)
+    extra = sorted(observed - required)
+    if missing:
+        return step('official feature coverage', 'FAIL', 'missing features: ' + ', '.join(missing))
+    detail = f'{len(observed)} manifest feature(s) covered'
+    if extra:
+        detail += '; extra: ' + ', '.join(extra)
+    return step('official feature coverage', 'PASS', detail)
 
 
 def run_official_generator(
@@ -314,6 +332,7 @@ def run_case(args: argparse.Namespace, case: dict, root: Path) -> CaseResult:
 def markdown_report(
     manifest: dict,
     source_step: StepResult,
+    feature_step: StepResult,
     results: list[CaseResult],
     require_official: bool,
     run_generator: bool,
@@ -323,6 +342,8 @@ def markdown_report(
     blocking_failures = [step for result in results for step in result.steps if step.blocking]
     if source_step.blocking or (require_official and source_step.status != 'PASS'):
         blocking_failures.append(source_step)
+    if feature_step.blocking:
+        blocking_failures.append(feature_step)
     if require_official and run_generator:
         blocking_failures.extend(
             step for result in results for step in result.steps
@@ -349,6 +370,7 @@ def markdown_report(
     for note in official.get('notes', []):
         lines.append(f'- source note: {note}')
     source_details = source_step.details.replace('|', '\\|').replace('\n', '<br>')
+    feature_details = feature_step.details.replace('|', '\\|').replace('\n', '<br>')
     lines.extend([
         '',
         '## Official source checkout',
@@ -356,6 +378,12 @@ def markdown_report(
         '| Step | Status | Details |',
         '| --- | --- | --- |',
         f'| {source_step.name} | {source_step.status} | {source_details} |',
+        '',
+        '## Manifest feature coverage',
+        '',
+        '| Step | Status | Details |',
+        '| --- | --- | --- |',
+        f'| {feature_step.name} | {feature_step.status} | {feature_details} |',
         '',
         '## Case results',
         '',
@@ -403,6 +431,7 @@ def case_step_is_failure(step_result: StepResult, require_official: bool, run_ge
 
 def junit_cases(
     source_step: StepResult,
+    feature_step: StepResult,
     results: list[CaseResult],
     require_official: bool,
     run_generator: bool,
@@ -412,7 +441,12 @@ def junit_cases(
             'official source checkout / ' + source_step.name,
             source_step,
             source_step_is_failure(source_step, require_official),
-        )
+        ),
+        (
+            'official manifest / ' + feature_step.name,
+            feature_step,
+            feature_step.blocking,
+        ),
     ]
     for result in results:
         for step_result in result.steps:
@@ -429,11 +463,12 @@ def junit_cases(
 def write_junit_report(
     path: Path,
     source_step: StepResult,
+    feature_step: StepResult,
     results: list[CaseResult],
     require_official: bool,
     run_generator: bool,
 ) -> None:
-    cases = junit_cases(source_step, results, require_official, run_generator)
+    cases = junit_cases(source_step, feature_step, results, require_official, run_generator)
     failures = sum(1 for _name, _step_result, is_failure in cases if is_failure)
     skipped = sum(
         1
@@ -499,10 +534,12 @@ def main(argv: list[str] | None = None) -> int:
     root = repo_root()
     manifest = load_manifest(root / args.manifest)
     source_step = check_official_source_contract(args.official_repo, manifest['official'])
+    feature_step = check_official_feature_coverage(manifest)
     results = [run_case(args, case, root) for case in manifest['cases']]
     md = markdown_report(
         manifest,
         source_step,
+        feature_step,
         results,
         args.require_official,
         args.run_official_generator,
@@ -515,6 +552,7 @@ def main(argv: list[str] | None = None) -> int:
         write_junit_report(
             Path(args.junit_out),
             source_step,
+            feature_step,
             results,
             args.require_official,
             args.run_official_generator,
@@ -522,7 +560,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f'junit: {args.junit_out}')
     print(md, end='')
     has_failures = any(step.blocking for result in results for step in result.steps)
-    has_failures = has_failures or source_step.blocking
+    has_failures = has_failures or source_step.blocking or feature_step.blocking
     if args.require_official:
         has_failures = has_failures or source_step.status != 'PASS'
         if args.run_official_generator:

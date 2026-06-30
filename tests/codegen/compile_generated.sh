@@ -191,6 +191,10 @@ python3 scripts/moon_proto_official_diff.py \
   --report generated/official_diff_report.md \
   --junit-out generated/official_diff_report.xml
 grep -Fq 'Overall status: **PASS**' generated/official_diff_report.md
+grep -q 'Manifest feature coverage' generated/official_diff_report.md
+grep -q 'official feature coverage' generated/official_diff_report.md
+grep -q 'scalar_matrix' generated/official_diff_report.md
+grep -q '17 samples : repeated uint32' generated/official_diff_report.md
 grep -q 'official protoc-gen-mbt' generated/official_diff_report.md
 grep -q 'SKIP' generated/official_diff_report.md
 grep -q '<testsuite' generated/official_diff_report.xml
@@ -203,6 +207,8 @@ python3 scripts/moon_proto_official_diff.py \
   --junit-out generated/official_generated_diff_report.xml
 grep -Fq 'Overall status: **PASS**' generated/official_generated_diff_report.md
 grep -q 'official generated output contract' generated/official_generated_diff_report.md
+grep -q 'scalar_matrix' generated/official_generated_diff_report.md
+grep -q 'pub struct ScalarMatrix' generated/official_generated_diff_report.md
 grep -q 'expected snippets found' generated/official_generated_diff_report.md
 grep -q '<testsuite' generated/official_generated_diff_report.xml
 grep -q 'failures="0"' generated/official_generated_diff_report.xml

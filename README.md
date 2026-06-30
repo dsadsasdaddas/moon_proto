@@ -46,7 +46,7 @@ The project has a small but end-to-end verifiable protobuf laboratory pipeline:
 - file-based Schema Doctor CLI for stable diagnostics on valid and invalid schemas;
 - AI verification CLI that runs doctor, schema inspection, codegen, generated-code compile checks, and Markdown/HTML/JUnit XML report generation;
 - old/new schema compatibility checker for detecting field, enum, package, type and reserved-contract breaking changes;
-- official MoonBit protobuf differential harness manifest/report for schemas overlapping with `moonbitlang/protoc-gen-mbt`, including source-contract, pre-generated output and installed-plugin live-generator smoke paths;
+- official MoonBit protobuf differential harness manifest/report for schemas overlapping with `moonbitlang/protoc-gen-mbt`, including manifest feature coverage gates, scalar-matrix adapter coverage, source-contract, pre-generated output and installed-plugin live-generator smoke paths;
 - FileDescriptorSet descriptor/reflection bridge for `.pb`/`.hex`/`.json` descriptor imports, proto reconstruction, verification reports, old/new descriptor-set compatibility reports, descriptor-registry release gates, JSON release-policy checks with rule-based severity/warning support, and file/HTTP/authenticated/profile/GitHub Contents managed-backend registry adapter publish/push/pull verification;
 - Python and Go official protobuf oracle fixtures for cross-language compatibility checks, including 32-bit numeric boundary values, float/double values, special NaN/Infinity JSON values, and upstream-style wire-decode edge vectors;
 - conformance-lite evidence report with Markdown/JSON/JUnit output for scalar/repeated/packed, map, oneof, numeric-boundary, float/double, special-float, wire-decode edge cases and an imported upstream-lite conformance manifest, expected-fail mutation self-checks, and coverage-gate taxonomy;
@@ -247,6 +247,7 @@ tests/codegen/compile_generated.sh
 - M38: installed official protoc-gen-mbt plugin live-generator smoke path. Done.
 - M39: upstream-style wire-decode conformance vectors for duplicate singular last-one-wins, unknown-field skipping, and mixed packed/unpacked repeated input. Done.
 - M40: imported upstream-lite conformance manifest with 11 protobuf-input/JSON-output acceptance cases and CI coverage gates. Done.
+- M41: official differential scalar-matrix adapter case with manifest feature coverage gate. Done.
 
 ## License
 

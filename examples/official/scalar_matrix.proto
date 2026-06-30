@@ -1,0 +1,22 @@
+syntax = "proto3";
+package demo;
+
+message ScalarMatrix {
+  double d = 1;
+  float f = 2;
+  int32 i32 = 3;
+  int64 i64 = 4;
+  uint32 u32 = 5;
+  uint64 u64 = 6;
+  sint32 s32 = 7;
+  sint64 s64 = 8;
+  fixed32 fixed32_value = 9;
+  fixed64 fixed64_value = 10;
+  sfixed32 sfixed32_value = 11;
+  sfixed64 sfixed64_value = 12;
+  bool active = 13;
+  string name = 14;
+  bytes payload = 15;
+  optional string note = 16;
+  repeated uint32 samples = 17;
+}

@@ -6,6 +6,7 @@ The goal is not to replace the official production generator. The goal is to mak
 
 - run Schema Doctor on schemas that overlap with the official feature surface;
 - verify inspect output against a stable case manifest;
+- enforce manifest feature coverage gates for the official generator surface;
 - generate Moon Proto Lab dynamic helper code and compile-check it;
 - document intentional differences between the dynamic lab and the official typed generator;
 - validate the public official README/spec contract when an official checkout is available;
@@ -33,6 +34,7 @@ Current cases:
 | --- | --- | --- |
 | `simple_user` | `examples/simple/user.proto` | scalar, repeated, map, oneof |
 | `decorated_telemetry` | `examples/decorated/telemetry.proto` | import, option, reserved, enum, optional, map, oneof |
+| `scalar_matrix` | `examples/official/scalar_matrix.proto` | double, float, 32/64-bit integers, fixed/sfixed, bool, string, bytes, optional, repeated |
 
 ## Run the default contract check
 
@@ -99,14 +101,14 @@ python3 scripts/moon_proto_official_diff.py \
   --junit-out generated/official_generated_diff_report.xml
 ```
 
-The harness checks each case against `expected_official_generated` snippets in `tests/differential/official_cases.json`. This mode is useful for CI environments that can consume cached official-generator artifacts but should not rebuild the official generator on every run.
+The harness checks each case against `expected_official_generated` snippets in `tests/differential/official_cases.json`. It also verifies the manifest-level `required_feature_coverage` gate so scalar, numeric, bytes, optional, repeated, map, oneof, enum, import and reserved features remain represented by at least one differential case. This mode is useful for CI environments that can consume cached official-generator artifacts but should not rebuild the official generator on every run.
 
 ## Why this matters
 
 This turns the project into ecosystem infrastructure rather than another protobuf runtime:
 
 - Moon Proto Lab can verify schemas before official code generation;
-- the manifest makes overlap with official capabilities explicit;
+- the manifest makes overlap with official capabilities explicit and CI-enforced;
 - generated Markdown/HTML/JUnit reports are suitable for CI artifacts and contest demos;
 - pre-generated official output can be checked without requiring `protoc` or official generator dependencies in the same job;
 - installed official generator binaries can be smoke-tested directly with `--official-plugin-bin`;
