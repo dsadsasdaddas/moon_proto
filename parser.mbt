@@ -288,6 +288,15 @@ fn ProtoParser::skip_until_semicolon(self : ProtoParser) -> Bool {
 }
 
 ///|
+fn ProtoParser::parse_bool_literal(self : ProtoParser) -> Bool? {
+  match self.consume_ident() {
+    Some("true") => Some(true)
+    Some("false") => Some(false)
+    _ => None
+  }
+}
+
+///|
 fn ProtoParser::parse_reserved_clause(
   self : ProtoParser,
   owner : String,
@@ -633,6 +642,7 @@ fn ProtoParser::parse_enum(self : ProtoParser) -> ParsedEnum? {
   let values : Array[EnumValueDescriptor] = []
   let reserved_numbers : Array[ReservedNumberRange] = []
   let reserved_names : Array[String] = []
+  let mut allow_alias = false
   let mut done = false
   while !done {
     match self.peek() {
@@ -661,8 +671,24 @@ fn ProtoParser::parse_enum(self : ProtoParser) -> ParsedEnum? {
           }
         } else if word == "option" {
           let _ = self.advance()
-          if !self.skip_until_semicolon() {
-            return None
+          match self.peek() {
+            Some(Ident("allow_alias")) => {
+              let _ = self.advance()
+              if !self.consume_sym("=") {
+                return None
+              }
+              match self.parse_bool_literal() {
+                Some(value) => allow_alias = value
+                None => return None
+              }
+              if !self.match_sym(";") {
+                return None
+              }
+            }
+            _ =>
+              if !self.skip_until_semicolon() {
+                return None
+              }
           }
         } else {
           match self.parse_enum_value() {
@@ -679,7 +705,7 @@ fn ProtoParser::parse_enum(self : ProtoParser) -> ParsedEnum? {
     }
   }
   Some(ParsedEnum::{
-    desc: EnumDescriptor::{ name, values },
+    desc: EnumDescriptor::{ name, values, allow_alias },
     reserved_numbers,
     reserved_names,
   })

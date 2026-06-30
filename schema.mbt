@@ -58,6 +58,7 @@ pub(all) struct EnumValueDescriptor {
 pub(all) struct EnumDescriptor {
   name : String
   values : Array[EnumValueDescriptor]
+  allow_alias : Bool
 } derive(Debug, Eq)
 
 ///|

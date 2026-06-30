@@ -1,0 +1,14 @@
+syntax = "proto3";
+package moon.proto.lab.demo.v1;
+
+enum AliasResult {
+  option allow_alias = true;
+  ALIAS_RESULT_UNSPECIFIED = 0;
+  ALIAS_RESULT_OK = 1;
+  ALIAS_RESULT_SUCCESS = 1;
+  ALIAS_RESULT_FAILED = 2;
+}
+
+message AliasCarrier {
+  AliasResult result = 1;
+}

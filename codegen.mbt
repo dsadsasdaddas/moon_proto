@@ -119,6 +119,7 @@ pub fn generate_enum_descriptor_function(desc : EnumDescriptor) -> String {
   lines.push("pub fn descriptor_" + desc.name + "() -> EnumDescriptor {")
   lines.push("  EnumDescriptor::{")
   lines.push("    name : \"" + desc.name + "\",")
+  lines.push("    allow_alias : " + desc.allow_alias.to_string() + ",")
   lines.push("    values : [")
   for value in desc.values {
     lines.push(

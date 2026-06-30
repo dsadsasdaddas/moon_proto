@@ -110,6 +110,7 @@ test "parser tolerates imports options reserved and field options" {
       assert_eq(file.package_name, "demo.v1")
       assert_eq(file.enums.length(), 1)
       assert_eq(file.enums[0].values.length(), 2)
+      assert_true(file.enums[0].allow_alias)
       assert_eq(file.enum_reservations.length(), 1)
       assert_eq(file.enum_reservations[0].owner, "Status")
       assert_eq(file.enum_reservations[0].numbers.length(), 1)
@@ -664,6 +665,7 @@ test "parse enum and codegen enum descriptor" {
         #|pub fn descriptor_Color() -> EnumDescriptor {
         #|  EnumDescriptor::{
         #|    name : "Color",
+        #|    allow_alias : false,
         #|    values : [
         #|      EnumValueDescriptor::{ name : "COLOR_UNSPECIFIED", number : 0 },
         #|      EnumValueDescriptor::{ name : "RED", number : 1 },
@@ -1437,6 +1439,7 @@ test "schema validator reports enum and top level issues" {
     enums: [
       EnumDescriptor::{
         name: "Thing",
+        allow_alias: false,
         values: [
           EnumValueDescriptor::{ name: "RED", number: 1 },
           EnumValueDescriptor::{ name: "RED", number: 1 },
@@ -1460,6 +1463,52 @@ test "schema validator reports enum and top level issues" {
         "top-level enum name conflicts with message name",
       )
     }
+  }
+}
+
+///|
+test "enum allow_alias permits duplicate enum numbers" {
+  let src =
+    #|syntax = "proto3";
+    #|enum Status {
+    #|  option allow_alias = true;
+    #|  STATUS_UNSPECIFIED = 0;
+    #|  STATUS_OK = 1;
+    #|  STATUS_SUCCESS = 1;
+    #|}
+  match parse_proto(src) {
+    ProtoErr(_) => fail("allow_alias enum should parse")
+    ProtoOk(file) => {
+      assert_eq(file.enums.length(), 1)
+      assert_true(file.enums[0].allow_alias)
+      assert_eq(file.enums[0].values.length(), 3)
+      assert_true(schema_is_valid(file))
+      let generated = generate_moonbit_source(file)
+      assert_true(generated.contains("allow_alias : true"))
+      assert_true(generated.contains("STATUS_SUCCESS"))
+    }
+  }
+}
+
+///|
+test "enum duplicate number requires allow_alias" {
+  let src =
+    #|syntax = "proto3";
+    #|enum Status {
+    #|  STATUS_UNSPECIFIED = 0;
+    #|  STATUS_OK = 1;
+    #|  STATUS_SUCCESS = 1;
+    #|}
+  match parse_proto(src) {
+    ProtoErr(_) => fail("duplicate enum number schema should parse then validate")
+    ProtoOk(file) =>
+      match validate_proto_file(file) {
+        SchemaValid => fail("duplicate enum number should fail without allow_alias")
+        SchemaInvalid(issues) => {
+          assert_eq(issues.length(), 1)
+          assert_eq(issues[0].message, "duplicate enum value number")
+        }
+      }
   }
 }
 

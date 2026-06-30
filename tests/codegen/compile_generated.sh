@@ -90,6 +90,9 @@ python3 scripts/moon_proto_lab.py inspect examples/decorated/nested_types.proto 
 python3 scripts/moon_proto_lab.py inspect examples/decorated/nested_types.proto \
   | grep -q 'enum Kind values=3'
 
+python3 scripts/moon_proto_lab.py inspect examples/decorated/telemetry.proto \
+  | grep -q 'enum Severity values=4 allow_alias=true'
+
 python3 scripts/moon_proto_lab.py verify examples/decorated/nested_types.proto \
   --report generated/verify_nested_types_report.md \
   --junit-out generated/verify_nested_types_report.xml
@@ -114,6 +117,20 @@ grep -Fq 'Overall status: **PASS**' generated/verify_enum_numbers_report.md
 grep -q 'STATUS_NEGATIVE' generated/verify_enum_numbers_report.md
 grep -q 'number : -1' generated/verify_enum_numbers_report.md
 grep -q 'failures="0"' generated/verify_enum_numbers_report.xml
+
+python3 scripts/moon_proto_lab.py doctor examples/decorated/enum_alias.proto \
+  | grep -q 'schema valid'
+
+python3 scripts/moon_proto_lab.py inspect examples/decorated/enum_alias.proto \
+  | grep -q 'enum AliasResult values=4 allow_alias=true'
+
+python3 scripts/moon_proto_lab.py verify examples/decorated/enum_alias.proto \
+  --report generated/verify_enum_alias_report.md \
+  --junit-out generated/verify_enum_alias_report.xml
+grep -Fq 'Overall status: **PASS**' generated/verify_enum_alias_report.md
+grep -q 'allow_alias : true' generated/verify_enum_alias_report.md
+grep -q 'ALIAS_RESULT_SUCCESS' generated/verify_enum_alias_report.md
+grep -q 'failures="0"' generated/verify_enum_alias_report.xml
 
 python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto \
   --report generated/compat_report.md \

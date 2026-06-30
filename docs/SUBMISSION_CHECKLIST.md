@@ -20,9 +20,9 @@
 | 要求 | 证据 |
 | --- | --- |
 | MoonBit 为主要实现语言 | `*.mbt` runtime/parser/codegen/tests 共 15 个源文件 |
-| 项目规模 4k+ MoonBit LOC | 当前 MoonBit 源码约 `6942` 行 |
+| 项目规模 4k+ MoonBit LOC | 当前 MoonBit 源码约 `7027` 行 |
 | 清晰工程结构 | wire/schema/runtime/json/codegen/cli/tests/docs 分层 |
-| 示例 schema | `examples/simple/user.proto`、`examples/decorated/telemetry.proto`、`examples/decorated/telemetry_service.proto`、`examples/decorated/nested_types.proto`、`examples/decorated/enum_numbers.proto` |
+| 示例 schema | `examples/simple/user.proto`、`examples/decorated/telemetry.proto`、`examples/decorated/telemetry_service.proto`、`examples/decorated/nested_types.proto`、`examples/decorated/enum_numbers.proto`、`examples/decorated/enum_alias.proto` |
 | 文件版生成入口 | `scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/` |
 | Schema Doctor / compat / verify / official diff / conformance-lite / descriptor verify/compat/registry/policy | `scripts/moon_proto_lab.py doctor examples/simple/user.proto` / `compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md` / `verify --report generated/verify_report.md` / `scripts/moon_proto_official_diff.py --report generated/official_diff_report.md --junit-out generated/official_diff_report.xml` / `scripts/moon_proto_official_diff.py --run-official-generator --official-plugin-bin protoc-gen-mbt --protoc-bin protoc --report generated/official_installed_plugin_diff_report.md --junit-out generated/official_installed_plugin_diff_report.xml` / `scripts/moon_proto_conformance.py --report generated/conformance_lite_report.md --json-out generated/conformance_lite.json --junit-out generated/conformance_lite.xml` / `scripts/moon_proto_descriptor.py verify tests/fixtures/user_descriptor_set.hex --report generated/descriptor_verify_report.md` / `scripts/moon_proto_descriptor.py compat tests/fixtures/user_descriptor_set.hex tests/fixtures/user_descriptor_set_reserved_v2.hex --report generated/descriptor_compat_report.md` / `scripts/moon_proto_descriptor.py registry tests/fixtures/user_descriptor_set.hex tests/fixtures/user_descriptor_set_reserved_v2.hex --name demo-user --report generated/descriptor_registry_report.md --json-out generated/descriptor_registry.json` |
 | 生态定位说明 | `docs/ECOSYSTEM_POSITIONING.md` |
@@ -31,7 +31,7 @@
 
 - protobuf wire type、key packing/parsing；
 - varint、zig-zag、fixed32/fixed64、length-delimited bytes/string；
-- proto3 schema parser 和 descriptor model，支持点分 package/type、import、option、真实 reserved number/name descriptor、extensions、nested message/enum lifting、signed enum value / enum reserved range、empty statement、block comments、service/rpc block 忽略式容错与字段/枚举值 option 容错解析；
+- proto3 schema parser 和 descriptor model，支持点分 package/type、import、option、真实 reserved number/name descriptor、extensions、nested message/enum lifting、signed enum value / enum reserved range、enum allow_alias duplicate-number semantics、empty statement、block comments、service/rpc block 忽略式容错与字段/枚举值 option 容错解析；
 - schema validation diagnostics，包含 reserved number/name 复用检查；
 - descriptor-driven dynamic message binary encode/decode；
 - repeated 与 proto3 packed repeated；
@@ -60,14 +60,14 @@
 | Go oracle | `(cd tests/oracle && go run .)` |
 | MoonBit check | `moon check` |
 | MoonBit build | `moon build` |
-| MoonBit tests | `moon test`，当前 `46/46 passed` |
+| MoonBit tests | `moon test`，当前 `48/48 passed` |
 | All targets | `moon test --target all` 覆盖 wasm/wasm-gc/js/native |
 | CLI smoke | `moon run cmd/main -- gen --example` |
 | File-based generator | `python3 scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/` |
 | Generated code compile | `tests/codegen/compile_generated.sh` |
 | Schema Doctor | `python3 scripts/moon_proto_lab.py doctor examples/simple/user.proto` |
 | Compatibility report | `python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md --junit-out generated/compat_report.xml` |
-| Verify report | `python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md --junit-out generated/verify_report.xml` / `python3 scripts/moon_proto_lab.py verify examples/decorated/enum_numbers.proto --report generated/verify_enum_numbers_report.md --junit-out generated/verify_enum_numbers_report.xml` |
+| Verify report | `python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md --junit-out generated/verify_report.xml` / `python3 scripts/moon_proto_lab.py verify examples/decorated/enum_numbers.proto --report generated/verify_enum_numbers_report.md --junit-out generated/verify_enum_numbers_report.xml` / `python3 scripts/moon_proto_lab.py verify examples/decorated/enum_alias.proto --report generated/verify_enum_alias_report.md --junit-out generated/verify_enum_alias_report.xml` |
 | Official differential report | `python3 scripts/moon_proto_official_diff.py --report generated/official_diff_report.md --junit-out generated/official_diff_report.xml`（含 manifest feature coverage gate 与 `scalar_matrix` case） / `python3 scripts/moon_proto_official_diff.py --official-generated-dir tests/differential/official_generated_fixture --report generated/official_generated_diff_report.md --junit-out generated/official_generated_diff_report.xml` / `python3 scripts/moon_proto_official_diff.py --run-official-generator --official-plugin-bin protoc-gen-mbt --protoc-bin protoc --report generated/official_installed_plugin_diff_report.md --junit-out generated/official_installed_plugin_diff_report.xml` / CI also runs `--official-repo /tmp/protoc-gen-mbt --require-official` |
 | Conformance-lite report | `python3 scripts/moon_proto_conformance.py --report generated/conformance_lite_report.md --json-out generated/conformance_lite.json --junit-out generated/conformance_lite.xml`，报告包含 positive oracle cases、11-case upstream-lite imported subset、expected-fail mutation self-checks 和 coverage gates |
 | Descriptor verify/compat/registry/policy/adapter/JUnit report | `python3 scripts/moon_proto_descriptor.py verify tests/fixtures/user_descriptor_set.hex --report generated/descriptor_verify_report.md --junit-out generated/descriptor_verify_report.xml` / `python3 scripts/moon_proto_descriptor.py compat tests/fixtures/user_descriptor_set.hex tests/fixtures/user_descriptor_set_reserved_v2.hex --report generated/descriptor_compat_report.md --junit-out generated/descriptor_compat_report.xml` / `python3 scripts/moon_proto_descriptor.py registry tests/fixtures/user_descriptor_set.hex tests/fixtures/user_descriptor_set_reserved_v2.hex --name demo-user --report generated/descriptor_registry_report.md --json-out generated/descriptor_registry.json --policy tests/fixtures/descriptor_registry_policy.json --junit-out generated/descriptor_registry_report.xml` / `python3 scripts/moon_proto_descriptor.py policy generated/descriptor_registry.json tests/fixtures/descriptor_registry_policy.json --report generated/descriptor_policy_report.md --json-out generated/descriptor_policy.json --junit-out generated/descriptor_policy_report.xml` / `python3 scripts/moon_proto_descriptor.py publish generated/descriptor_registry.json --store generated/schema_registry_store --base-dir . --report generated/descriptor_registry_publish_report.md --junit-out generated/descriptor_registry_publish_report.xml` / `python3 scripts/moon_proto_descriptor.py push generated/schema_registry_store --base-url https://schemas.example.test/ --registry demo-user.json --report generated/descriptor_registry_push_report.md --junit-out generated/descriptor_registry_push_report.xml` / `python3 scripts/moon_proto_descriptor.py pull generated/schema_registry_store/registries/demo-user.json --output-dir generated/schema_registry_pull --report generated/descriptor_registry_pull_report.md --junit-out generated/descriptor_registry_pull_report.xml` |
@@ -105,9 +105,11 @@ python3 scripts/moon_proto_gen.py gen examples/simple/user.proto -o generated/
 python3 scripts/moon_proto_lab.py doctor examples/simple/user.proto
 python3 scripts/moon_proto_lab.py doctor examples/decorated/telemetry.proto
 python3 scripts/moon_proto_lab.py doctor examples/decorated/enum_numbers.proto
+python3 scripts/moon_proto_lab.py doctor examples/decorated/enum_alias.proto
 python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md --junit-out generated/compat_report.xml
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md --junit-out generated/verify_report.xml
 python3 scripts/moon_proto_lab.py verify examples/decorated/enum_numbers.proto --report generated/verify_enum_numbers_report.md --junit-out generated/verify_enum_numbers_report.xml
+python3 scripts/moon_proto_lab.py verify examples/decorated/enum_alias.proto --report generated/verify_enum_alias_report.md --junit-out generated/verify_enum_alias_report.xml
 python3 scripts/moon_proto_official_diff.py --report generated/official_diff_report.md --junit-out generated/official_diff_report.xml
 python3 scripts/moon_proto_official_diff.py --official-generated-dir tests/differential/official_generated_fixture --report generated/official_generated_diff_report.md --junit-out generated/official_generated_diff_report.xml
 python3 scripts/moon_proto_descriptor.py verify tests/fixtures/user_descriptor_set.hex --report generated/descriptor_verify_report.md --junit-out generated/descriptor_verify_report.xml

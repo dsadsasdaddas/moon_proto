@@ -364,6 +364,8 @@ def reserved_lines(prefix: str, reserved_ranges, reserved_names) -> list[str]:
 
 def enum_to_proto(enum_desc: descriptor_pb2.EnumDescriptorProto) -> list[str]:
     lines = [f'enum {enum_desc.name} {{']
+    if enum_desc.options.allow_alias:
+        lines.append('  option allow_alias = true;')
     lines.extend(reserved_lines('  ', enum_desc.reserved_range, enum_desc.reserved_name))
     for value in enum_desc.value:
         lines.append(f'  {value.name} = {value.number};')

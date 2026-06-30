@@ -393,7 +393,8 @@ pub fn validate_enum_descriptor(
         "duplicate enum value name",
       )
     }
-    if has_duplicate_enum_value_number(enum_desc.values, i) {
+    if !enum_desc.allow_alias &&
+      has_duplicate_enum_value_number(enum_desc.values, i) {
       push_issue(
         issues,
         "enum." + enum_desc.name + ".value." + value.number.to_string(),

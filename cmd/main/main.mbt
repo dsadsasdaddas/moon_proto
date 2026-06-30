@@ -191,7 +191,14 @@ fn inspect_report(file : @proto.ProtoFile) -> String {
   }
   lines.push("enums: " + file.enums.length().to_string())
   for enum_desc in file.enums {
-    lines.push("enum " + enum_desc.name + " values=" + enum_desc.values.length().to_string())
+    lines.push(
+      "enum " +
+      enum_desc.name +
+      " values=" +
+      enum_desc.values.length().to_string() +
+      " allow_alias=" +
+      enum_desc.allow_alias.to_string(),
+    )
     for value in enum_desc.values {
       lines.push("  " + value.number.to_string() + " " + value.name)
     }
