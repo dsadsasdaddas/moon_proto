@@ -57,7 +57,10 @@ The project has a small but end-to-end verifiable protobuf laboratory pipeline:
 
 ## Engineering records
 
-For contest traceability, the repository keeps public engineering records in:
+For contest traceability, the repository keeps public engineering records in.
+Early work is primarily evidenced by the commit log and CI history; issues #2-#5
+are explicitly retrospective records, while new work should use the live issue/PR
+workflow.
 
 - [`CHANGELOG.md`](CHANGELOG.md) for release-level changes;
 - [`docs/ENGINEERING_RECORD.md`](docs/ENGINEERING_RECORD.md) for work-package traceability and verification policy;
