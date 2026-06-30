@@ -1185,6 +1185,64 @@ def registry_pull_headers(header_args: list[str], bearer_token: str | None, toke
     return headers
 
 
+def load_registry_profile(profile_file: str | None, profile_name: str | None) -> dict:
+    if not profile_file and not profile_name:
+        return {}
+    if not profile_file or not profile_name:
+        raise ValueError('use --profile-file and --profile together')
+    data = load_json_object(Path(profile_file))
+    profiles = data.get('profiles', data)
+    if not isinstance(profiles, dict):
+        raise ValueError('registry profile file must contain an object or a profiles object')
+    profile = profiles.get(profile_name)
+    if not isinstance(profile, dict):
+        raise ValueError(f'registry profile not found: {profile_name}')
+    return profile
+
+
+def registry_profile_headers(profile: dict) -> list[str]:
+    value = profile.get('headers', [])
+    if value is None:
+        return []
+    if isinstance(value, dict):
+        out: list[str] = []
+        for name, header_value in value.items():
+            if not isinstance(name, str) or not isinstance(header_value, str):
+                raise ValueError('registry profile headers object must map strings to strings')
+            out.append(f'{name}: {header_value}')
+        return out
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return value
+    raise ValueError('registry profile headers must be an object or a list of header strings')
+
+
+def registry_profile_string(profile: dict, key: str) -> str | None:
+    value = profile.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f'registry profile key {key} must be a string')
+    return value
+
+
+def merged_registry_headers(profile: dict, args: argparse.Namespace) -> dict[str, str]:
+    header_args = registry_profile_headers(profile) + (args.header or [])
+    if args.bearer_token or args.token_env:
+        bearer_token = args.bearer_token
+        token_env = args.token_env
+    else:
+        bearer_token = registry_profile_string(profile, 'bearer_token')
+        token_env = registry_profile_string(profile, 'token_env')
+    return registry_pull_headers(header_args, bearer_token, token_env)
+
+
+def resolve_profile_source(source: str, profile: dict) -> str:
+    base_url = registry_profile_string(profile, 'base_url')
+    if base_url and not location_is_url(source) and not Path(source).exists():
+        return remote_registry_url(base_url, source)
+    return source
+
+
 def registry_adapter_report(title: str, registry_name: str, steps: list[DescriptorStep]) -> str:
     ok = all(step.ok for step in steps)
     lines = [
@@ -1315,10 +1373,17 @@ def command_publish(args: argparse.Namespace) -> int:
 
 def command_pull(args: argparse.Namespace) -> int:
     source = args.source
-    base = location_parent(source)
     steps: list[DescriptorStep] = []
     try:
-        headers = registry_pull_headers(args.header or [], args.bearer_token, args.token_env)
+        profile = load_registry_profile(args.profile_file, args.profile)
+        if profile:
+            steps.append(DescriptorStep('load registry profile', True, args.profile))
+    except Exception as exc:
+        profile = {}
+        steps.append(DescriptorStep('load registry profile', False, str(exc)))
+    try:
+        source = resolve_profile_source(source, profile)
+        headers = merged_registry_headers(profile, args)
         if headers:
             steps.append(DescriptorStep(
                 'configure HTTP headers',
@@ -1328,6 +1393,7 @@ def command_pull(args: argparse.Namespace) -> int:
     except Exception as exc:
         headers = {}
         steps.append(DescriptorStep('configure HTTP headers', False, str(exc)))
+    base = location_parent(source)
     try:
         manifest = json.loads(read_location_bytes(source, headers).decode('utf-8'))
         if not isinstance(manifest, dict):
@@ -1404,7 +1470,14 @@ def command_push(args: argparse.Namespace) -> int:
     store = Path(args.store)
     steps: list[DescriptorStep] = []
     try:
-        headers = registry_pull_headers(args.header or [], args.bearer_token, args.token_env)
+        profile = load_registry_profile(args.profile_file, args.profile)
+        if profile:
+            steps.append(DescriptorStep('load registry profile', True, args.profile))
+    except Exception as exc:
+        profile = {}
+        steps.append(DescriptorStep('load registry profile', False, str(exc)))
+    try:
+        headers = merged_registry_headers(profile, args)
         if headers:
             steps.append(DescriptorStep(
                 'configure HTTP headers',
@@ -1414,9 +1487,26 @@ def command_push(args: argparse.Namespace) -> int:
     except Exception as exc:
         headers = {}
         steps.append(DescriptorStep('configure HTTP headers', False, str(exc)))
+    try:
+        base_url = args.base_url or registry_profile_string(profile, 'base_url')
+        if not base_url:
+            steps.append(DescriptorStep('resolve registry base URL', False, 'pass --base-url or configure profile.base_url'))
+            base_url = ''
+        else:
+            steps.append(DescriptorStep('resolve registry base URL', True, base_url))
+    except Exception as exc:
+        base_url = ''
+        steps.append(DescriptorStep('resolve registry base URL', False, str(exc)))
+    try:
+        registry_arg = args.registry or registry_profile_string(profile, 'registry')
+        if registry_arg and not args.registry:
+            steps.append(DescriptorStep('resolve registry manifest name', True, registry_arg))
+    except Exception as exc:
+        registry_arg = args.registry
+        steps.append(DescriptorStep('resolve registry manifest name', False, str(exc)))
 
     try:
-        manifest_path = published_registry_manifest_path(store, args.registry)
+        manifest_path = published_registry_manifest_path(store, registry_arg)
         manifest = load_json_object(manifest_path)
         steps.append(DescriptorStep('load registry manifest', True, str(manifest_path)))
     except Exception as exc:
@@ -1450,7 +1540,7 @@ def command_push(args: argparse.Namespace) -> int:
             if digest != expected:
                 raise ValueError(f'digest mismatch: expected {expected}, got {digest}')
             remote_path = artifact_remote_relative_path(ref)
-            remote_url = remote_registry_url(args.base_url, remote_path)
+            remote_url = remote_registry_url(base_url, remote_path)
             status = write_http_bytes(remote_url, data, headers)
             steps.append(DescriptorStep(
                 f'push version {index}',
@@ -1461,10 +1551,10 @@ def command_push(args: argparse.Namespace) -> int:
             steps.append(DescriptorStep(f'push version {index}', False, str(exc)))
 
     pushed['pushed_at'] = datetime.now(timezone.utc).isoformat()
-    pushed['remote_base_url'] = args.base_url
+    pushed['remote_base_url'] = base_url
     try:
         manifest_data = json.dumps(pushed, indent=2, sort_keys=True).encode('utf-8') + b'\n'
-        remote_manifest = remote_registry_url(args.base_url, 'registries/' + manifest_path.name)
+        remote_manifest = remote_registry_url(base_url, 'registries/' + manifest_path.name)
         status = write_http_bytes(remote_manifest, manifest_data, headers)
         steps.append(DescriptorStep('push registry manifest', True, f'{remote_manifest} status={status}'))
     except Exception as exc:
@@ -1769,6 +1859,8 @@ def build_parser() -> argparse.ArgumentParser:
     pull.add_argument('--header', action='append', default=[], help='extra HTTP header as "Name: value"; can be repeated')
     pull.add_argument('--bearer-token', help='HTTP bearer token for registry manifest and artifact requests')
     pull.add_argument('--token-env', help='environment variable containing an HTTP bearer token')
+    pull.add_argument('--profile-file', help='JSON file containing named hosted registry profiles')
+    pull.add_argument('--profile', help='hosted registry profile name from --profile-file')
     pull.add_argument('--report')
     pull.add_argument('--json-out')
     pull.add_argument('--junit-out')
@@ -1776,11 +1868,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     push = sub.add_parser('push', help='push a local registry store to an HTTP(S) registry endpoint with digest verification')
     push.add_argument('store', help='local registry store directory produced by publish')
-    push.add_argument('--base-url', required=True, help='HTTP(S) base URL that accepts PUT for blobs/ and registries/')
+    push.add_argument('--base-url', help='HTTP(S) base URL that accepts PUT for blobs/ and registries/; can also come from a profile')
     push.add_argument('--registry', help='registry manifest filename under <store>/registries; required when multiple manifests exist')
     push.add_argument('--header', action='append', default=[], help='extra HTTP header as "Name: value"; can be repeated')
     push.add_argument('--bearer-token', help='HTTP bearer token for registry artifact and manifest PUT requests')
     push.add_argument('--token-env', help='environment variable containing an HTTP bearer token')
+    push.add_argument('--profile-file', help='JSON file containing named hosted registry profiles')
+    push.add_argument('--profile', help='hosted registry profile name from --profile-file')
     push.add_argument('--report')
     push.add_argument('--json-out')
     push.add_argument('--junit-out')

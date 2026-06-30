@@ -137,6 +137,46 @@ python3 scripts/moon_proto_descriptor.py push \
 
 `push` verifies each local descriptor artifact against the manifest SHA-256 before uploading it, and it records the remote base URL in the JSON result. This gives CI and demos a concrete registry adapter story: generate a registry manifest, publish immutable descriptor blobs, push/pull them over HTTP(S), authenticate against hosted registries when needed, and verify every artifact before accepting a release gate.
 
+## Hosted registry profiles
+
+For repeated CI and team usage, put hosted-registry connection details in a profile file instead of repeating flags:
+
+```json
+{
+  "profiles": {
+    "production": {
+      "base_url": "https://schemas.example.test/",
+      "registry": "demo-user.json",
+      "token_env": "MOON_PROTO_REGISTRY_TOKEN",
+      "headers": {
+        "X-Registry-Client": "moon-proto-lab"
+      }
+    }
+  }
+}
+```
+
+Then use the profile for both push and pull:
+
+```bash
+MOON_PROTO_REGISTRY_TOKEN=moon-secret-token \
+python3 scripts/moon_proto_descriptor.py push \
+  generated/schema_registry_store \
+  --profile-file registry_profiles.json \
+  --profile production \
+  --report generated/descriptor_registry_profile_push_report.md
+
+MOON_PROTO_REGISTRY_TOKEN=moon-secret-token \
+python3 scripts/moon_proto_descriptor.py pull \
+  registries/demo-user.json \
+  --profile-file registry_profiles.json \
+  --profile production \
+  --output-dir generated/schema_registry_profile_pull \
+  --report generated/descriptor_registry_profile_pull_report.md
+```
+
+When `pull` receives a relative source and the profile has `base_url`, the source is resolved against that base URL. Profile headers are merged with CLI `--header` values, and CLI token flags override profile token settings.
+
 ## What the registry command checks
 
 For each imported version it records:

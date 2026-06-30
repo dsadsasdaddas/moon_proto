@@ -47,7 +47,7 @@ The project has a small but end-to-end verifiable protobuf laboratory pipeline:
 - AI verification CLI that runs doctor, schema inspection, codegen, generated-code compile checks, and Markdown/HTML/JUnit XML report generation;
 - old/new schema compatibility checker for detecting field, enum, package, type and reserved-contract breaking changes;
 - official MoonBit protobuf differential harness manifest/report for schemas overlapping with `moonbitlang/protoc-gen-mbt`;
-- FileDescriptorSet descriptor/reflection bridge for `.pb`/`.hex`/`.json` descriptor imports, proto reconstruction, verification reports, old/new descriptor-set compatibility reports, descriptor-registry release gates, JSON release-policy checks with rule-based severity/warning support, and file/HTTP/authenticated registry adapter publish/push/pull verification;
+- FileDescriptorSet descriptor/reflection bridge for `.pb`/`.hex`/`.json` descriptor imports, proto reconstruction, verification reports, old/new descriptor-set compatibility reports, descriptor-registry release gates, JSON release-policy checks with rule-based severity/warning support, and file/HTTP/authenticated registry adapter publish/push/pull/profile verification;
 - Python and Go official protobuf oracle fixtures for cross-language compatibility checks, including 32-bit numeric boundary values, float/double values, and special NaN/Infinity JSON values;
 - deterministic property-style roundtrip corpora for binary and JSON paths;
 - generated-code compile checks and GitHub Actions CI.
@@ -234,7 +234,8 @@ tests/codegen/compile_generated.sh
 - M30b: file/HTTP descriptor registry adapter publish/pull with artifact digest verification. Done.
 - M31: authenticated HTTP registry pull with bearer-token/header support. Done.
 - M32: authenticated HTTP registry push with PUT upload and digest verification. Done.
-- M33: production hosted registry integrations. Planned.
+- M33: hosted registry profiles for reusable base URL, registry, token and header configuration. Done.
+- M34: managed hosted registry backends. Planned.
 
 ## License
 

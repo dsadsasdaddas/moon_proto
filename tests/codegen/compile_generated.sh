@@ -534,6 +534,46 @@ grep -Fq 'Overall status: **PASS**' generated/descriptor_registry_hosted_pull_re
 grep -q '<testsuite' generated/descriptor_registry_hosted_pull_report.xml
 grep -q 'failures="0"' generated/descriptor_registry_hosted_pull_report.xml
 find generated/schema_registry_hosted_pull -type f | grep -q 'version_1_'
+
+cat > generated/registry_profiles.json <<EOF
+{
+  "profiles": {
+    "local-hosted": {
+      "base_url": "http://127.0.0.1:${REGISTRY_PUSH_HTTP_PORT}/",
+      "registry": "demo-user.json",
+      "token_env": "MOON_PROTO_REGISTRY_TOKEN",
+      "headers": {
+        "X-Registry-Client": "moon-proto-lab"
+      }
+    }
+  }
+}
+EOF
+MOON_PROTO_REGISTRY_TOKEN=moon-secret-token python3 scripts/moon_proto_descriptor.py push \
+  generated/schema_registry_store \
+  --profile-file generated/registry_profiles.json \
+  --profile local-hosted \
+  --report generated/descriptor_registry_profile_push_report.md \
+  --json-out generated/descriptor_registry_profile_pushed.json \
+  --junit-out generated/descriptor_registry_profile_push_report.xml
+grep -Fq 'Overall status: **PASS**' generated/descriptor_registry_profile_push_report.md
+grep -q 'load registry profile' generated/descriptor_registry_profile_push_report.md
+grep -q 'X-Registry-Client' generated/descriptor_registry_profile_push_report.md
+grep -q 'failures="0"' generated/descriptor_registry_profile_push_report.xml
+
+MOON_PROTO_REGISTRY_TOKEN=moon-secret-token python3 scripts/moon_proto_descriptor.py pull \
+  registries/demo-user.json \
+  --profile-file generated/registry_profiles.json \
+  --profile local-hosted \
+  --output-dir generated/schema_registry_profile_pull \
+  --report generated/descriptor_registry_profile_pull_report.md \
+  --json-out generated/descriptor_registry_profile_pulled.json \
+  --junit-out generated/descriptor_registry_profile_pull_report.xml
+grep -Fq 'Overall status: **PASS**' generated/descriptor_registry_profile_pull_report.md
+grep -q 'load registry profile' generated/descriptor_registry_profile_pull_report.md
+grep -q 'http://127.0.0.1' generated/descriptor_registry_profile_pulled.json
+grep -q 'failures="0"' generated/descriptor_registry_profile_pull_report.xml
+find generated/schema_registry_profile_pull -type f | grep -q 'version_1_'
 kill "$HTTP_PID" 2>/dev/null || true
 wait "$HTTP_PID" 2>/dev/null || true
 HTTP_PID=""
