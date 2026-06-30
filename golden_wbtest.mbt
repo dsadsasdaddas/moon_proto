@@ -732,6 +732,10 @@ test "codegen emits moonbit struct and descriptor" {
         #|  message_to_json_with_descriptors(descriptor_User(), message_descriptors(), value)
         #|}
         #|
+        #|pub fn to_json_lower_camel_User(value : MessageValue) -> JsonEncodeResult {
+        #|  message_to_json_lower_camel_with_descriptors(descriptor_User(), message_descriptors(), value)
+        #|}
+        #|
         #|pub fn from_json_User(input : String) -> JsonDecodeResult {
         #|  json_to_message_with_descriptors(descriptor_User(), message_descriptors(), input)
         #|}
@@ -843,6 +847,10 @@ test "parse enum and codegen enum descriptor" {
         #|
         #|pub fn to_json_Paint(value : MessageValue) -> JsonEncodeResult {
         #|  message_to_json_with_descriptors(descriptor_Paint(), message_descriptors(), value)
+        #|}
+        #|
+        #|pub fn to_json_lower_camel_Paint(value : MessageValue) -> JsonEncodeResult {
+        #|  message_to_json_lower_camel_with_descriptors(descriptor_Paint(), message_descriptors(), value)
         #|}
         #|
         #|pub fn from_json_Paint(input : String) -> JsonDecodeResult {
@@ -1258,6 +1266,14 @@ test "protobuf style json parser accepts lower camel field names" {
             "{\"user_id\":\"150\",\"display_name\":\"Alice\",\"phone_number\":\"123\"}",
           )
       }
+      match message_to_json_lower_camel(desc, msg) {
+        JsonErr(_) => fail("lowerCamel JSON writer failed")
+        JsonOk(canonical) =>
+          assert_eq(
+            canonical,
+            "{\"userId\":\"150\",\"displayName\":\"Alice\",\"phoneNumber\":\"123\"}",
+          )
+      }
     }
   }
   match json_to_message(desc, "{\"user_id\":\"1\",\"userId\":\"2\"}") {
@@ -1269,6 +1285,46 @@ test "protobuf style json parser accepts lower camel field names" {
     JsonDecodeOk(_) => fail("wrong JSON field case should be rejected")
     JsonDecodeErr(Unsupported(_)) => ()
     JsonDecodeErr(_) => fail("unexpected lowerCamel unknown-field error")
+  }
+  let wrapper_desc = MessageDescriptor::{
+    name: "Wrapper",
+    fields: [
+      FieldDescriptor::{
+        name: "profile",
+        typ: NamedType("Profile"),
+        number: 1,
+        label: Singular,
+      },
+      FieldDescriptor::{
+        name: "audit_log",
+        typ: StringType,
+        number: 2,
+        label: Repeated,
+      },
+    ],
+  }
+  let wrapper = message_value([
+    message_field(
+      "profile",
+      NestedMessageValue(
+        message_value([
+          message_field("user_id", UInt64Value(150UL)),
+          message_field("display_name", StringValue("Alice")),
+        ]),
+      ),
+    ),
+    repeated_message_field("audit_log", [StringValue("created")]),
+  ])
+  match
+    message_to_json_lower_camel_with_descriptors(
+      wrapper_desc, [desc, wrapper_desc], wrapper,
+    ) {
+    JsonErr(_) => fail("nested lowerCamel JSON writer failed")
+    JsonOk(canonical) =>
+      assert_eq(
+        canonical,
+        "{\"profile\":{\"userId\":\"150\",\"displayName\":\"Alice\"},\"auditLog\":[\"created\"]}",
+      )
   }
 }
 
@@ -1936,6 +1992,10 @@ test "parse and codegen map fields" {
         #|  message_to_json_with_descriptors(descriptor_Bag(), message_descriptors(), value)
         #|}
         #|
+        #|pub fn to_json_lower_camel_Bag(value : MessageValue) -> JsonEncodeResult {
+        #|  message_to_json_lower_camel_with_descriptors(descriptor_Bag(), message_descriptors(), value)
+        #|}
+        #|
         #|pub fn from_json_Bag(input : String) -> JsonDecodeResult {
         #|  json_to_message_with_descriptors(descriptor_Bag(), message_descriptors(), input)
         #|}
@@ -2188,6 +2248,10 @@ test "parse and codegen oneof fields" {
         #|
         #|pub fn to_json_Contact(value : MessageValue) -> JsonEncodeResult {
         #|  message_to_json_with_descriptors(descriptor_Contact(), message_descriptors(), value)
+        #|}
+        #|
+        #|pub fn to_json_lower_camel_Contact(value : MessageValue) -> JsonEncodeResult {
+        #|  message_to_json_lower_camel_with_descriptors(descriptor_Contact(), message_descriptors(), value)
         #|}
         #|
         #|pub fn from_json_Contact(input : String) -> JsonDecodeResult {

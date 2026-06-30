@@ -402,6 +402,7 @@ fn map_field_to_json(
   desc : FieldDescriptor,
   field : MessageField,
   descriptors : Array[MessageDescriptor],
+  lower_camel : Bool,
 ) -> JsonEncodeResult {
   match desc.typ {
     MapType(key_typ, value_typ) => {
@@ -422,7 +423,9 @@ fn map_field_to_json(
               JsonOk(text) => text
             }
             let value_text = match
-              scalar_to_json_with_descriptors(value_typ, value, descriptors) {
+              scalar_to_json_with_options(
+                value_typ, value, descriptors, lower_camel,
+              ) {
               JsonErr(e) => return JsonErr(e)
               JsonOk(text) => text
             }
@@ -511,15 +514,19 @@ fn field_to_json(
   desc : FieldDescriptor,
   field : MessageField,
   descriptors : Array[MessageDescriptor],
+  lower_camel : Bool,
 ) -> JsonEncodeResult {
   match desc.typ {
-    MapType(_, _) => return map_field_to_json(desc, field, descriptors)
+    MapType(_, _) =>
+      return map_field_to_json(desc, field, descriptors, lower_camel)
     _ => ()
   }
   if desc.label == Repeated {
     let items : Array[String] = []
     for value in field.values {
-      match scalar_to_json_with_descriptors(desc.typ, value, descriptors) {
+      match scalar_to_json_with_options(
+        desc.typ, value, descriptors, lower_camel,
+      ) {
         JsonErr(e) => return JsonErr(e)
         JsonOk(item) => items.push(item)
       }
@@ -528,24 +535,37 @@ fn field_to_json(
   } else if field.values.length() == 0 {
     JsonErr(Unsupported("singular field has no JSON value: " + field.name))
   } else {
-    scalar_to_json_with_descriptors(desc.typ, field.values[0], descriptors)
+    scalar_to_json_with_options(
+      desc.typ, field.values[0], descriptors, lower_camel,
+    )
   }
 }
 
 ///|
-fn scalar_to_json_with_descriptors(
+fn scalar_to_json_with_options(
   typ : ScalarType,
   value : ProtoValue,
   descriptors : Array[MessageDescriptor],
+  lower_camel : Bool,
 ) -> JsonEncodeResult {
   match (typ, value) {
     (NamedType(name), NestedMessageValue(v)) =>
       match json_find_message_descriptor(descriptors, name) {
         None =>
           JsonErr(Unsupported("missing descriptor for nested message: " + name))
-        Some(desc) => message_to_json_with_descriptors(desc, descriptors, v)
+        Some(desc) =>
+          message_to_json_with_options(desc, descriptors, v, lower_camel)
       }
     _ => scalar_to_json(typ, value)
+  }
+}
+
+///|
+fn json_output_field_name(field : FieldDescriptor, lower_camel : Bool) -> String {
+  if lower_camel {
+    json_lower_camel_field_name(field.name)
+  } else {
+    field.name
   }
 }
 
@@ -560,12 +580,43 @@ pub fn message_to_json(
 }
 
 ///|
+/// Convert a dynamic message to deterministic protobuf-style JSON using
+/// lowerCamelCase JSON field names, matching the protobuf JSON default.
+pub fn message_to_json_lower_camel(
+  desc : MessageDescriptor,
+  value : MessageValue,
+) -> JsonEncodeResult {
+  message_to_json_lower_camel_with_descriptors(desc, [], value)
+}
+
+///|
 /// Convert a dynamic message to deterministic protobuf-style JSON, resolving
 /// `NamedType` fields through `descriptors` for nested message values.
 pub fn message_to_json_with_descriptors(
   desc : MessageDescriptor,
   descriptors : Array[MessageDescriptor],
   value : MessageValue,
+) -> JsonEncodeResult {
+  message_to_json_with_options(desc, descriptors, value, false)
+}
+
+///|
+/// Convert protobuf-style JSON with lowerCamelCase field names while resolving
+/// `NamedType` fields through `descriptors`.
+pub fn message_to_json_lower_camel_with_descriptors(
+  desc : MessageDescriptor,
+  descriptors : Array[MessageDescriptor],
+  value : MessageValue,
+) -> JsonEncodeResult {
+  message_to_json_with_options(desc, descriptors, value, true)
+}
+
+///|
+fn message_to_json_with_options(
+  desc : MessageDescriptor,
+  descriptors : Array[MessageDescriptor],
+  value : MessageValue,
+  lower_camel : Bool,
 ) -> JsonEncodeResult {
   match validate_json_message(desc, value) {
     Some(e) => return JsonErr(e)
@@ -576,10 +627,14 @@ pub fn message_to_json_with_descriptors(
     match json_find_message_field(value, fd.name) {
       None => ()
       Some(field) =>
-        match field_to_json(fd, field, descriptors) {
+        match field_to_json(fd, field, descriptors, lower_camel) {
           JsonErr(e) => return JsonErr(e)
           JsonOk(encoded) =>
-            props.push(json_escape_string(fd.name) + ":" + encoded)
+            props.push(
+              json_escape_string(json_output_field_name(fd, lower_camel)) +
+              ":" +
+              encoded,
+            )
         }
     }
   }

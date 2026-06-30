@@ -231,6 +231,18 @@ pub fn generate_message_runtime_helpers(desc : MessageDescriptor) -> String {
   lines.push("}")
   lines.push("")
   lines.push(
+    "pub fn to_json_lower_camel_" +
+    desc.name +
+    "(value : MessageValue) -> JsonEncodeResult {",
+  )
+  lines.push(
+    "  message_to_json_lower_camel_with_descriptors(descriptor_" +
+    desc.name +
+    "(), message_descriptors(), value)",
+  )
+  lines.push("}")
+  lines.push("")
+  lines.push(
     "pub fn from_json_" + desc.name + "(input : String) -> JsonDecodeResult {",
   )
   lines.push(
