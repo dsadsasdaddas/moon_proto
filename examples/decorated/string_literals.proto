@@ -1,0 +1,10 @@
+syntax = 'proto3';
+package moon.proto.lab.demo.v1;
+
+option (moon.proto.lab.file) = { note: "quoted \" value; still option" };
+
+message StringLiteralCarrier {
+  option (moon.proto.lab.message) = { note: 'single quoted ; still option' };
+  reserved 'old_name', "legacy_name";
+  string text = 1 [json_name = "text_value", (moon.proto.lab.field) = { note: "field \" option" }];
+}

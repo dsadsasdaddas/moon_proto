@@ -132,6 +132,20 @@ grep -q 'allow_alias : true' generated/verify_enum_alias_report.md
 grep -q 'ALIAS_RESULT_SUCCESS' generated/verify_enum_alias_report.md
 grep -q 'failures="0"' generated/verify_enum_alias_report.xml
 
+python3 scripts/moon_proto_lab.py doctor examples/decorated/string_literals.proto \
+  | grep -q 'schema valid'
+
+python3 scripts/moon_proto_lab.py inspect examples/decorated/string_literals.proto \
+  | grep -q 'reserved names: old_name, legacy_name'
+
+python3 scripts/moon_proto_lab.py verify examples/decorated/string_literals.proto \
+  --report generated/verify_string_literals_report.md \
+  --junit-out generated/verify_string_literals_report.xml
+grep -Fq 'Overall status: **PASS**' generated/verify_string_literals_report.md
+grep -q 'StringLiteralCarrier' generated/verify_string_literals_report.md
+grep -q 'text : String' generated/verify_string_literals_report.md
+grep -q 'failures="0"' generated/verify_string_literals_report.xml
+
 python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto \
   --report generated/compat_report.md \
   --junit-out generated/compat_report.xml

@@ -60,6 +60,14 @@ test "proto lexer" {
 }
 
 ///|
+test "proto lexer supports single quotes and escaped strings" {
+  let toks = lex_proto("'proto3' \"a\\\";b\" 'c\\t'")
+  assert_true(toks[0] == StrLit("proto3"))
+  assert_true(toks[1] == StrLit("a\";b"))
+  assert_true(toks[2] == StrLit("c\t"))
+}
+
+///|
 test "parse simple proto" {
   let src =
     #|syntax = "proto3";
@@ -131,6 +139,38 @@ test "parser tolerates imports options reserved and field options" {
       )
     }
     ProtoErr(_) => fail("expected parser to accept decorated proto schema")
+  }
+}
+
+///|
+test "parser tolerates single quoted and escaped option strings" {
+  let src =
+    #|syntax = 'proto3';
+    #|package demo.literals;
+    #|option (demo.file) = { note: "quoted \" value; still option" };
+    #|message StringLiteralCarrier {
+    #|  option (demo.message) = { note: 'single quoted ; still option' };
+    #|  reserved 'old_name', "legacy_name";
+    #|  string text = 1 [json_name = "text_value", (demo.field) = { note: "field \" option" }];
+    #|}
+  match parse_proto(src) {
+    ProtoErr(_) => fail("string literal schema should parse")
+    ProtoOk(file) => {
+      assert_eq(file.syntax, "proto3")
+      assert_eq(file.package_name, "demo.literals")
+      assert_eq(file.messages.length(), 1)
+      assert_eq(file.messages[0].name, "StringLiteralCarrier")
+      assert_eq(file.messages[0].fields.length(), 1)
+      assert_true(file.messages[0].fields[0].typ == StringType)
+      assert_eq(file.message_reservations.length(), 1)
+      assert_eq(file.message_reservations[0].names.length(), 2)
+      assert_eq(file.message_reservations[0].names[0], "old_name")
+      assert_eq(file.message_reservations[0].names[1], "legacy_name")
+      assert_true(schema_is_valid(file))
+      let generated = generate_moonbit_source(file)
+      assert_true(generated.contains("pub(all) struct StringLiteralCarrier"))
+      assert_true(generated.contains("text : String"))
+    }
   }
 }
 

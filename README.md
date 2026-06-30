@@ -36,7 +36,7 @@ The project has a small but end-to-end verifiable protobuf laboratory pipeline:
 - length-delimited bytes/string helpers;
 - field-level helpers for `uint64`, `bool`, `sint64`, `string`, `bytes`;
 - proto3 schema model for messages, fields, labels, scalar types, enums, named messages, maps and oneof groups;
-- `.proto` lexer/parser for `syntax`, dotted `package` names, `import`, top-level/message/enum `option`, real `reserved` number/name descriptors, `extensions`, `message`, `enum`, nested message/enum definitions, scalar/named fields, field/enum options, signed enum values and enum reserved ranges, enum `allow_alias` duplicate-number semantics, empty statements, `optional`, `repeated`, `map`, `oneof`, block comments, and ignored `service`/`rpc` blocks;
+- `.proto` lexer/parser for `syntax`, dotted `package` names, `import`, top-level/message/enum `option`, real `reserved` number/name descriptors, `extensions`, `message`, `enum`, nested message/enum definitions, scalar/named fields, field/enum options, signed enum values and enum reserved ranges, enum `allow_alias` duplicate-number semantics, single-quoted/escaped string literals, empty statements, `optional`, `repeated`, `map`, `oneof`, block comments, and ignored `service`/`rpc` blocks;
 - schema validator for field numbers, duplicate names/numbers, proto3 enum invariants, top-level conflicts, map constraints, and field/enum reserved-number/name reuse;
 - schema-driven dynamic message encode/decode for scalar, repeated, packed repeated, enum, nested message, map and oneof fields;
 - unknown-field skipping during decode;
@@ -129,14 +129,17 @@ python3 scripts/moon_proto_lab.py doctor examples/decorated/telemetry_service.pr
 python3 scripts/moon_proto_lab.py doctor examples/decorated/nested_types.proto
 python3 scripts/moon_proto_lab.py doctor examples/decorated/enum_numbers.proto
 python3 scripts/moon_proto_lab.py doctor examples/decorated/enum_alias.proto
+python3 scripts/moon_proto_lab.py doctor examples/decorated/string_literals.proto
 python3 scripts/moon_proto_lab.py inspect examples/decorated/telemetry.proto
 python3 scripts/moon_proto_lab.py inspect examples/simple/user.proto
 python3 scripts/moon_proto_lab.py inspect examples/decorated/enum_numbers.proto
 python3 scripts/moon_proto_lab.py inspect examples/decorated/enum_alias.proto
+python3 scripts/moon_proto_lab.py inspect examples/decorated/string_literals.proto
 python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md --junit-out generated/compat_report.xml
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md --junit-out generated/verify_report.xml
 python3 scripts/moon_proto_lab.py verify examples/decorated/enum_numbers.proto --report generated/verify_enum_numbers_report.md --junit-out generated/verify_enum_numbers_report.xml
 python3 scripts/moon_proto_lab.py verify examples/decorated/enum_alias.proto --report generated/verify_enum_alias_report.md --junit-out generated/verify_enum_alias_report.xml
+python3 scripts/moon_proto_lab.py verify examples/decorated/string_literals.proto --report generated/verify_string_literals_report.md --junit-out generated/verify_string_literals_report.xml
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.html
 python3 scripts/moon_proto_official_diff.py --report generated/official_diff_report.md --junit-out generated/official_diff_report.xml
 python3 scripts/moon_proto_official_diff.py --official-generated-dir tests/differential/official_generated_fixture --report generated/official_generated_diff_report.md --junit-out generated/official_generated_diff_report.xml
@@ -187,10 +190,12 @@ python3 scripts/moon_proto_lab.py doctor examples/decorated/telemetry_service.pr
 python3 scripts/moon_proto_lab.py doctor examples/decorated/nested_types.proto
 python3 scripts/moon_proto_lab.py doctor examples/decorated/enum_numbers.proto
 python3 scripts/moon_proto_lab.py doctor examples/decorated/enum_alias.proto
+python3 scripts/moon_proto_lab.py doctor examples/decorated/string_literals.proto
 python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md --junit-out generated/compat_report.xml
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md --junit-out generated/verify_report.xml
 python3 scripts/moon_proto_lab.py verify examples/decorated/enum_numbers.proto --report generated/verify_enum_numbers_report.md --junit-out generated/verify_enum_numbers_report.xml
 python3 scripts/moon_proto_lab.py verify examples/decorated/enum_alias.proto --report generated/verify_enum_alias_report.md --junit-out generated/verify_enum_alias_report.xml
+python3 scripts/moon_proto_lab.py verify examples/decorated/string_literals.proto --report generated/verify_string_literals_report.md --junit-out generated/verify_string_literals_report.xml
 python3 scripts/moon_proto_official_diff.py --report generated/official_diff_report.md --junit-out generated/official_diff_report.xml
 python3 scripts/moon_proto_official_diff.py --official-generated-dir tests/differential/official_generated_fixture --report generated/official_generated_diff_report.md --junit-out generated/official_generated_diff_report.xml
 python3 scripts/moon_proto_official_diff.py --run-official-generator --official-plugin-bin protoc-gen-mbt --protoc-bin protoc --report generated/official_installed_plugin_diff_report.md --junit-out generated/official_installed_plugin_diff_report.xml
@@ -266,6 +271,7 @@ tests/codegen/compile_generated.sh
 - M43: nested message/enum parser lifting with generated-code verify coverage. Done.
 - M44: signed enum values, signed enum reserved ranges and empty-statement parser tolerance with generated-code verify coverage. Done.
 - M45: enum `allow_alias` parser, validation and generated-code verify coverage. Done.
+- M46: single-quoted and escaped `.proto` string literal parser tolerance with generated-code verify coverage. Done.
 
 ## License
 

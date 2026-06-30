@@ -73,14 +73,29 @@ pub fn lex_proto(src : String) -> Array[ProtoToken] {
         i = i + 1
       }
       toks.push(IntLit(value))
-    } else if c == '"' {
+    } else if c == '"' || c == '\'' {
+      let quote = c
       i = i + 1
       let buf : Array[Char] = []
-      while i < chars.length() && chars[i] != '"' {
-        buf.push(chars[i])
-        i = i + 1
+      while i < chars.length() && chars[i] != quote {
+        if chars[i] == '\\' && i + 1 < chars.length() {
+          let escaped = chars[i + 1]
+          match escaped {
+            'n' => buf.push('\n')
+            'r' => buf.push('\r')
+            't' => buf.push('\t')
+            '\\' => buf.push('\\')
+            '"' => buf.push('"')
+            '\'' => buf.push('\'')
+            other => buf.push(other)
+          }
+          i = i + 2
+        } else {
+          buf.push(chars[i])
+          i = i + 1
+        }
       }
-      if i < chars.length() && chars[i] == '"' {
+      if i < chars.length() && chars[i] == quote {
         i = i + 1
       }
       toks.push(StrLit(String::from_iter(buf.iter())))

@@ -11,7 +11,7 @@ Current tests cover:
 - length-delimited string encoding;
 - a hand-checked `User` message byte stream;
 - a small proto3 lexer/parser smoke test;
-- parser tolerance for dotted package/type names, import, option, reserved/extensions, field/enum options, nested message/enum definitions, signed enum values/reserved ranges, enum allow_alias duplicate-number semantics, empty statements, block comments, and ignored service/rpc blocks;
+- parser tolerance for dotted package/type names, import, option, reserved/extensions, field/enum options, nested message/enum definitions, signed enum values/reserved ranges, enum allow_alias duplicate-number semantics, single-quoted/escaped string literals, empty statements, block comments, and ignored service/rpc blocks;
 - reserved number/name descriptors, Schema Doctor reserved-reuse rejection, and compatibility behavior for removed-but-reserved fields;
 - schema-driven dynamic message encode golden bytes;
 - schema-driven dynamic message decode roundtrip;
@@ -56,10 +56,12 @@ python3 scripts/moon_proto_lab.py doctor examples/decorated/telemetry_service.pr
 python3 scripts/moon_proto_lab.py doctor examples/decorated/nested_types.proto
 python3 scripts/moon_proto_lab.py doctor examples/decorated/enum_numbers.proto
 python3 scripts/moon_proto_lab.py doctor examples/decorated/enum_alias.proto
+python3 scripts/moon_proto_lab.py doctor examples/decorated/string_literals.proto
 python3 scripts/moon_proto_lab.py compat examples/simple/user.proto examples/simple/user_v2.proto --report generated/compat_report.md --junit-out generated/compat_report.xml
 python3 scripts/moon_proto_lab.py verify examples/simple/user.proto --report generated/verify_report.md --junit-out generated/verify_report.xml
 python3 scripts/moon_proto_lab.py verify examples/decorated/enum_numbers.proto --report generated/verify_enum_numbers_report.md --junit-out generated/verify_enum_numbers_report.xml
 python3 scripts/moon_proto_lab.py verify examples/decorated/enum_alias.proto --report generated/verify_enum_alias_report.md --junit-out generated/verify_enum_alias_report.xml
+python3 scripts/moon_proto_lab.py verify examples/decorated/string_literals.proto --report generated/verify_string_literals_report.md --junit-out generated/verify_string_literals_report.xml
 python3 scripts/moon_proto_official_diff.py --report generated/official_diff_report.md --junit-out generated/official_diff_report.xml
 python3 scripts/moon_proto_official_diff.py --official-generated-dir tests/differential/official_generated_fixture --report generated/official_generated_diff_report.md --junit-out generated/official_generated_diff_report.xml
 python3 scripts/moon_proto_official_diff.py --run-official-generator --official-plugin-bin protoc-gen-mbt --protoc-bin protoc --report generated/official_installed_plugin_diff_report.md --junit-out generated/official_installed_plugin_diff_report.xml
@@ -90,6 +92,6 @@ The project is positioned as a protobuf ecosystem verification lab for MoonBit. 
 - generated-code compile checks ensure generated MoonBit source actually builds;
 - verify reports make the result reviewable as Markdown/HTML artifacts.
 
-Completed parser/schema-tool verification now includes old/new compatibility checks, descriptor-set compatibility checks, descriptor-registry release gates, JSON release-policy checks, richer release-policy DSL checks with warning severity, official generated-output contract checks, official scalar-matrix adapter coverage, installed-plugin official generator smoke checks, conformance-lite Markdown/JSON/JUnit evidence reports with expected-fail mutation self-checks and coverage gates, registry adapter publish/push/pull checks over local paths, HTTP, authenticated HTTP, hosted registry profiles, and managed GitHub Contents backend profiles, larger conformance-lite oracle fixtures, upstream-style wire-decode edge vectors, an imported upstream-lite conformance subset, import/option/reserved/service/nested-type parser tolerance, signed enum value/reserved-range tolerance, enum allow_alias duplicate-number validation, empty-statement tolerance, block-comment tolerance, and reserved contract validation. Planned next verification:
+Completed parser/schema-tool verification now includes old/new compatibility checks, descriptor-set compatibility checks, descriptor-registry release gates, JSON release-policy checks, richer release-policy DSL checks with warning severity, official generated-output contract checks, official scalar-matrix adapter coverage, installed-plugin official generator smoke checks, conformance-lite Markdown/JSON/JUnit evidence reports with expected-fail mutation self-checks and coverage gates, registry adapter publish/push/pull checks over local paths, HTTP, authenticated HTTP, hosted registry profiles, and managed GitHub Contents backend profiles, larger conformance-lite oracle fixtures, upstream-style wire-decode edge vectors, an imported upstream-lite conformance subset, import/option/reserved/service/nested-type parser tolerance, signed enum value/reserved-range tolerance, enum allow_alias duplicate-number validation, string-literal escape/single-quote tolerance, empty-statement tolerance, block-comment tolerance, and reserved contract validation. Planned next verification:
 
 - differential adapter tests against more official MoonBit protobuf runtime/codegen outputs when stable sample projects are available.
