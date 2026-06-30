@@ -1,8 +1,15 @@
 # Engineering Record
 
 This document explains how Moon Proto Lab keeps the contest-required engineering
-history public, continuous and traceable.  It complements the Git commit log,
-GitHub/Gitlink mirrors, CI runs, issue tracker and changelog.
+history public and traceable.  The earliest development phase was tracked mainly
+through Git commits and CI; the public issues #2-#5 below are **retrospective
+traceability records**, not pre-existing sprint tickets.  They are intentionally
+marked as completed records so reviewers can see the mapping from commits to work
+packages without implying that the issues were opened before the work started.
+
+The real-time process from this point forward is: open issue -> branch -> pull
+request -> CI -> merge -> Gitlink sync.  PR #1 and issue #6 are the first records
+created with that live process.
 
 ## Public tracking locations
 
@@ -20,16 +27,16 @@ GitHub/Gitlink mirrors, CI runs, issue tracker and changelog.
 ## Public issue tracker records
 
 The following public GitHub issues make the main work packages visible in the
-issue tracker.  Historical work-package issues are explicitly marked as
-traceability records instead of being backdated.
+issue tracker.  Issues #2-#5 are retrospective records created after the initial
+implementation, while #6 is tracked by an actual PR workflow.
 
 | Issue | Purpose | Status |
 | --- | --- | --- |
-| [#2](https://github.com/dsadsasdaddas/moon_proto/issues/2) | Runtime primitives and golden vectors | Completed traceability record |
-| [#3](https://github.com/dsadsasdaddas/moon_proto/issues/3) | Schema parser, validation and Schema Doctor | Completed traceability record |
-| [#4](https://github.com/dsadsasdaddas/moon_proto/issues/4) | JSON mapping, dynamic runtime and MoonBit codegen | Completed traceability record |
-| [#5](https://github.com/dsadsasdaddas/moon_proto/issues/5) | Oracle, conformance, official differential and descriptor registry gates | Completed traceability record |
-| [#6](https://github.com/dsadsasdaddas/moon_proto/issues/6) | Contest submission engineering records and release hygiene | Tracked by PR [#1](https://github.com/dsadsasdaddas/moon_proto/pull/1) |
+| [#2](https://github.com/dsadsasdaddas/moon_proto/issues/2) | Runtime primitives and golden vectors | Retrospective completed record |
+| [#3](https://github.com/dsadsasdaddas/moon_proto/issues/3) | Schema parser, validation and Schema Doctor | Retrospective completed record |
+| [#4](https://github.com/dsadsasdaddas/moon_proto/issues/4) | JSON mapping, dynamic runtime and MoonBit codegen | Retrospective completed record |
+| [#5](https://github.com/dsadsasdaddas/moon_proto/issues/5) | Oracle, conformance, official differential and descriptor registry gates | Retrospective completed record |
+| [#6](https://github.com/dsadsasdaddas/moon_proto/issues/6) | Contest submission engineering records and release hygiene | Live issue tracked by PR [#1](https://github.com/dsadsasdaddas/moon_proto/pull/1) |
 
 ## Work-package traceability
 
