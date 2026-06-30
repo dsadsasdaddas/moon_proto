@@ -3,7 +3,12 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TMP="${TMPDIR:-/tmp}/moon_proto_codegen_check_$$"
+HTTP_PID=""
 cleanup() {
+  if [ -n "${HTTP_PID:-}" ]; then
+    kill "$HTTP_PID" 2>/dev/null || true
+    wait "$HTTP_PID" 2>/dev/null || true
+  fi
   rm -rf "$TMP"
 }
 trap cleanup EXIT
@@ -330,5 +335,69 @@ grep -q '"status": "PASS"' generated/descriptor_policy_relaxed.json
 grep -q '"status": "WARN"' generated/descriptor_policy_relaxed.json
 grep -q '<testsuite' generated/descriptor_policy_relaxed_report.xml
 grep -q 'failures="0"' generated/descriptor_policy_relaxed_report.xml
+
+python3 scripts/moon_proto_descriptor.py publish \
+  generated/descriptor_registry.json \
+  --store generated/schema_registry_store \
+  --base-dir . \
+  --report generated/descriptor_registry_publish_report.md \
+  --json-out generated/descriptor_registry_published.json \
+  --junit-out generated/descriptor_registry_publish_report.xml
+grep -Fq 'Overall status: **PASS**' generated/descriptor_registry_publish_report.md
+grep -q 'artifact_path' generated/descriptor_registry_published.json
+grep -q '<testsuite' generated/descriptor_registry_publish_report.xml
+grep -q 'failures="0"' generated/descriptor_registry_publish_report.xml
+test -f generated/schema_registry_store/registries/demo-user.json
+
+python3 scripts/moon_proto_descriptor.py pull \
+  generated/schema_registry_store/registries/demo-user.json \
+  --output-dir generated/schema_registry_pull \
+  --report generated/descriptor_registry_pull_report.md \
+  --json-out generated/descriptor_registry_pulled.json \
+  --junit-out generated/descriptor_registry_pull_report.xml
+grep -Fq 'Overall status: **PASS**' generated/descriptor_registry_pull_report.md
+grep -q 'pulled_path' generated/descriptor_registry_pulled.json
+grep -q '<testsuite' generated/descriptor_registry_pull_report.xml
+grep -q 'failures="0"' generated/descriptor_registry_pull_report.xml
+find generated/schema_registry_pull -type f | grep -q 'version_0_'
+
+cat > generated/registry_http_server.py <<'PY'
+import functools
+import http.server
+import pathlib
+import socketserver
+import sys
+
+directory = sys.argv[1]
+port_file = pathlib.Path(sys.argv[2])
+handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=directory)
+with socketserver.TCPServer(("127.0.0.1", 0), handler) as httpd:
+    port_file.write_text(str(httpd.server_address[1]), encoding="utf-8")
+    httpd.serve_forever()
+PY
+python3 generated/registry_http_server.py generated/schema_registry_store generated/registry_http_port.txt > generated/registry_http.log 2>&1 &
+HTTP_PID="$!"
+for _ in $(seq 1 50); do
+  if [ -s generated/registry_http_port.txt ]; then
+    break
+  fi
+  sleep 0.1
+done
+test -s generated/registry_http_port.txt
+REGISTRY_HTTP_PORT="$(cat generated/registry_http_port.txt)"
+python3 scripts/moon_proto_descriptor.py pull \
+  "http://127.0.0.1:${REGISTRY_HTTP_PORT}/registries/demo-user.json" \
+  --output-dir generated/schema_registry_http_pull \
+  --report generated/descriptor_registry_http_pull_report.md \
+  --json-out generated/descriptor_registry_http_pulled.json \
+  --junit-out generated/descriptor_registry_http_pull_report.xml
+grep -Fq 'Overall status: **PASS**' generated/descriptor_registry_http_pull_report.md
+grep -q 'http://127.0.0.1' generated/descriptor_registry_http_pulled.json
+grep -q '<testsuite' generated/descriptor_registry_http_pull_report.xml
+grep -q 'failures="0"' generated/descriptor_registry_http_pull_report.xml
+find generated/schema_registry_http_pull -type f | grep -q 'version_1_'
+kill "$HTTP_PID" 2>/dev/null || true
+wait "$HTTP_PID" 2>/dev/null || true
+HTTP_PID=""
 
 echo "Generated MoonBit source compiles"

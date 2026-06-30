@@ -13,6 +13,8 @@ import html
 import json
 import sys
 import tempfile
+import urllib.parse
+import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -104,8 +106,11 @@ def canonical_json(message) -> str:
 
 def load_descriptor_set(path: Path) -> descriptor_pb2.FileDescriptorSet:
     data = path.read_bytes()
+    return parse_descriptor_set_data(data, path.suffix.lower())
+
+
+def parse_descriptor_set_data(data: bytes, suffix: str) -> descriptor_pb2.FileDescriptorSet:
     fds = descriptor_pb2.FileDescriptorSet()
-    suffix = path.suffix.lower()
     if suffix == '.json':
         json_format.Parse(data.decode('utf-8'), fds)
     elif suffix == '.hex':
@@ -1083,6 +1088,239 @@ def expand_registry_inputs(inputs: list[str]) -> list[Path]:
     return paths
 
 
+def safe_registry_name(name: str) -> str:
+    safe = ''.join(ch if ch.isalnum() or ch in {'-', '_', '.'} else '_' for ch in name)
+    safe = safe.strip('._')
+    return safe or 'registry'
+
+
+def location_scheme(location: str) -> str:
+    return urllib.parse.urlparse(location).scheme
+
+
+def location_is_url(location: str) -> bool:
+    return location_scheme(location) in {'http', 'https', 'file'}
+
+
+def read_location_bytes(location: str) -> bytes:
+    if location_is_url(location):
+        with urllib.request.urlopen(location) as response:
+            return response.read()
+    return Path(location).read_bytes()
+
+
+def location_parent(location: str) -> str:
+    parsed = urllib.parse.urlparse(location)
+    if parsed.scheme in {'http', 'https', 'file'}:
+        return location.rsplit('/', 1)[0] + '/'
+    return str(Path(location).parent)
+
+
+def resolve_location(base: str, reference: str) -> str:
+    if location_is_url(reference):
+        return reference
+    if location_is_url(base):
+        return urllib.parse.urljoin(base, reference)
+    return str(Path(base) / reference)
+
+
+def location_suffix(location: str) -> str:
+    parsed = urllib.parse.urlparse(location)
+    path = parsed.path if parsed.scheme else location
+    return Path(path).suffix.lower()
+
+
+def registry_adapter_report(title: str, registry_name: str, steps: list[DescriptorStep]) -> str:
+    ok = all(step.ok for step in steps)
+    lines = [
+        f'# Moon Proto Lab {title}',
+        '',
+        f'- Registry: `{registry_name}`',
+        f'- Generated at: `{datetime.now(timezone.utc).isoformat()}`',
+        f'- Overall status: **{"PASS" if ok else "FAIL"}**',
+        '',
+        '| Step | Status | Details |',
+        '| --- | --- | --- |',
+    ]
+    for step in steps:
+        lines.append(f'| {step.name} | {"PASS" if step.ok else "FAIL"} | {markdown_table_cell(step.details)} |')
+    return '\n'.join(lines) + '\n'
+
+
+def artifact_reference(version: dict) -> str:
+    for key in ('artifact_url', 'artifact_path', 'path'):
+        value = version.get(key)
+        if isinstance(value, str) and value:
+            return value
+    raise ValueError('version is missing artifact_url, artifact_path or path')
+
+
+def command_publish(args: argparse.Namespace) -> int:
+    manifest_path = Path(args.manifest)
+    manifest = load_json_object(manifest_path)
+    registry_name = str(manifest.get('name') or 'registry')
+    base_dir = Path(args.base_dir) if args.base_dir else manifest_path.parent
+    store = Path(args.store)
+    blobs_dir = store / 'blobs'
+    registries_dir = store / 'registries'
+    blobs_dir.mkdir(parents=True, exist_ok=True)
+    registries_dir.mkdir(parents=True, exist_ok=True)
+    published = json.loads(json.dumps(manifest))
+    versions = published.get('versions', [])
+    steps: list[DescriptorStep] = []
+
+    if not isinstance(versions, list):
+        steps.append(DescriptorStep('manifest versions', False, 'manifest.versions must be a list'))
+        versions = []
+
+    for version in versions:
+        if not isinstance(version, dict):
+            steps.append(DescriptorStep('version entry', False, 'version entry must be an object'))
+            continue
+        index = version.get('index', '?')
+        path_text = version.get('path')
+        if not isinstance(path_text, str):
+            steps.append(DescriptorStep(f'publish version {index}', False, 'version.path must be a string'))
+            continue
+        source = Path(path_text)
+        if not source.is_absolute():
+            source = base_dir / source
+        try:
+            data = source.read_bytes()
+            fds = parse_descriptor_set_data(data, source.suffix.lower())
+            digest = descriptor_digest(fds)
+            expected = version.get('sha256')
+            if isinstance(expected, str) and expected and expected != digest:
+                steps.append(DescriptorStep(
+                    f'publish version {index}',
+                    False,
+                    f'digest mismatch for {source}: expected {expected}, got {digest}',
+                ))
+                continue
+            suffix = source.suffix.lower() or '.pb'
+            artifact_name = f'{digest}{suffix}'
+            artifact_path = blobs_dir / artifact_name
+            artifact_path.write_bytes(data)
+            version['sha256'] = digest
+            version['artifact_path'] = f'../blobs/{artifact_name}'
+            steps.append(DescriptorStep(
+                f'publish version {index}',
+                True,
+                f'{source} -> {artifact_path} sha256={digest}',
+            ))
+        except Exception as exc:
+            steps.append(DescriptorStep(f'publish version {index}', False, str(exc)))
+
+    published['published_at'] = datetime.now(timezone.utc).isoformat()
+    published['adapter'] = {
+        'kind': 'moon-proto-lab.registry-store',
+        'layout': 'registries/<name>.json + blobs/<descriptor-sha>.<ext>',
+    }
+    alias = args.alias or (safe_registry_name(registry_name) + '.json')
+    published_manifest = registries_dir / alias
+    published_manifest.write_text(json.dumps(published, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+    steps.append(DescriptorStep('publish manifest', True, str(published_manifest)))
+
+    if args.json_out:
+        out = Path(args.json_out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(published, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+        print(f'json: {args.json_out}')
+    if args.report:
+        write_text_report(Path(args.report), registry_adapter_report('registry publish report', registry_name, steps))
+        print(f'report: {args.report}')
+    if args.junit_out:
+        write_junit_cases(
+            Path(args.junit_out),
+            'moon-proto-lab.registry-publish',
+            descriptor_step_cases(steps),
+        )
+        print(f'junit: {args.junit_out}')
+
+    ok = all(step.ok for step in steps)
+    print('Moon Proto Lab registry publish: ' + ('PASS' if ok else 'FAIL'))
+    print(f'published: {published_manifest}')
+    for step in steps:
+        print(f'- {step.name}: {"PASS" if step.ok else "FAIL"} - {step.details.splitlines()[0] if step.details else ""}')
+    return 0 if ok else 1
+
+
+def command_pull(args: argparse.Namespace) -> int:
+    source = args.source
+    base = location_parent(source)
+    steps: list[DescriptorStep] = []
+    try:
+        manifest = json.loads(read_location_bytes(source).decode('utf-8'))
+        if not isinstance(manifest, dict):
+            raise ValueError('registry manifest must be a JSON object')
+        steps.append(DescriptorStep('fetch manifest', True, source))
+    except Exception as exc:
+        manifest = {'name': '', 'versions': []}
+        steps.append(DescriptorStep('fetch manifest', False, str(exc)))
+
+    registry_name = str(manifest.get('name') or '')
+    pulled = json.loads(json.dumps(manifest))
+    versions = pulled.get('versions', [])
+    if not isinstance(versions, list):
+        steps.append(DescriptorStep('manifest versions', False, 'manifest.versions must be a list'))
+        versions = []
+
+    output_dir = Path(args.output_dir) if args.output_dir else None
+    if output_dir is not None:
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+    for version in versions:
+        if not isinstance(version, dict):
+            steps.append(DescriptorStep('pull version', False, 'version entry must be an object'))
+            continue
+        index = version.get('index', '?')
+        try:
+            ref = artifact_reference(version)
+            location = resolve_location(base, ref)
+            data = read_location_bytes(location)
+            suffix = location_suffix(location) or '.pb'
+            fds = parse_descriptor_set_data(data, suffix)
+            digest = descriptor_digest(fds)
+            expected = version.get('sha256')
+            if not isinstance(expected, str) or not expected:
+                raise ValueError('version.sha256 must be present for artifact verification')
+            if digest != expected:
+                raise ValueError(f'digest mismatch: expected {expected}, got {digest}')
+            details = f'{location} sha256={digest}'
+            if output_dir is not None:
+                out = output_dir / f'version_{index}_{digest[:16]}{suffix}'
+                out.write_bytes(data)
+                version['pulled_path'] = str(out)
+                details += f' -> {out}'
+            steps.append(DescriptorStep(f'pull version {index}', True, details))
+        except Exception as exc:
+            steps.append(DescriptorStep(f'pull version {index}', False, str(exc)))
+
+    pulled['pulled_at'] = datetime.now(timezone.utc).isoformat()
+    pulled['source'] = source
+    if args.json_out:
+        out = Path(args.json_out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(pulled, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+        print(f'json: {args.json_out}')
+    if args.report:
+        write_text_report(Path(args.report), registry_adapter_report('registry pull report', registry_name, steps))
+        print(f'report: {args.report}')
+    if args.junit_out:
+        write_junit_cases(
+            Path(args.junit_out),
+            'moon-proto-lab.registry-pull',
+            descriptor_step_cases(steps),
+        )
+        print(f'junit: {args.junit_out}')
+
+    ok = all(step.ok for step in steps)
+    print('Moon Proto Lab registry pull: ' + ('PASS' if ok else 'FAIL'))
+    for step in steps:
+        print(f'- {step.name}: {"PASS" if step.ok else "FAIL"} - {step.details.splitlines()[0] if step.details else ""}')
+    return 0 if ok else 1
+
+
 def command_registry(args: argparse.Namespace) -> int:
     root = repo_root()
     paths = expand_registry_inputs(args.descriptors)
@@ -1342,6 +1580,24 @@ def build_parser() -> argparse.ArgumentParser:
     policy.add_argument('--json-out')
     policy.add_argument('--junit-out')
     policy.set_defaults(func=command_policy)
+
+    publish = sub.add_parser('publish', help='publish a registry JSON manifest and descriptor artifacts to a portable registry store')
+    publish.add_argument('manifest', help='registry manifest JSON produced by the registry command')
+    publish.add_argument('--store', required=True, help='output registry store directory')
+    publish.add_argument('--alias', help='published manifest filename under <store>/registries; defaults to <registry-name>.json')
+    publish.add_argument('--base-dir', help='base directory for relative descriptor paths in the manifest; defaults to manifest parent')
+    publish.add_argument('--report')
+    publish.add_argument('--json-out')
+    publish.add_argument('--junit-out')
+    publish.set_defaults(func=command_publish)
+
+    pull = sub.add_parser('pull', help='pull and verify a registry manifest from a local path, file:// URL, or HTTP(S) URL')
+    pull.add_argument('source', help='registry manifest location')
+    pull.add_argument('--output-dir', help='optional directory for downloaded descriptor artifacts')
+    pull.add_argument('--report')
+    pull.add_argument('--json-out')
+    pull.add_argument('--junit-out')
+    pull.set_defaults(func=command_pull)
 
     verify = sub.add_parser('verify', help='convert descriptor set and run doctor/codegen/compile checks')
     verify.add_argument('descriptor')

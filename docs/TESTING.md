@@ -33,7 +33,7 @@ Current tests cover:
 - nested message binary and JSON roundtrip through descriptor registries;
 - proto3 map parser/codegen snapshot, schema validation, binary roundtrip and JSON object mapping;
 - proto3 oneof parser/codegen snapshot, encode-time conflict rejection, binary last-one-wins decode and JSON conflict rejection;
-- codegen runtime helper snapshots, inline/file-based CLI smoke generation, Schema Doctor diagnostics, compatibility checks, verify report and JUnit XML generation, official differential report and JUnit XML generation, descriptor verify/compat/registry/policy report and JUnit XML generation, CI official source-contract checks, and generated-code compile checks;
+- codegen runtime helper snapshots, inline/file-based CLI smoke generation, Schema Doctor diagnostics, compatibility checks, verify report and JUnit XML generation, official differential report and JUnit XML generation, descriptor verify/compat/registry/policy report and JUnit XML generation, registry adapter publish/pull report and JUnit XML generation, CI official source-contract checks, and generated-code compile checks;
 - deterministic property-style roundtrip corpora for varint, zig-zag, dynamic message binary and JSON;
 - official Python `google.protobuf` and Go `google.golang.org/protobuf` oracle fixtures for full scalar/repeated, map, oneof, 32-bit numeric boundary, float/double and special float messages.
 
@@ -57,6 +57,8 @@ python3 scripts/moon_proto_descriptor.py verify tests/fixtures/user_descriptor_s
 python3 scripts/moon_proto_descriptor.py compat tests/fixtures/user_descriptor_set.hex tests/fixtures/user_descriptor_set_reserved_v2.hex --report generated/descriptor_compat_report.md --junit-out generated/descriptor_compat_report.xml
 python3 scripts/moon_proto_descriptor.py registry tests/fixtures/user_descriptor_set.hex tests/fixtures/user_descriptor_set_reserved_v2.hex --name demo-user --report generated/descriptor_registry_report.md --json-out generated/descriptor_registry.json --policy tests/fixtures/descriptor_registry_policy.json --junit-out generated/descriptor_registry_report.xml
 python3 scripts/moon_proto_descriptor.py policy generated/descriptor_registry.json tests/fixtures/descriptor_registry_policy.json --report generated/descriptor_policy_report.md --json-out generated/descriptor_policy.json --junit-out generated/descriptor_policy_report.xml
+python3 scripts/moon_proto_descriptor.py publish generated/descriptor_registry.json --store generated/schema_registry_store --base-dir . --report generated/descriptor_registry_publish_report.md --json-out generated/descriptor_registry_published.json --junit-out generated/descriptor_registry_publish_report.xml
+python3 scripts/moon_proto_descriptor.py pull generated/schema_registry_store/registries/demo-user.json --output-dir generated/schema_registry_pull --report generated/descriptor_registry_pull_report.md --json-out generated/descriptor_registry_pulled.json --junit-out generated/descriptor_registry_pull_report.xml
 tests/codegen/compile_generated.sh
 ```
 
@@ -77,8 +79,8 @@ The project is positioned as a protobuf ecosystem verification lab for MoonBit. 
 - generated-code compile checks ensure generated MoonBit source actually builds;
 - verify reports make the result reviewable as Markdown/HTML artifacts.
 
-Completed parser/schema-tool verification now includes old/new compatibility checks, descriptor-set compatibility checks, descriptor-registry release gates, JSON release-policy checks, richer release-policy DSL checks with warning severity, larger conformance-lite oracle fixtures, import/option/reserved parser tolerance, and reserved contract validation. Planned next verification:
+Completed parser/schema-tool verification now includes old/new compatibility checks, descriptor-set compatibility checks, descriptor-registry release gates, JSON release-policy checks, richer release-policy DSL checks with warning severity, registry adapter publish/pull checks over local paths and HTTP, larger conformance-lite oracle fixtures, import/option/reserved parser tolerance, and reserved contract validation. Planned next verification:
 
 - deeper differential tests against an installed official `protoc-gen-mbt` generator when its external registry dependencies resolve;
-- real remote schema registry adapters;
+- authenticated hosted schema registry service adapters;
 - selected upstream protobuf conformance-suite cases.

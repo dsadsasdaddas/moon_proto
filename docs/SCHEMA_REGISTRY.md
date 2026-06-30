@@ -72,6 +72,44 @@ Example relaxed policy:
 
 With this policy, a registry can report base compatibility `FAIL` while the release gate returns `PASS` if the declared rule budget allows it. Warning checks are rendered as `WARN` in Markdown/JSON reports and do not create JUnit failures.
 
+## Registry adapter publish/pull
+
+The registry workflow also includes a small portable adapter for sharing descriptor registry artifacts without depending on a hosted service. `publish` writes a registry store with this layout:
+
+```text
+schema_registry_store/
+├── registries/demo-user.json
+└── blobs/<descriptor-sha256>.hex
+```
+
+Each published manifest version gets an `artifact_path` pointing at a content-addressed descriptor blob. `pull` can read the manifest from a local path, `file://` URL, or `http://` / `https://` URL, download every descriptor artifact, parse it as a `FileDescriptorSet`, and verify the descriptor SHA-256 against the manifest.
+
+```bash
+python3 scripts/moon_proto_descriptor.py publish \
+  generated/descriptor_registry.json \
+  --store generated/schema_registry_store \
+  --base-dir . \
+  --report generated/descriptor_registry_publish_report.md \
+  --json-out generated/descriptor_registry_published.json \
+  --junit-out generated/descriptor_registry_publish_report.xml
+
+python3 scripts/moon_proto_descriptor.py pull \
+  generated/schema_registry_store/registries/demo-user.json \
+  --output-dir generated/schema_registry_pull \
+  --report generated/descriptor_registry_pull_report.md \
+  --json-out generated/descriptor_registry_pulled.json \
+  --junit-out generated/descriptor_registry_pull_report.xml
+
+python3 scripts/moon_proto_descriptor.py pull \
+  http://127.0.0.1:8000/registries/demo-user.json \
+  --output-dir generated/schema_registry_http_pull \
+  --report generated/descriptor_registry_http_pull_report.md \
+  --json-out generated/descriptor_registry_http_pulled.json \
+  --junit-out generated/descriptor_registry_http_pull_report.xml
+```
+
+This gives CI and demos a concrete registry adapter story: generate a registry manifest, publish immutable descriptor blobs, pull them over HTTP, and verify every artifact before accepting a release gate.
+
 ## What the registry command checks
 
 For each imported version it records:
@@ -90,7 +128,7 @@ The checked-in fixtures provide both success and failure evidence:
 - `user_descriptor_set.hex` -> `user_descriptor_set_reserved_v2.hex` passes because `phone = 6` is removed only after reserving both number `6` and name `"phone"`, while `created_at = 9` is added safely.
 - `user_descriptor_set.hex` -> `user_descriptor_set_breaking.hex` fails because `id = 1` changes from `uint32` to `string`.
 
-The generated Markdown and JUnit XML reports are suitable for human review. The generated JSON manifest and policy result are suitable for CI, release gates, or future integration with a real schema registry service.
+The generated Markdown and JUnit XML reports are suitable for human review. The generated JSON manifest, policy result, and adapter publish/pull metadata are suitable for CI, release gates, static artifact hosting, or future integration with a hosted schema registry service.
 
 ## Why this matters
 
