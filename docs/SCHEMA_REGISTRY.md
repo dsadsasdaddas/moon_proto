@@ -10,10 +10,25 @@ python3 scripts/moon_proto_descriptor.py registry \
   tests/fixtures/user_descriptor_set_reserved_v2.hex \
   --name demo-user \
   --report generated/descriptor_registry_report.md \
-  --json-out generated/descriptor_registry.json
+  --json-out generated/descriptor_registry.json \
+  --policy tests/fixtures/descriptor_registry_policy.json
 ```
 
 Inputs may be explicit descriptor files or directories containing descriptor files. Explicit files are recommended when version order matters. Supported input formats are `.pb`, `.bin`, `.hex`, and `.json`.
+
+## Release policy gate
+
+A registry manifest can also be checked against a JSON release policy:
+
+```bash
+python3 scripts/moon_proto_descriptor.py policy \
+  generated/descriptor_registry.json \
+  tests/fixtures/descriptor_registry_policy.json \
+  --report generated/descriptor_policy_report.md \
+  --json-out generated/descriptor_policy.json
+```
+
+The checked-in sample policy requires at least two versions, at least one compatibility edge, unique descriptor digests, package `demo`, message `User`, and no breaking adjacent changes. The same policy can be passed directly to `registry --policy ...` so CI fails immediately when a proposed descriptor sequence violates the release gate.
 
 ## What the registry command checks
 
@@ -33,7 +48,7 @@ The checked-in fixtures provide both success and failure evidence:
 - `user_descriptor_set.hex` -> `user_descriptor_set_reserved_v2.hex` passes because `phone = 6` is removed only after reserving both number `6` and name `"phone"`, while `created_at = 9` is added safely.
 - `user_descriptor_set.hex` -> `user_descriptor_set_breaking.hex` fails because `id = 1` changes from `uint32` to `string`.
 
-The generated Markdown report is suitable for human review. The generated JSON manifest is suitable for CI, release gates, or future integration with a real schema registry service.
+The generated Markdown report is suitable for human review. The generated JSON manifest and policy result are suitable for CI, release gates, or future integration with a real schema registry service.
 
 ## Why this matters
 

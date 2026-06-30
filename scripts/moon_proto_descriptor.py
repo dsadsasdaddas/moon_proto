@@ -62,6 +62,13 @@ class RegistryEdge:
     output: str
 
 
+@dataclass
+class PolicyCheck:
+    name: str
+    ok: bool
+    details: str
+
+
 PROTO_TYPE_NAMES = {
     descriptor_pb2.FieldDescriptorProto.TYPE_DOUBLE: 'double',
     descriptor_pb2.FieldDescriptorProto.TYPE_FLOAT: 'float',
@@ -146,6 +153,38 @@ def collect_schema_names(fds: descriptor_pb2.FileDescriptorSet) -> tuple[list[st
 
 def markdown_table_cell(text: str) -> str:
     return text.replace('|', '\\|').replace('\n', '<br>')
+
+
+def load_json_object(path: Path) -> dict:
+    data = json.loads(path.read_text(encoding='utf-8'))
+    if not isinstance(data, dict):
+        raise ValueError(f'expected JSON object: {path}')
+    return data
+
+
+def string_list_policy(policy: dict, key: str) -> list[str]:
+    value = policy.get(key, [])
+    if value is None:
+        return []
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise ValueError(f'policy key {key} must be a list of strings')
+    return value
+
+
+def bool_policy(policy: dict, key: str, default: bool) -> bool:
+    value = policy.get(key, default)
+    if not isinstance(value, bool):
+        raise ValueError(f'policy key {key} must be a boolean')
+    return value
+
+
+def int_policy(policy: dict, key: str, default=None):
+    if key not in policy:
+        return default
+    value = policy[key]
+    if not isinstance(value, int):
+        raise ValueError(f'policy key {key} must be an integer')
+    return value
 
 
 def type_name_tail(type_name: str, package: str) -> str:
@@ -438,11 +477,15 @@ def registry_manifest(
     name: str,
     versions: list[RegistryVersion],
     edges: list[RegistryEdge],
+    policy_result: dict | None = None,
 ) -> dict:
+    base_ok = all(v.ok for v in versions) and all(e.compatible for e in edges)
+    policy_ok = True if policy_result is None else policy_result.get('status') == 'PASS'
+    overall_ok = base_ok and policy_ok
     return {
         'name': name,
         'generated_at': datetime.now(timezone.utc).isoformat(),
-        'overall_status': 'PASS' if all(v.ok for v in versions) and all(e.compatible for e in edges) else 'FAIL',
+        'overall_status': 'PASS' if overall_ok else 'FAIL',
         'versions': [
             {
                 'index': version.index,
@@ -468,15 +511,142 @@ def registry_manifest(
             }
             for edge in edges
         ],
+        **({'policy': policy_result} if policy_result is not None else {}),
     }
+
+
+def policy_result_dict(policy_path: Path, checks: list[PolicyCheck]) -> dict:
+    return {
+        'path': str(policy_path),
+        'status': 'PASS' if all(check.ok for check in checks) else 'FAIL',
+        'checks': [
+            {
+                'name': check.name,
+                'status': 'PASS' if check.ok else 'FAIL',
+                'details': check.details,
+            }
+            for check in checks
+        ],
+    }
+
+
+def manifest_values(manifest: dict, key: str) -> set[str]:
+    out: set[str] = set()
+    for version in manifest.get('versions', []):
+        values = version.get(key, [])
+        if isinstance(values, list):
+            for value in values:
+                if isinstance(value, str):
+                    out.add(value)
+    return out
+
+
+def evaluate_registry_policy(manifest: dict, policy: dict) -> list[PolicyCheck]:
+    checks: list[PolicyCheck] = []
+    versions = manifest.get('versions', [])
+    edges = manifest.get('compatibility_edges', [])
+    if not isinstance(versions, list):
+        versions = []
+    if not isinstance(edges, list):
+        edges = []
+
+    require_registry_pass = bool_policy(policy, 'require_registry_pass', True)
+    if require_registry_pass:
+        status = manifest.get('overall_status')
+        checks.append(PolicyCheck(
+            'registry status',
+            status == 'PASS',
+            f'overall_status={status}',
+        ))
+
+    min_versions = int_policy(policy, 'min_versions', None)
+    if min_versions is not None:
+        checks.append(PolicyCheck(
+            'minimum versions',
+            len(versions) >= min_versions,
+            f'{len(versions)} >= {min_versions}',
+        ))
+
+    min_edges = int_policy(policy, 'min_compatibility_edges', None)
+    if min_edges is not None:
+        checks.append(PolicyCheck(
+            'minimum compatibility edges',
+            len(edges) >= min_edges,
+            f'{len(edges)} >= {min_edges}',
+        ))
+
+    allow_breaking = bool_policy(policy, 'allow_breaking', False)
+    if not allow_breaking:
+        bad_edges = [
+            f"{edge.get('old_index')}->{edge.get('new_index')}"
+            for edge in edges
+            if isinstance(edge, dict) and edge.get('status') != 'PASS'
+        ]
+        checks.append(PolicyCheck(
+            'no breaking adjacent changes',
+            len(bad_edges) == 0,
+            'all adjacent edges pass' if not bad_edges else 'breaking edges: ' + ', '.join(bad_edges),
+        ))
+
+    if bool_policy(policy, 'require_unique_digests', False):
+        digests = [
+            version.get('sha256')
+            for version in versions
+            if isinstance(version, dict) and version.get('sha256')
+        ]
+        checks.append(PolicyCheck(
+            'unique descriptor digests',
+            len(digests) == len(set(digests)),
+            f'{len(set(digests))} unique / {len(digests)} total',
+        ))
+
+    for key, label in [
+        ('required_files', 'required files'),
+        ('required_packages', 'required packages'),
+        ('required_messages', 'required messages'),
+        ('required_enums', 'required enums'),
+    ]:
+        required = set(string_list_policy(policy, key))
+        if required:
+            manifest_key = key.removeprefix('required_')
+            present = manifest_values(manifest, manifest_key)
+            missing = sorted(required - present)
+            checks.append(PolicyCheck(
+                label,
+                not missing,
+                'present: ' + ', '.join(sorted(required)) if not missing else 'missing: ' + ', '.join(missing),
+            ))
+
+    for key, label in [
+        ('forbidden_packages', 'forbidden packages'),
+        ('forbidden_messages', 'forbidden messages'),
+        ('forbidden_enums', 'forbidden enums'),
+    ]:
+        forbidden = set(string_list_policy(policy, key))
+        if forbidden:
+            manifest_key = key.removeprefix('forbidden_')
+            present = manifest_values(manifest, manifest_key)
+            found = sorted(forbidden & present)
+            checks.append(PolicyCheck(
+                label,
+                not found,
+                'none present' if not found else 'found: ' + ', '.join(found),
+            ))
+
+    if not checks:
+        checks.append(PolicyCheck('policy loaded', True, 'no explicit checks configured'))
+    return checks
 
 
 def descriptor_registry_report(
     name: str,
     versions: list[RegistryVersion],
     edges: list[RegistryEdge],
+    policy_path: Path | None = None,
+    policy_checks: list[PolicyCheck] | None = None,
 ) -> str:
-    ok = all(version.ok for version in versions) and all(edge.compatible for edge in edges)
+    policy_ok = True if policy_checks is None else all(check.ok for check in policy_checks)
+    ok = all(version.ok for version in versions) and all(edge.compatible for edge in edges) and policy_ok
     lines = [
         '# Moon Proto Lab descriptor registry report',
         '',
@@ -522,6 +692,20 @@ def descriptor_registry_report(
             f'{"PASS" if edge.compatible else "FAIL"} | '
             f'{markdown_table_cell(diagnostics)} |'
         )
+    if policy_checks is not None:
+        lines.extend([
+            '',
+            '## Release policy checks',
+            '',
+            f'- Policy: `{policy_path}`',
+            '',
+            '| Check | Status | Details |',
+            '| --- | --- | --- |',
+        ])
+        for check in policy_checks:
+            lines.append(
+                f'| {check.name} | {"PASS" if check.ok else "FAIL"} | {markdown_table_cell(check.details)} |'
+            )
     lines.extend([
         '',
         '## Reconstructed proto previews',
@@ -535,7 +719,41 @@ def descriptor_registry_report(
             '```proto',
             preview.strip(),
             '```',
-        ])
+    ])
+    return '\n'.join(lines) + '\n'
+
+
+def registry_policy_report(
+    manifest_path: Path,
+    policy_path: Path,
+    manifest: dict,
+    checks: list[PolicyCheck],
+) -> str:
+    ok = all(check.ok for check in checks)
+    lines = [
+        '# Moon Proto Lab registry policy report',
+        '',
+        f'- Manifest: `{manifest_path}`',
+        f'- Policy: `{policy_path}`',
+        f'- Registry: `{manifest.get("name", "")}`',
+        f'- Generated at: `{datetime.now(timezone.utc).isoformat()}`',
+        f'- Overall status: **{"PASS" if ok else "FAIL"}**',
+        '',
+        '| Check | Status | Details |',
+        '| --- | --- | --- |',
+    ]
+    for check in checks:
+        lines.append(
+            f'| {check.name} | {"PASS" if check.ok else "FAIL"} | {markdown_table_cell(check.details)} |'
+        )
+    lines.extend([
+        '',
+        '## Manifest summary',
+        '',
+        f'- Manifest status: `{manifest.get("overall_status", "")}`',
+        f'- Versions: `{len(manifest.get("versions", [])) if isinstance(manifest.get("versions", []), list) else 0}`',
+        f'- Compatibility edges: `{len(manifest.get("compatibility_edges", [])) if isinstance(manifest.get("compatibility_edges", []), list) else 0}`',
+    ])
     return '\n'.join(lines) + '\n'
 
 
@@ -717,14 +935,41 @@ def command_registry(args: argparse.Namespace) -> int:
             output=output,
         ))
 
-    ok = all(version.ok for version in versions) and all(edge.compatible for edge in edges)
+    policy_path = Path(args.policy) if args.policy else None
+    policy_checks: list[PolicyCheck] | None = None
+    policy_result = None
+    if policy_path is not None:
+        try:
+            policy = load_json_object(policy_path)
+            base_manifest = registry_manifest(args.name, versions, edges)
+            policy_checks = evaluate_registry_policy(base_manifest, policy)
+            policy_result = policy_result_dict(policy_path, policy_checks)
+        except Exception as exc:
+            policy_checks = [PolicyCheck('policy parse', False, str(exc))]
+            policy_result = policy_result_dict(policy_path, policy_checks)
+
+    ok = (
+        all(version.ok for version in versions)
+        and all(edge.compatible for edge in edges)
+        and (policy_checks is None or all(check.ok for check in policy_checks))
+    )
     if args.report:
-        write_text_report(Path(args.report), descriptor_registry_report(args.name, versions, edges))
+        write_text_report(
+            Path(args.report),
+            descriptor_registry_report(args.name, versions, edges, policy_path, policy_checks),
+        )
         print(f'report: {args.report}')
     if args.json_out:
         out = Path(args.json_out)
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(registry_manifest(args.name, versions, edges), indent=2, sort_keys=True) + '\n', encoding='utf-8')
+        out.write_text(
+            json.dumps(
+                registry_manifest(args.name, versions, edges, policy_result),
+                indent=2,
+                sort_keys=True,
+            ) + '\n',
+            encoding='utf-8',
+        )
         print(f'json: {args.json_out}')
 
     print('Moon Proto Lab descriptor registry: ' + ('PASS' if ok else 'FAIL'))
@@ -735,6 +980,36 @@ def command_registry(args: argparse.Namespace) -> int:
     for edge in edges:
         first = edge.output.splitlines()[0] if edge.output else 'no output'
         print(f'- edge {edge.old_index}->{edge.new_index}: {"PASS" if edge.compatible else "FAIL"} {first}')
+    if policy_checks is not None:
+        print('policy: ' + ('PASS' if all(check.ok for check in policy_checks) else 'FAIL'))
+        for check in policy_checks:
+            print(f'- policy {check.name}: {"PASS" if check.ok else "FAIL"} {check.details}')
+    return 0 if ok else 1
+
+
+def command_policy(args: argparse.Namespace) -> int:
+    manifest_path = Path(args.manifest)
+    policy_path = Path(args.policy)
+    try:
+        manifest = load_json_object(manifest_path)
+        policy = load_json_object(policy_path)
+        checks = evaluate_registry_policy(manifest, policy)
+    except Exception as exc:
+        checks = [PolicyCheck('policy parse', False, str(exc))]
+        manifest = {'name': '', 'overall_status': 'FAIL', 'versions': [], 'compatibility_edges': []}
+
+    ok = all(check.ok for check in checks)
+    if args.report:
+        write_text_report(Path(args.report), registry_policy_report(manifest_path, policy_path, manifest, checks))
+        print(f'report: {args.report}')
+    if args.json_out:
+        out = Path(args.json_out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(policy_result_dict(policy_path, checks), indent=2, sort_keys=True) + '\n', encoding='utf-8')
+        print(f'json: {args.json_out}')
+    print('Moon Proto Lab registry policy: ' + ('PASS' if ok else 'FAIL'))
+    for check in checks:
+        print(f'- {check.name}: {"PASS" if check.ok else "FAIL"} - {check.details}')
     return 0 if ok else 1
 
 
@@ -822,8 +1097,16 @@ def build_parser() -> argparse.ArgumentParser:
     registry.add_argument('--name', default='moon-proto-lab-registry')
     registry.add_argument('--report')
     registry.add_argument('--json-out')
+    registry.add_argument('--policy', help='optional registry release policy JSON')
     registry.add_argument('--moon-bin', default='moon')
     registry.set_defaults(func=command_registry)
+
+    policy = sub.add_parser('policy', help='evaluate a descriptor registry JSON manifest against a release policy')
+    policy.add_argument('manifest')
+    policy.add_argument('policy')
+    policy.add_argument('--report')
+    policy.add_argument('--json-out')
+    policy.set_defaults(func=command_policy)
 
     verify = sub.add_parser('verify', help='convert descriptor set and run doctor/codegen/compile checks')
     verify.add_argument('descriptor')

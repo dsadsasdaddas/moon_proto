@@ -1,0 +1,10 @@
+{
+  "require_registry_pass": true,
+  "min_versions": 2,
+  "min_compatibility_edges": 1,
+  "allow_breaking": false,
+  "require_unique_digests": true,
+  "required_files": ["examples/simple/user.proto"],
+  "required_packages": ["demo"],
+  "required_messages": ["User"]
+}

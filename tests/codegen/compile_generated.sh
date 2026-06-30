@@ -231,22 +231,45 @@ python3 scripts/moon_proto_descriptor.py registry \
   tests/fixtures/user_descriptor_set_reserved_v2.hex \
   --name demo-user \
   --report generated/descriptor_registry_report.md \
-  --json-out generated/descriptor_registry.json
+  --json-out generated/descriptor_registry.json \
+  --policy tests/fixtures/descriptor_registry_policy.json
 grep -Fq 'Overall status: **PASS**' generated/descriptor_registry_report.md
 grep -q 'schema compatible' generated/descriptor_registry_report.md
+grep -q 'Release policy checks' generated/descriptor_registry_report.md
 grep -q '"overall_status": "PASS"' generated/descriptor_registry.json
+grep -q '"policy"' generated/descriptor_registry.json
+
+python3 scripts/moon_proto_descriptor.py policy \
+  generated/descriptor_registry.json \
+  tests/fixtures/descriptor_registry_policy.json \
+  --report generated/descriptor_policy_report.md \
+  --json-out generated/descriptor_policy.json
+grep -Fq 'Overall status: **PASS**' generated/descriptor_policy_report.md
+grep -q '"status": "PASS"' generated/descriptor_policy.json
 
 if python3 scripts/moon_proto_descriptor.py registry \
   tests/fixtures/user_descriptor_set.hex \
   tests/fixtures/user_descriptor_set_breaking.hex \
   --name demo-user-breaking \
   --report generated/descriptor_registry_breaking_report.md \
-  --json-out generated/descriptor_registry_breaking.json; then
+  --json-out generated/descriptor_registry_breaking.json \
+  --policy tests/fixtures/descriptor_registry_policy.json; then
   echo "expected descriptor registry failure" >&2
   exit 1
 fi
 grep -Fq 'Overall status: **FAIL**' generated/descriptor_registry_breaking_report.md
 grep -q 'field type changed' generated/descriptor_registry_breaking_report.md
 grep -q '"overall_status": "FAIL"' generated/descriptor_registry_breaking.json
+if python3 scripts/moon_proto_descriptor.py policy \
+  generated/descriptor_registry_breaking.json \
+  tests/fixtures/descriptor_registry_policy.json \
+  --report generated/descriptor_policy_breaking_report.md \
+  --json-out generated/descriptor_policy_breaking.json; then
+  echo "expected descriptor policy failure" >&2
+  exit 1
+fi
+grep -Fq 'Overall status: **FAIL**' generated/descriptor_policy_breaking_report.md
+grep -q 'no breaking adjacent changes' generated/descriptor_policy_breaking_report.md
+grep -q '"status": "FAIL"' generated/descriptor_policy_breaking.json
 
 echo "Generated MoonBit source compiles"
